@@ -117,13 +117,25 @@ jobs:
 
       - run: flutter pub get
 
-      - name: Install provisioning profiles
-        uses: apple-actions/download-provisioning-profiles@v1
+      - name: Import Apple Distribution certificate
+        uses: apple-actions/import-codesign-certs@v1
         with:
-          bundle-id: ${{ env.BUNDLE_ID }}
-          issuer-id: ${{ secrets.APPSTORE_ISSUER_ID }}
-          api-key-id: ${{ secrets.APPSTORE_API_KEY_ID }}
-          api-private-key: ${{ secrets.APPSTORE_API_PRIVATE_KEY }}
+          p12-file-base64: ${{ secrets.CERTIFICATES_P12_BASE64 }}
+          p12-password: ${{ secrets.CERTIFICATES_P12_PASSWORD }}
+
+      # Profiles are committed in the repo (they contain no secrets — just
+      # team + bundle id + entitlements). Install them to the standard
+      # location so `xcodebuild archive` can find them without an account
+      # session.
+      - name: Install provisioning profiles
+        run: |
+          PP="$HOME/Library/MobileDevice/Provisioning Profiles"
+          mkdir -p "$PP"
+          for f in ios/profiles/*.mobileprovision; do
+            u=$(/usr/libexec/PlistBuddy -c "Print :UUID" "$f" 2>/dev/null)
+            cp "$f" "$PP/$u.mobileprovision"
+            echo "  installed: $(basename $f) → $u"
+          done
 
       - name: Build IPA
         env:
