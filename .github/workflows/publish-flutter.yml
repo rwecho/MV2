@@ -1,9 +1,7 @@
 name: Publish Flutter MV2
 
-# 加入旧仓库（rwecho/V2ex.Maui2）后，把它放到 `.github/workflows/` 即可。
-#
-# 默认只允许手动触发——等仓库里真正放入 Flutter 工程（app/）并配好 secrets 之
-# 后，再把下面注释掉的 `push: tags: ['v*']` 打开，避免在迁移完成前 tag 触发失败。
+# 推送 `v*` tag（如 v1.2.35）即自动构建并发布到 TestFlight / Play internal；
+# 也可在 Actions 页手动触发。版本号从 tag 名计算（规则同旧 MAUI CI）。
 #
 # 复用旧仓库的 secrets（名称一字不改，见 V2ex.Maui2/.github/workflows/publish.yml）：
 #   KEYSTORE_BASE64, ANDROID_KEYSTORE_PASSWORD, ANDROID_KEY_PASSWORD,
@@ -14,6 +12,9 @@ name: Publish Flutter MV2
 #   IOS_PROVISIONING_PROFILE_BASE64
 
 on:
+  push:
+    tags:
+      - 'v*'
   workflow_dispatch:
 
 permissions:
