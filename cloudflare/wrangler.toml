@@ -12,5 +12,18 @@ id = "954cd9fe3c9e42b38b9b526dfb9dbec3"
 preview_id = "a1c1c9bf8fc64c44986f03a1a0b6ad66"
 
 [vars]
+# --- FCM (existing) ---------------------------------------------------------
 # FIREBASE_SERVICE_ACCOUNT_JSON = "set via wrangler secret put FIREBASE_SERVICE_ACCOUNT_JSON"
 # ADMIN_SECRET = "set via wrangler secret put ADMIN_SECRET"
+
+# --- HMS Push Kit (HarmonyOS devices, deviceType = "hms"/"ohos") ------------
+# HMS_APP_ID is the AppGallery Connect *App ID* (Project settings); it is not a
+# secret and is used in the URL path:
+#   POST https://push-api.cloud.huawei.com/v1/{HMS_APP_ID}/messages:send
+# HMS_APP_ID = "1234567890"
+
+# The AGC service-account key file (JSON) used to sign the OAuth2 JWT
+# assertion. It contains a private key — always set it as a secret, never here,
+# and never commit it:
+# HMS_SERVICE_ACCOUNT_JSON = "set via wrangler secret put HMS_SERVICE_ACCOUNT_JSON"
+

@@ -2,11 +2,28 @@ export interface Env {
   V2EX_PUSH_KV: KVNamespace;
   FIREBASE_SERVICE_ACCOUNT_JSON: string;
   ADMIN_SECRET: string;
+  /** AGC service-account JSON for HMS Push Kit (wrangler secret). */
+  HMS_SERVICE_ACCOUNT_JSON?: string;
+  /** AppGallery Connect app id used in the HMS Push REST path. */
+  HMS_APP_ID?: string;
 }
 
 export const PUSHED_IDS_LIMIT = 200;
 export const MAX_PUSH_PER_USER_PER_RUN = 5;
 export const HOT_TOPIC_REPLIES_THRESHOLD = 100;
+
+/**
+ * A token FCM has declared unregistered is quarantined instead of deleted.
+ *
+ * The legacy MAUI client caches `(token, feedUrl)` and **skips re-registration
+ * while they are unchanged**, so a deleted record would never come back and the
+ * user would silently lose push. Quarantining stops the 15-minute retry storm
+ * while keeping the record, and probing once a day lets a spurious verdict —
+ * e.g. while the Firebase project's APNs credential is broken — heal by itself.
+ */
+export const QUARANTINE_PROBE_MS = 24 * 60 * 60 * 1000; // 1 day
+/** Quarantined *and* still dead for this long: the entry is dropped for good. */
+export const QUARANTINE_DROP_MS = 90 * 24 * 60 * 60 * 1000; // 90 days
 
 function extractTopicIdFromLink(link?: string): string | null {
   if (!link) return null;
@@ -80,6 +97,10 @@ export default {
 
     if (request.method === "POST" && url.pathname === "/register") {
       return handleRegister(request, env);
+    }
+
+    if (request.method === "POST" && url.pathname === "/unregister") {
+      return handleUnregister(request, env);
     }
 
     if (request.method === "GET" && url.pathname === "/health") {
@@ -248,6 +269,9 @@ async function handleRegister(request: Request, env: Env): Promise<Response> {
       deviceType,
       updatedAt: Date.now(),
       lastPushed,
+      // NOTE: `quarantine` is deliberately NOT carried over. Registration is the
+      // client saying "I am alive", so it revives a quarantined token. Do not
+      // "preserve" it here.
     };
 
     await env.V2EX_PUSH_KV.put(`user:${fcmToken}`, JSON.stringify(payload));
@@ -262,6 +286,35 @@ async function handleRegister(request: Request, env: Env): Promise<Response> {
 
 import { fetchAndParseFeed, V2exNotification } from "./utils/v2ex";
 import { sendPushNotification } from "./utils/fcm";
+import { isHmsDevice, sendHmsPush } from "./utils/hms";
+
+/**
+ * Opt-out for the app's 推送通知 switch: drops the device so the cron stops
+ * polling the account's feed. Also clears the dedup cursor, which is keyed by
+ * token and would otherwise linger after a re-register.
+ */
+async function handleUnregister(
+  request: Request,
+  env: Env,
+): Promise<Response> {
+  try {
+    const data: any = await request.json();
+    const { fcmToken } = data;
+
+    if (!fcmToken) {
+      return new Response("Missing fcmToken", { status: 400 });
+    }
+
+    await env.V2EX_PUSH_KV.delete(`user:${fcmToken}`);
+    await env.V2EX_PUSH_KV.delete(`pushed:${fcmToken}`);
+
+    return new Response(JSON.stringify({ success: true }), {
+      headers: { "Content-Type": "application/json" },
+    });
+  } catch (e) {
+    return new Response("Error processing request", { status: 500 });
+  }
+}
 
 async function handleScheduled(event: ScheduledEvent, env: Env) {
   console.log("Scheduled event triggered at", event.scheduledTime);
@@ -308,9 +361,32 @@ export async function processUserNotifications(
   history: any[],
   sendPush: typeof sendPushNotification,
   fetchFeed: typeof fetchAndParseFeed,
+  sendHms: typeof sendHmsPush = sendHmsPush,
 ): Promise<{ pushedCount: number }> {
   const { feedUrl, fcmToken, lastPushed = 0 } = userData;
   if (!feedUrl || !fcmToken) return { pushedCount: 0 };
+
+  // Quarantined token: skip until the daily probe falls due (see the constants).
+  const now = Date.now();
+  const quarantine = userData.quarantine;
+  let probedThisRun = false;
+  if (quarantine?.unregistered) {
+    const since = typeof quarantine.since === "number" ? quarantine.since : now;
+    if (now - since > QUARANTINE_DROP_MS) {
+      console.log(`Dropping ${keyName}: unregistered for over 90 days.`);
+      await env.V2EX_PUSH_KV.delete(keyName);
+      return { pushedCount: 0 };
+    }
+    const probedAt =
+      typeof quarantine.probedAt === "number" ? quarantine.probedAt : since;
+    if (now - probedAt < QUARANTINE_PROBE_MS) return { pushedCount: 0 };
+    console.log(`Probing quarantined token ${keyName}.`);
+    probedThisRun = true;
+  }
+
+  // A device is delivered through HMS when it registered as HarmonyOS. The
+  // stored record shape is unchanged: the HMS token also lives in `fcmToken`.
+  const hms = isHmsDevice(userData.deviceType);
 
   const notifications = await fetchFeed(feedUrl);
 
@@ -334,6 +410,7 @@ export async function processUserNotifications(
 
   let pushedCount = 0;
   let anyFailure = false;
+  let sawUnregistered = false;
   let maxSuccessTimestamp = lastPushed;
 
   for (const item of itemsToPush) {
@@ -347,16 +424,33 @@ export async function processUserNotifications(
       data.topicId = topicId;
     }
 
-    const success = await sendPush(
-      fcmToken,
-      title,
-      body,
-      data,
-      env.FIREBASE_SERVICE_ACCOUNT_JSON,
-      env.V2EX_PUSH_KV,
-    );
+    const sendResult = hms
+      ? {
+          ok: await sendHms(
+            fcmToken,
+            title,
+            body,
+            data,
+            env.HMS_SERVICE_ACCOUNT_JSON,
+            env.HMS_APP_ID,
+            env.V2EX_PUSH_KV,
+          ),
+          unregistered: false,
+        }
+      : normalizeSendResult(
+          await sendPush(
+            fcmToken,
+            title,
+            body,
+            data,
+            env.FIREBASE_SERVICE_ACCOUNT_JSON,
+            env.V2EX_PUSH_KV,
+          ),
+        );
 
-    if (!success) {
+    if (sendResult.unregistered) sawUnregistered = true;
+
+    if (!sendResult.ok) {
       anyFailure = true;
       console.warn(
         `Push failed for user ${keyName} notification ${item.id}, will retry next run.`,
@@ -385,14 +479,97 @@ export async function processUserNotifications(
   // pushedIds prevents already-pushed items from being re-sent.
   const shouldAdvance =
     !anyFailure && !hasDeferred && maxSuccessTimestamp > lastPushed;
-  const updatedUserData = {
+  const updatedUserData: Record<string, any> = {
     ...userData,
     lastPushed: shouldAdvance ? maxSuccessTimestamp : lastPushed,
     updatedAt: Date.now(),
   };
+
+  // Track the quarantine state.
+  //
+  // * a fresh UNREGISTERED verdict (re)stamps `probedAt`, keeping the original
+  //   `since`, so a token that keeps failing eventually ages out;
+  // * a probe that delivered lifts the quarantine;
+  // * a probe that failed for any other reason (5xx, network) still stamps
+  //   `probedAt`, otherwise the 15-minute cron would hammer a quarantined token
+  //   through its transient failure.
+  if (sawUnregistered) {
+    updatedUserData.quarantine = {
+      unregistered: true,
+      since:
+        typeof quarantine?.since === "number" ? quarantine.since : now,
+      probedAt: now,
+    };
+  } else if (probedThisRun) {
+    if (pushedCount > 0) {
+      // `updatedUserData` starts as a spread of `userData`, so the old flag has
+      // to be removed explicitly — merely not re-adding it keeps the stale one.
+      delete updatedUserData.quarantine;
+      console.log(`Token ${keyName} is delivering again; quarantine lifted.`);
+    } else {
+      updatedUserData.quarantine = {
+        unregistered: true,
+        since:
+          typeof quarantine?.since === "number" ? quarantine.since : now,
+        probedAt: now,
+      };
+    }
+  }
+
   await env.V2EX_PUSH_KV.put(keyName, JSON.stringify(updatedUserData));
 
   return { pushedCount };
+}
+
+/**
+ * The sender is injectable, and both shapes are accepted: the real FCM sender
+ * returns `{ok, unregistered}` while older callers and tests still return a
+ * plain boolean.
+ */
+function normalizeSendResult(
+  result: boolean | { ok: boolean; unregistered?: boolean },
+): { ok: boolean; unregistered: boolean } {
+  if (typeof result === "boolean") return { ok: result, unregistered: false };
+  return { ok: result.ok, unregistered: result.unregistered === true };
+}
+
+/**
+ * Device-aware delivery used outside `processUserNotifications` (hot topics,
+ * which bypass the injectable sender): a device registered for HarmonyOS goes
+ * through HMS Push Kit, everything else keeps the FCM path.
+ */
+async function deliverPush(
+  env: Env,
+  userData: any,
+  token: string,
+  title: string,
+  body: string,
+  data: Record<string, string>,
+): Promise<{ ok: boolean; unregistered: boolean }> {
+  if (isHmsDevice(userData?.deviceType)) {
+    return {
+      ok: await sendHmsPush(
+        token,
+        title,
+        body,
+        data,
+        env.HMS_SERVICE_ACCOUNT_JSON,
+        env.HMS_APP_ID,
+        env.V2EX_PUSH_KV,
+      ),
+      unregistered: false,
+    };
+  }
+  return normalizeSendResult(
+    await sendPushNotification(
+      token,
+      title,
+      body,
+      data,
+      env.FIREBASE_SERVICE_ACCOUNT_JSON,
+      env.V2EX_PUSH_KV,
+    ),
+  );
 }
 
 async function checkHotTopics(env: Env, history: any[]) {
@@ -431,8 +608,13 @@ async function checkHotTopics(env: Env, history: any[]) {
           const { fcmToken } = userData;
 
           if (fcmToken) {
+            // A quarantined token is probed by the per-user job; pushing every
+            // hot topic to it would defeat the quarantine.
+            if (userData.quarantine?.unregistered) return;
             const { title, body } = buildHotTopicTitleBody(topic);
-            const success = await sendPushNotification(
+            const result = await deliverPush(
+              env,
+              userData,
               fcmToken,
               title,
               body,
@@ -440,10 +622,8 @@ async function checkHotTopics(env: Env, history: any[]) {
                 link: topic.url,
                 topicId: String(topic.id),
               },
-              env.FIREBASE_SERVICE_ACCOUNT_JSON,
-              env.V2EX_PUSH_KV,
             );
-            if (success) successCount++;
+            if (result.ok) successCount++;
           }
         }),
       );

@@ -4,6 +4,7 @@ import {
   MAX_PUSH_PER_USER_PER_RUN,
   PUSHED_IDS_LIMIT,
 } from "../src/index";
+import worker from "../src/index";
 
 class FakeKV {
   private store = new Map<string, string>();
@@ -27,6 +28,9 @@ class FakeKV {
       keys: Array.from(this.store.keys()).map((name) => ({ name })),
       list_complete: true,
     };
+  }
+  async delete(key: string): Promise<void> {
+    this.store.delete(key);
   }
   // Test helper
   rawGet(key: string): string | undefined {
@@ -370,5 +374,37 @@ describe("processUserNotifications dedup", () => {
       fetchFeed as any,
     );
     expect(r2.pushedCount).toBe(0);
+  });
+});
+
+describe("POST /unregister", () => {
+  function request(body: unknown): Request {
+    return new Request("https://push.test/unregister", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+  }
+
+  it("drops the device and its dedup cursor", async () => {
+    const env = makeEnv();
+    await env.V2EX_PUSH_KV.put("user:tok1", JSON.stringify({ fcmToken: "tok1" }));
+    await env.V2EX_PUSH_KV.put("pushed:tok1", JSON.stringify(["a"]));
+
+    const response = await worker.fetch(
+      request({ fcmToken: "tok1" }),
+      env as any,
+      {} as any,
+    );
+
+    expect(response.status).toBe(200);
+    expect(env.V2EX_PUSH_KV.rawGet("user:tok1")).toBeUndefined();
+    expect(env.V2EX_PUSH_KV.rawGet("pushed:tok1")).toBeUndefined();
+  });
+
+  it("rejects a payload without a token", async () => {
+    const env = makeEnv();
+    const response = await worker.fetch(request({}), env as any, {} as any);
+    expect(response.status).toBe(400);
   });
 });

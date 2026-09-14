@@ -1,16 +1,59 @@
 import { SignJWT, importPKCS8 } from 'jose';
 
+/**
+ * Outcome of one FCM send.
+ *
+ * `unregistered` is only ever true for a **definitive** "this token is gone"
+ * answer from FCM (404 / NOT_FOUND / errorCode UNREGISTERED). Transient
+ * failures (5xx, network, quota) stay `false` so they are simply retried.
+ */
+export interface PushSendResult {
+    ok: boolean;
+    unregistered: boolean;
+}
+
+/**
+ * Whether an FCM v1 error response means "the token no longer exists".
+ *
+ * FCM answers a dead token with `404` and a body shaped like:
+ * `{"error":{"code":404,"status":"NOT_FOUND","details":[
+ *    {"@type":"…/FcmError","errorCode":"UNREGISTERED"}]}}`
+ *
+ * Kept narrow on purpose: a false positive would make the worker stop pushing
+ * to a live device, and the legacy MAUI client does **not** re-register while
+ * its cached token is unchanged, so it could not heal itself.
+ */
+export function isUnregisteredToken(status: number, body: string): boolean {
+    const text = body ?? '';
+    if (text.includes('UNREGISTERED')) return true;
+    if (status !== 404) return false;
+    try {
+        const error = JSON.parse(text)?.error;
+        if (error?.status === 'NOT_FOUND') return true;
+        if (Array.isArray(error?.details)) {
+            return error.details.some(
+                (detail: any) => detail?.errorCode === 'UNREGISTERED'
+            );
+        }
+    } catch {
+        // Non-JSON body: fall through.
+    }
+    return false;
+}
+
 export async function sendPushNotification(
-    fcmToken: string, 
-    title: string, 
-    body: string, 
+    fcmToken: string,
+    title: string,
+    body: string,
     data: Record<string, string>,
     serviceAccountJson: string,
     kv: KVNamespace
-): Promise<boolean> {
+): Promise<PushSendResult> {
+    const failed: PushSendResult = { ok: false, unregistered: false };
+
     if (!serviceAccountJson) {
         console.error("Missing FIREBASE_SERVICE_ACCOUNT_JSON");
-        return false;
+        return failed;
     }
 
     let serviceAccount;
@@ -18,13 +61,13 @@ export async function sendPushNotification(
         serviceAccount = JSON.parse(serviceAccountJson);
     } catch (e) {
         console.error("Failed to parse Service Account JSON", e);
-        return false;
+        return failed;
     }
 
     const accessToken = await getAccessToken(serviceAccount, kv);
     if (!accessToken) {
         console.error("Failed to get Access Token");
-        return false;
+        return failed;
     }
 
     // FCM v1 API Payload
@@ -62,20 +105,24 @@ export async function sendPushNotification(
 
         if (!response.ok) {
             const text = await response.text();
-            console.error(`FCM Send Failed: ${response.status} ${text}`);
-            return false;
+            const unregistered = isUnregisteredToken(response.status, text);
+            console.error(
+                `FCM Send Failed: ${response.status} ${text}` +
+                    (unregistered ? ' (token unregistered)' : '')
+            );
+            return { ok: false, unregistered };
         }
 
-        return true;
+        return { ok: true, unregistered: false };
     } catch (e) {
         console.error("Error sending push", e);
-        return false;
+        return failed;
     }
 }
 
 async function getAccessToken(serviceAccount: any, kv: KVNamespace): Promise<string | null> {
     const KV_KEY = "firebase_access_token";
-    
+
     // 1. Check KV Cache
     const cachedToken = await kv.get(KV_KEY);
     if (cachedToken) {
@@ -119,7 +166,7 @@ async function getAccessToken(serviceAccount: any, kv: KVNamespace): Promise<str
 
         // 3. Cache in KV (set TTL slightly less than expiration)
         await kv.put(KV_KEY, accessToken, { expirationTtl: expiresIn - 60 });
-        
+
         return accessToken;
     } catch (e) {
         console.error("Error generating access token", e);

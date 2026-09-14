@@ -1,7 +1,0 @@
-{
-  "name": "v2ex",
-  "integrations": {
-    "capacitor": {}
-  },
-  "type": "react-vite"
-}

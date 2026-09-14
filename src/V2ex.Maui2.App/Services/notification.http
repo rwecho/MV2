@@ -1,9 +1,0 @@
-
-POST https://v2ex-push-service.rwecho.workers.dev/register
-Content-Type: application/json
-
-{
-    "feedUrl": "https://www.v2ex.com/n/01fd931034463e01e146d5adada62de86926702d.xml",
-    "fcmToken": "fJF5tCAjvEFBrma1gBb5Lg:APA91bFRnADHlRkAiYoWguQWKWcq3M9EXLDXYCXNgkyqv0PmdCMe_XOEOEhFpYyDuB03TNsKJOvnTq84n0RmrakTl_Dc7tdImAuFYzWMA-LxUMROtAaFbGk",
-    "deviceType": "iOS"
-}
