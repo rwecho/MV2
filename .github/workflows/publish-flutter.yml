@@ -144,10 +144,22 @@ jobs:
             --build-number="${{ needs.version.outputs.build_version }}" \
             --export-options-plist=ios/ExportOptions.plist
 
+      - name: Locate IPA
+        id: ipa
+        run: |
+          IPA_PATH=$(find build/ios/ipa -maxdepth 1 -type f -name '*.ipa' -print -quit)
+          if [ -z "$IPA_PATH" ]; then
+            echo "No IPA found in build/ios/ipa"
+            ls -la build/ios/ipa || true
+            exit 1
+          fi
+          echo "Found IPA: $IPA_PATH"
+          echo "path=${{ github.workspace }}/app/$IPA_PATH" >> "$GITHUB_OUTPUT"
+
       - name: Upload to TestFlight
         uses: apple-actions/upload-testflight-build@v1
         with:
-          app-path: ${{ github.workspace }}/app/build/ios/ipa/Runner.ipa
+          app-path: ${{ steps.ipa.outputs.path }}
           issuer-id: ${{ secrets.APPSTORE_ISSUER_ID }}
           api-key-id: ${{ secrets.APPSTORE_API_KEY_ID }}
           api-private-key: ${{ secrets.APPSTORE_API_PRIVATE_KEY }}
