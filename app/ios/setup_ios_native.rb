@@ -65,6 +65,14 @@ unless host.source_build_phase.files_references.include?(bridge)
   puts "added #{HOST_TARGET}/#{HOST_BRIDGE_SOURCE} to the #{HOST_TARGET} target"
 end
 
+# --------------------------------------------------- App-level privacy manifest
+privacy = host_group.files.find { |file| file.path == 'PrivacyInfo.xcprivacy' } ||
+          host_group.new_reference('PrivacyInfo.xcprivacy')
+unless host.resources_build_phase.files_references.include?(privacy)
+  host.add_resources([privacy])
+  puts "added #{HOST_TARGET}/PrivacyInfo.xcprivacy to the #{HOST_TARGET} resources"
+end
+
 # ------------------------------------------------- Firebase config resource
 if File.exist?(File.join(IOS_DIR, HOST_TARGET, HOST_RESOURCE))
   firebase_config = host_group.files.find { |file| file.path == HOST_RESOURCE } ||
