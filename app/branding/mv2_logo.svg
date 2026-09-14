@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1254" height="1254" viewBox="0 0 1254 1254"><rect x="0" y="0" width="1254" height="1254" fill="#ffffff"/>
+  <title>Symmetric red and blue V logo</title>
+  <!-- Transparent background -->
+  <!-- Colors sampled from the provided transparent PNG logo -->
+  <g id="blue-arm" transform="translate(776 640) rotate(28)">
+    <rect x="-95" y="-350" width="190" height="700" rx="95" fill="#0953A3"/>
+  </g>
+  <g id="red-arm" transform="translate(478 640) rotate(-28)">
+    <rect x="-95" y="-350" width="190" height="700" rx="95" fill="#C90522"/>
+  </g>
+</svg>

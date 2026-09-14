@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!--
+  C · 保留现有那对弧线（品牌延续性最好），只把渐变换成红/蓝实色，
+   并把底部的点换成真正的人形。改动最小。
+-->
+<svg width="456" height="456" viewBox="0 0 456 456" version="1.1"
+     xmlns="http://www.w3.org/2000/svg">
+    <rect x="0" y="0" width="456" height="456" fill="#ffffff" />
+
+    <!-- 蓝药丸（右，原曲线） -->
+    <path d="M 318 130 Q 270 220 252 322"
+          style="fill:none;stroke:#2563EB;stroke-width:40;stroke-linecap:round" />
+    <!-- 红药丸（左，原曲线） -->
+    <path d="M 138 130 Q 186 220 204 322"
+          style="fill:none;stroke:#E5484D;stroke-width:40;stroke-linecap:round" />
+
+    <circle cx="228" cy="306" r="23" fill="#111827" />
+    <path d="M 191 400 Q 191 325 228 325 Q 265 325 265 400 Z" fill="#111827" />
+</svg>

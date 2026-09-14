@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<!--
+  SYNTHETIC FIXTURE (test/fixtures/notifications_signed_in.html).
+
+  We have no V2EX login, so `/notifications` answers `302 → /signin` and the
+  signed-in list can never be captured. This file follows the documented live
+  shape (docs/12 §2.2): items are `div[id^="n_"]` under `#Wrapper`, each with a
+  `td strong` actor, a `td a img` avatar, an `a.topic-link` title, a `span.snow`
+  timestamp and a `div.payload` quote. The `unread` class token and the day
+  sections are synthetic/illustrative — the real unread marker is unverifiable
+  without a signed-in session.
+-->
+<html lang="zh-CN">
+<head><title>V2EX › 通知</title><meta name="Content-Type" content="text/html;charset=utf-8"></head>
+<body>
+<div id="Wrapper">
+  <div class="box">
+
+    <div class="cell unread" id="n_910001">
+      <table cellpadding="0" cellspacing="0" border="0" width="100%">
+        <tr>
+          <td width="48" valign="top" align="center"><a href="/member/kernel"><img src="https://cdn.v2ex.com/avatar/1a2b/3c4d/100001_large.png?m=1" class="avatar" border="0" align="default" width="48" alt="kernel" data-uid="100001" /></a></td>
+          <td width="10"></td>
+          <td width="auto" valign="top" align="left">
+            <span class="fade"><strong><a href="/member/kernel">kernel</a></strong> 回复了你的主题 <a href="/t/1241200#reply20" class="topic-link" id="topic-link-1241200">周五了，额度双双用光光</a></span>
+            <div class="sep5"></div>
+            <div class="payload">我也遇到过类似的问题，后来通过调整提示词格式解决了，分享一下我的配置<b>要点</b>…</div>
+            <div class="sep5"></div>
+            <span class="snow">3 小时前</span>
+          </td>
+        </tr>
+      </table>
+    </div>
+
+    <div class="cell unread" id="n_910002">
+      <table cellpadding="0" cellspacing="0" border="0" width="100%">
+        <tr>
+          <td width="48" valign="top" align="center"><a href="/member/seanChen"><img src="https://cdn.v2ex.com/avatar/2b3c/4d5e/100002_large.png?m=2" class="avatar" border="0" align="default" width="48" alt="seanChen" data-uid="100002" /></a></td>
+          <td width="10"></td>
+          <td width="auto" valign="top" align="left">
+            <span class="fade"><strong><a href="/member/seanChen">seanChen</a></strong> 在回复 <a href="/t/1241298#reply155" class="topic-link" id="topic-link-1241298">Anthropic 点名多家中国公司蒸馏 Claude</a> 时提到了你</span>
+            <div class="sep5"></div>
+            <div class="payload">@imshuai 这个方案很有参考价值，感谢分享！</div>
+            <div class="sep5"></div>
+            <span class="snow">5 小时前</span>
+          </td>
+        </tr>
+      </table>
+    </div>
+
+    <div class="cell" id="n_910003">
+      <table cellpadding="0" cellspacing="0" border="0" width="100%">
+        <tr>
+          <td width="48" valign="top" align="center"><a href="/member/eight"><img src="https://cdn.v2ex.com/avatar/3c4d/5e6f/100003_large.png?m=3" class="avatar" border="0" align="default" width="48" alt="eight" data-uid="100003" /></a></td>
+          <td width="10"></td>
+          <td width="auto" valign="top" align="left">
+            <span class="fade"><strong><a href="/member/eight">eight</a></strong> 感谢了你的回复</span>
+            <div class="sep5"></div>
+            <div class="payload">写得很详细，受益匪浅</div>
+            <div class="sep5"></div>
+            <span class="snow">1 天前</span>
+          </td>
+        </tr>
+      </table>
+    </div>
+
+    <div class="cell" id="n_910004">
+      <table cellpadding="0" cellspacing="0" border="0" width="100%">
+        <tr>
+          <td width="48" valign="top" align="center"><a href="/member/charlieYe"><img src="https://cdn.v2ex.com/avatar/4d5e/6f70/100004_large.png?m=4" class="avatar" border="0" align="default" width="48" alt="charlieYe" data-uid="100004" /></a></td>
+          <td width="10"></td>
+          <td width="auto" valign="top" align="left">
+            <span class="fade"><strong><a href="/member/charlieYe">charlieYe</a></strong> 收藏了你发布的主题 <a href="/t/1239253#reply6" class="topic-link" id="topic-link-1239253">我给我的各种 agents 做了一个 social network</a></span>
+            <div class="sep5"></div>
+            <div class="payload">很棒的总结，已收藏，方便后续再看。</div>
+            <div class="sep5"></div>
+            <span class="snow">8 月 31 日</span>
+          </td>
+        </tr>
+      </table>
+    </div>
+
+    <div class="cell ps_container">
+      <table cellpadding="0" cellspacing="0" border="0" width="100%">
+        <tr><td width="92%">
+          <a href="?p=1" class="page_current">1</a>
+          <a href="?p=2" class="page_normal">2</a>
+          <a href="?p=3" class="page_normal">3</a>
+          <input type="number" class="page_input" value="1" min="1" max="3">
+        </td></tr>
+      </table>
+    </div>
+
+  </div>
+</div>
+</body>
+</html>

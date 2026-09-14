@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!--
+  G · 不做 V：人站正中，两粒药丸在其上方左右分列，倾斜朝向人。
+  "两个选择"最直白，但丢掉 V / V2EX 的字形。
+-->
+<svg width="456" height="456" viewBox="0 0 456 456" version="1.1"
+     xmlns="http://www.w3.org/2000/svg">
+    <rect x="0" y="0" width="456" height="456" fill="#ffffff" />
+
+    <line x1="168" y1="246" x2="96" y2="196"
+          stroke="#E5484D" stroke-width="46" stroke-linecap="round" />
+    <line x1="288" y1="246" x2="360" y2="196"
+          stroke="#2563EB" stroke-width="46" stroke-linecap="round" />
+
+    <line x1="142.3" y1="206.2" x2="121.7" y2="235.8"
+          stroke="#ffffff" stroke-width="6" />
+    <line x1="313.7" y1="206.2" x2="334.3" y2="235.8"
+          stroke="#ffffff" stroke-width="6" />
+
+    <circle cx="228" cy="300" r="30" fill="#111827" />
+    <path d="M 190 414 Q 190 352 228 352 Q 266 352 266 414 Z" fill="#111827" />
+</svg>

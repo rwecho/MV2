@@ -1,0 +1,76 @@
+{
+  "took": 255,
+  "total": 5799,
+  "hits": [
+    {
+      "_score": null,
+      "_index": "topic_v1",
+      "_type": "topic",
+      "_id": "1241319",
+      "sort": [
+        1789106895000
+      ],
+      "highlight": {
+        "content": [
+          " DeepSeek 、GLM 、Kimi 、MiniMax 、通义千问等国产模型，兼容 Claude Code 、<em>Codex</em> 、Gemini CLI 等工具"
+        ]
+      },
+      "_source": {
+        "node": 864,
+        "replies": 0,
+        "created": "2026-09-11T06:08:15",
+        "member": "alynn",
+        "id": 1241319,
+        "title": "[CUBENCE] 周年庆活动来啦！ Macmini、机械键盘、现金红包大奖等你来！",
+        "content": "这里是 Cubence ，不知不觉已成立了一年了。\r\n\r\nCubence 提供国内外多模型 API 接入，覆盖 Claude 、GPT 、Gemini ，以及 DeepSeek 、GLM 、Kimi 、MiniMax 、通义千问等国产模型，兼容 Claude Code 、Codex 、Gemini CLI 等工具。支持按需求选择模型和分组，在一个控制台管理 API Key 、用量与费用。平台采用按量计费。公开价格页展示模型基础价格，实际费用还需要结合所选分组和峰谷倍率查看。充值邀请人返佣 5%   被邀请人返佣 5% \r\n\r\n**同时我们也非常注重用户隐私安全，不会保留任何对话数据，而且支持开启隐私过滤（将敏感数据进行屏蔽)**\r\n\r\n我们的网站地址是[https://cubence.com]\r\n文档地址[https://docs.cubence.com]\r\n\r\n为了回馈各位新老用户，为大家带来了诚意满满的周年活动。\r\n\r\n介绍一下本次周年庆的活动内容：\r\n\r\n1. 现金红包活动预热，9.10 日当天会在 qq 售后群及 tg 群中，发送现金红包抽奖\r\n2. 实体好礼、现金红包等每日抽奖\r\n\r\n活动时间：北京时间 2026 年 9 月 11 日 12:00 至 2026 年 9 月 25 日 12:00 \r\n终极奖品：Mac mini m6 16G 256G 1 台。\r\n日常奖品：机械键盘 6 把、现金红包、站内余额\r\n参与方式：登录活动页，完成签到等已开放的免费任务，领取次数后进行日常抽奖。充值不会增加抽奖次数。\r\n\r\n日常抽奖有机会获得现金红包、站内余额、实物和 Mac mini 终极抽奖码，也可能未中奖。抽到终极抽奖码，代表获得活动结束后的抽奖资格，不代表已经抽中机器。 \r\n\r\n![](  )"
+      }
+    },
+    {
+      "_score": null,
+      "_index": "topic_v1",
+      "_type": "topic",
+      "_id": "1241312",
+      "sort": [
+        1789105841000
+      ],
+      "highlight": {
+        "title": [
+          "<em>Codex</em> Business Team 席位，按月付费，有质保，有需要联系我"
+        ]
+      },
+      "_source": {
+        "node": 69,
+        "replies": 0,
+        "created": "2026-09-11T05:50:41",
+        "member": "glzcc520",
+        "id": 1241312,
+        "title": "Codex Business Team 席位，按月付费，有质保，有需要联系我",
+        "content": "![](  ) \r\n\r\n联系方式 V：\r\n\r\nV: R0xaQ0MxMzE0  \r\n\r\n进群或者单独加我都可以"
+      }
+    },
+    {
+      "_score": null,
+      "_index": "topic_v1",
+      "_type": "topic",
+      "_id": "1241311",
+      "sort": [
+        1789105717000
+      ],
+      "highlight": {
+        "content": [
+          "# 用户群体是谁？\r\nAI 编程发展到现在，在手机上编程已经不是什么新鲜事了，像 <em>Codex</em> 的手机客户端进行远程控制编程就非常好用。\r\n\r\n为什么做这个"
+        ]
+      },
+      "_source": {
+        "node": 17,
+        "replies": 0,
+        "created": "2026-09-11T05:48:37",
+        "member": "andforce",
+        "id": 1241311,
+        "title": "[送码]在手机端 AI 编程最佳应用： Octrix",
+        "content": "# 用户群体是谁？\r\nAI 编程发展到现在，在手机上编程已经不是什么新鲜事了，像 Codex 的手机客户端进行远程控制编程就非常好用。\r\n\r\n为什么做这个 APP 呢？是因为我发现并不是所有人都用 Codex ，他们可能是用 CodeX 接入国产模型（比如 Kimi 、DeepSeek 等等），这些不支持使用 Codex 官方的手机 APP 进行远程控制。\r\n\r\n为了实现远程控制，大家往往会在手机上使用终端去处理。但在手机上用终端是一个非常反人类的操作，体验特别差，这就是我开发这个软件的核心点所在。\r\n\r\n# 工作原理\r\n这个软件的核心工作原理很简单：\r\n\r\n1. 在 Mac 上起一个服务模拟 TUI ，这样就有了跟各种 AI agent 进行通信的能力（支持 Codex 、Cloud Code 等十余款 CLI 工具）\r\n2. 通过一个后端中转服务，把手机和 Mac 进行通信与配对绑定\r\n\r\n这样在手机端就是一个聊天对话框，可以完成与 Mac 上的通信\r\n\r\n\r\n# 特色\r\n0 、全部开源，从 iOS 客户端，到中继服务，到落地页都开源\r\n1 、支持大部分 AI CLI ，理论上可以适配所有 CLI\r\n2 、自带语音输入（需要配置 DeepSeek 的 API Key ）\r\n3 、支持长按进入文件、图片等\r\n\r\n\r\n# 资源\r\n\r\n开源地址 https://github.com/andforce/octrix\r\n\r\niOS 应用下载地址 https://apps.apple.com/cn/app/octrix/id6786918049\r\n\r\n\r\n官网 https://octrix.work/\r\n\r\n用户群：\r\n\r\n![0](  )\r\n\r\n\r\n# 产品部分截图\r\n\r\n![1]( https://octrix.work/macbook-web-tui.webp)\r\n\r\n\r\n\r\n![2](  )\r\n\r\n\r\n\r\n![3](  )"
+      }
+    }
+  ],
+  "timed_out": false
+}

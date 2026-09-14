@@ -1,0 +1,13 @@
+# Copy this file to `android/key.properties` and fill it in to sign release
+# builds with the published MV2 app's upload key. It is NOT committed.
+#
+# The keystore itself (`upload-keystore.jks`) is the same `keystore.jks` the
+# legacy CI decodes from the `KEYSTORE_BASE64` secret
+# (alias `v2ex_key`, see V2ex.Maui2/.github/workflows/publish.yml) — reusing it
+# is what makes a Flutter build an *update* of the published app on Play.
+#
+# `storeFile` is resolved relative to `android/app/`.
+storeFile=upload-keystore.jks
+storePassword=CHANGE_ME
+keyAlias=v2ex_key
+keyPassword=CHANGE_ME
