@@ -1,7 +1,10 @@
 name: Publish Flutter MV2
 
-# 推送 `v*` tag（如 v1.2.35）即自动构建并发布到 TestFlight / Play internal；
-# 也可在 Actions 页手动触发。版本号从 tag 名计算（规则同旧 MAUI CI）。
+# 推送 `v*` tag（如 v1.2.36）即自动构建并发布到 TestFlight / Play internal；
+# 也可在 Actions 页手动触发（版本号留空则取 app/pubspec.yaml）。
+#
+# tag 与 `app/pubspec.yaml` 的 `version:` 必须一致，否则 job 直接失败 —— 避免
+# 发布出「包名版本 = tag、App 内显示版本 = pubspec」的错版包。
 #
 # 复用旧仓库的 secrets（名称一字不改，见 V2ex.Maui2/.github/workflows/publish.yml）：
 #   KEYSTORE_BASE64, ANDROID_KEYSTORE_PASSWORD, ANDROID_KEY_PASSWORD,
@@ -16,9 +19,19 @@ on:
     tags:
       - 'v*'
   workflow_dispatch:
+    inputs:
+      version:
+        description: '手动发布的版本号（如 1.2.36）；留空则取 app/pubspec.yaml'
+        required: false
+        type: string
 
 permissions:
   contents: read
+
+# 同一 tag / 分支的发布串行执行，避免两次上传在同一商店版本上打架。
+concurrency:
+  group: publish-flutter-${{ github.ref }}
+  cancel-in-progress: false
 
 env:
   FLUTTER_VERSION: "3.47.3"
@@ -26,22 +39,60 @@ env:
 
 jobs:
   version:
-    name: Derive version from tag
+    name: Derive and verify version
     runs-on: ubuntu-latest
     outputs:
       display_version: ${{ steps.v.outputs.DISPLAY_VERSION }}
       build_version: ${{ steps.v.outputs.BUILD_VERSION }}
     steps:
+      - uses: actions/checkout@v4
+
       - name: Compute
         id: v
+        env:
+          # 经 env 传入而不是内联 ${{ }}，避免手动触发时把输入当代码执行。
+          INPUT_VERSION: ${{ inputs.version }}
         run: |
-          VERSION="${GITHUB_REF_NAME#v}"
-          echo "DISPLAY_VERSION=$VERSION" >> "$GITHUB_OUTPUT"
+          set -euo pipefail
+
+          PUBSPEC_VERSION="$(sed -n 's/^version:[[:space:]]*//p' app/pubspec.yaml | head -1)"
+          if [ -z "$PUBSPEC_VERSION" ]; then
+            echo "::error::app/pubspec.yaml 里读不到 version:"
+            exit 1
+          fi
+          PUBSPEC_NAME="${PUBSPEC_VERSION%%+*}"
+          echo "pubspec version: $PUBSPEC_VERSION"
+
+          if [ "${GITHUB_REF_TYPE}" = "tag" ]; then
+            VERSION="${GITHUB_REF_NAME#v}"
+            if [ "$VERSION" != "$PUBSPEC_NAME" ]; then
+              echo "::error::tag v$VERSION 与 app/pubspec.yaml 的 $PUBSPEC_NAME 不一致：先把 pubspec 的 version 改成 $VERSION 并提交，再重新打 tag。"
+              exit 1
+            fi
+          else
+            VERSION="${INPUT_VERSION:-}"
+            [ -n "$VERSION" ] || VERSION="$PUBSPEC_NAME"
+          fi
 
           # 与旧 MAUI CI 完全同一规则：1.2.34 → "1002034" + run number
           IFS='.' read -r MAJOR MINOR PATCH <<< "$VERSION"
-          BASE_BUILD=$(printf "%d%03d%03d" "${MAJOR:-0}" "${MINOR:-0}" "${PATCH:-0}")
+          for PART in "$MAJOR" "$MINOR" "$PATCH"; do
+            case "$PART" in
+              ''|*[!0-9]*)
+                echo "::error::版本号必须是 x.y.z 形式（当前 '$VERSION'）"
+                exit 1
+                ;;
+            esac
+            if [ "$PART" -gt 999 ]; then
+              echo "::error::版本段 $PART 超过 999，会破坏 %03d 拼版规则；请调整发布规则后再发。"
+              exit 1
+            fi
+          done
+
+          BASE_BUILD=$(printf "%d%03d%03d" "$MAJOR" "$MINOR" "$PATCH")
+          echo "DISPLAY_VERSION=$VERSION" >> "$GITHUB_OUTPUT"
           echo "BUILD_VERSION=${BASE_BUILD}${GITHUB_RUN_NUMBER}" >> "$GITHUB_OUTPUT"
+          echo "releasing $VERSION (base build $BASE_BUILD)"
 
   build-android:
     name: Android → Play (internal)

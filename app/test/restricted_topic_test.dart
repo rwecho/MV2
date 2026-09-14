@@ -15,6 +15,7 @@ import 'package:mv2/design_system/theme/mv2_theme.dart';
 import 'package:mv2/features/topic/presentation/topic_detail_page.dart';
 import 'package:mv2/shared/models/topic_detail.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'support/fixture_api.dart';
 
 /// Replays a canned redirect without touching the network.
 class _FakeAdapter implements HttpClientAdapter {

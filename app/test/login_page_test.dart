@@ -4,12 +4,12 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:mv2/core/data/v2ex_api.dart';
 import 'package:mv2/core/errors/failures.dart';
 import 'package:mv2/core/data/v2ex_providers.dart';
 import 'package:mv2/design_system/theme/mv2_theme.dart';
 import 'package:mv2/features/auth/presentation/login_page.dart';
 import 'package:mv2/shared/models/login_form.dart';
+import 'support/fixture_api.dart';
 
 /// A 1x1 transparent PNG so `Image.memory` can actually decode in the test.
 final Uint8List _onePixelPng = base64Decode(

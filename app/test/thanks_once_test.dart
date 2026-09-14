@@ -11,6 +11,7 @@ import 'package:mv2/shared/models/models.dart';
 import 'package:mv2/shared/models/topic_detail.dart';
 import 'package:mv2/shared/models/write_result.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'support/fixture_api.dart';
 
 /// V2EX rotates the session `once` after a write and hands the new value back
 /// in the `/thank/*` JSON. Without reusing it the **second** action in a row is

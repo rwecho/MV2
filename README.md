@@ -106,6 +106,34 @@ flutter build ipa
 
 Release CI is defined in `.github/workflows/publish-flutter.yml`. Pushing a `v*` tag triggers the store publishing workflow.
 
+#### Cutting a release
+
+The published version comes from the tag, but the binary is built from
+`app/pubspec.yaml`. Those two must agree: the workflow fails the run when the tag
+and the pubspec version differ, instead of shipping a package whose store version
+and in-app version disagree.
+
+```bash
+# 1. bump the version in app/pubspec.yaml (patch for a small release)
+#      version: 1.2.36+1002036000
+#    the +N build suffix must stay ahead of the last uploaded versionCode
+# 2. commit it
+git add app/pubspec.yaml
+git commit -m "release: v1.2.36"
+# 3. tag and push — the tag push is what starts TestFlight + Play internal
+git tag -a v1.2.36 -m "MV2 v1.2.36"
+git push origin HEAD
+git push origin v1.2.36
+```
+
+Manual runs are also available from the Actions tab (`workflow_dispatch`); leaving
+the version input empty falls back to the version in `app/pubspec.yaml`.
+
+The workflow derives the store build number with the legacy MV2 rule
+(`printf "%d%03d%03d", MAJOR, MINOR, PATCH` + the workflow run number), so each
+segment must stay below 1000 — the run fails loudly if a version segment would
+overflow that scheme.
+
 ---
 
 ## 📱 Application Identity

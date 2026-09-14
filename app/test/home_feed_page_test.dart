@@ -3,7 +3,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mv2/app/app.dart';
 import 'package:mv2/core/data/home_tab.dart';
-import 'package:mv2/core/data/v2ex_api.dart';
 import 'package:mv2/core/data/v2ex_providers.dart';
 import 'package:mv2/core/errors/failures.dart';
 import 'package:mv2/features/feed/application/feed_providers.dart';
@@ -11,6 +10,8 @@ import 'package:mv2/features/shell/application/shell_chrome.dart';
 import 'package:mv2/shared/models/models.dart';
 import 'package:mv2/ui/components/xna_item.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'support/fixture_api.dart';
+import 'support/test_container.dart';
 
 /// Counts `feed()` calls so a pull-to-refresh can be observed.
 class _CountingApi extends FixtureV2exApi {
@@ -45,7 +46,9 @@ class _FailingApi extends FixtureV2exApi {
 void main() {
   Future<ProviderContainer> boot(WidgetTester tester) async {
     SharedPreferences.setMockInitialValues(<String, Object>{});
-    final container = ProviderContainer();
+    final container = ProviderContainer(
+      overrides: [v2exApiProvider.overrideWithValue(fixtureApi())],
+    );
     addTearDown(container.dispose);
     await tester.pumpWidget(
       UncontrolledProviderScope(container: container, child: const Mv2App()),

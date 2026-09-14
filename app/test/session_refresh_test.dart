@@ -5,7 +5,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mv2/app/session_cache_refresh.dart';
-import 'package:mv2/core/data/v2ex_api.dart';
 import 'package:mv2/core/data/v2ex_providers.dart';
 import 'package:mv2/core/network/mv2_http_client.dart';
 import 'package:mv2/core/storage/cache_database.dart';
@@ -20,6 +19,7 @@ import 'package:mv2/shared/models/models.dart';
 import 'package:mv2/shared/models/topic_detail.dart';
 import 'package:mv2/ui/primitives/mv2_buttons.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'support/fixture_api.dart';
 
 /// A topic page fetched anonymously carries **no** `once` token, and the detail
 /// provider is long-lived. Signing in used to leave that cached anonymous copy

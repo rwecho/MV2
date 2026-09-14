@@ -11,11 +11,12 @@ import '../../../design_system/theme/mv2_theme.dart';
 import '../../../design_system/tokens/mv2_radius.dart';
 import '../../../design_system/tokens/mv2_spacing.dart';
 import '../../../shared/emoji/mv2_emoji_library.dart';
-import '../../../shared/mock/mock_data.dart';
 import '../../../shared/models/models.dart';
 import '../../../shared/models/topic_detail.dart';
+import '../../../ui/components/mv2_error_feedback.dart';
 import '../../../ui/components/mv2_page_header.dart';
 import '../../../ui/components/mv2_page_scaffold.dart';
+import '../../../ui/components/states/mv2_state_view.dart';
 import '../../../ui/primitives/mv2_avatar.dart';
 import '../../../ui/primitives/mv2_buttons.dart';
 import '../../../ui/primitives/mv2_chips.dart';
@@ -263,7 +264,7 @@ class _ReplyComposerPageState extends ConsumerState<ReplyComposerPage> {
     final detail = ref.watch(
       topicDetailProvider(TopicDetailArgs(widget.topicId)),
     );
-    final topic = detail.value?.topic ?? MockData.composerTopic();
+    final topic = detail.value?.topic;
     final quotedReply = _quotedReply(detail.value);
     // Prefer the session's newest token: a 感谢 on the topic page rotates it,
     // and the composer must not post with the stale scraped value.
@@ -318,7 +319,22 @@ class _ReplyComposerPageState extends ConsumerState<ReplyComposerPage> {
           Mv2Spacing.x8 + 96 + bottomInset,
         ),
         children: <Widget>[
-          _QuotedTopicCard(topic: topic),
+          // 引用卡：loaded → real card; loading → placeholder; failure →
+          // the standard error state with retry, never a stand-in topic.
+          if (topic != null)
+            _QuotedTopicCard(topic: topic)
+          else if (detail.hasError)
+            Mv2StateView(
+              kind: Mv2StateKind.error,
+              compact: true,
+              description: mv2DescribeError(detail.error!),
+              actionLabel: '重试',
+              onAction: () => ref.invalidate(
+                topicDetailProvider(TopicDetailArgs(widget.topicId)),
+              ),
+            )
+          else
+            const _QuotedTopicSkeleton(),
           if (quotedReply != null) ...<Widget>[
             const SizedBox(height: Mv2Spacing.x3),
             _QuoteBlock(reply: quotedReply),
@@ -404,6 +420,54 @@ class _ComposerErrorBanner extends StatelessWidget {
 }
 
 /// The topic being replied to, quoted at the top of the composer.
+/// Loading placeholder matching [_QuotedTopicCard] metrics.
+class _QuotedTopicSkeleton extends StatelessWidget {
+  const _QuotedTopicSkeleton();
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+
+    return Mv2Surface(
+      padding: const EdgeInsets.all(Mv2Spacing.x4),
+      shadowed: false,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Container(
+            width: 72,
+            height: 16,
+            decoration: BoxDecoration(
+              color: colors.divider,
+              borderRadius: Mv2Radius.allSm,
+            ),
+          ),
+          const SizedBox(height: Mv2Spacing.x2),
+          Container(
+            width: double.infinity,
+            height: 18,
+            decoration: BoxDecoration(
+              color: colors.divider,
+              borderRadius: Mv2Radius.allSm,
+            ),
+          ),
+          const SizedBox(height: Mv2Spacing.x2),
+          FractionallySizedBox(
+            widthFactor: 0.6,
+            child: Container(
+              height: 14,
+              decoration: BoxDecoration(
+                color: colors.divider,
+                borderRadius: Mv2Radius.allSm,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _QuotedTopicCard extends StatelessWidget {
   const _QuotedTopicCard({required this.topic});
 

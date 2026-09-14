@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -7,18 +8,19 @@ import '../../../design_system/effects/mv2_glass.dart';
 import '../../../design_system/theme/mv2_theme.dart';
 import '../../../design_system/tokens/mv2_radius.dart';
 import '../../../design_system/tokens/mv2_spacing.dart';
-import '../../../shared/mock/mock_data.dart';
 import '../../../ui/components/mv2_page_header.dart';
 import '../../../ui/components/mv2_page_scaffold.dart';
 import '../../../ui/components/mv2_settings_row.dart';
+import '../application/settings_providers.dart';
 
 /// 关于 MV2 — app identity plus the project's policy links.
-class AboutPage extends StatelessWidget {
+class AboutPage extends ConsumerWidget {
   const AboutPage({super.key});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final colors = context.colors;
+    final appVersion = ref.watch(appVersionProvider).value ?? '…';
 
     return Mv2PageScaffold(
       header: Mv2SecondaryHeader(title: '关于 MV2', onBack: () => context.pop()),
@@ -59,7 +61,7 @@ class AboutPage extends StatelessWidget {
                   ),
                   const SizedBox(height: 2),
                   Text(
-                    '版本 ${MockData.appVersion}',
+                    '版本 $appVersion',
                     style: context.text.metadata.copyWith(
                       color: colors.textSecondary,
                     ),
@@ -121,12 +123,12 @@ class AboutPage extends StatelessWidget {
                 borderRadius: Mv2Radius.allMd,
                 shadowed: false,
                 padding: const EdgeInsets.all(Mv2Spacing.x4),
-                child: const Column(
+                child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: <Widget>[
-                    _DebugLine(label: '数据来源', value: 'V2EX · sov2ex'),
-                    SizedBox(height: Mv2Spacing.x2),
-                    _DebugLine(label: '版本', value: MockData.appVersion),
+                    const _DebugLine(label: '数据来源', value: 'V2EX · sov2ex'),
+                    const SizedBox(height: Mv2Spacing.x2),
+                    _DebugLine(label: '版本', value: appVersion),
                   ],
                 ),
               ),

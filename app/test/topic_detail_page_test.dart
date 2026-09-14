@@ -11,6 +11,8 @@ import 'package:mv2/shared/models/models.dart';
 import 'package:mv2/shared/models/topic_detail.dart';
 import 'package:mv2/shared/models/write_result.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'support/fixture_api.dart';
+import 'support/test_container.dart';
 
 /// Records 感谢 calls so the reply like button can be observed.
 class _RecordingThanksApi extends FixtureV2exApi {
@@ -90,7 +92,9 @@ void main() {
     addTearDown(tester.view.resetDevicePixelRatio);
 
     SharedPreferences.setMockInitialValues(<String, Object>{});
-    final container = ProviderContainer();
+    final container = ProviderContainer(
+      overrides: [v2exApiProvider.overrideWithValue(fixtureApi())],
+    );
     addTearDown(container.dispose);
 
     await tester.pumpWidget(
@@ -148,7 +152,9 @@ void main() {
 
   testWidgets('long-pressing a reply opens 回复 / 复制 / 举报', (tester) async {
     SharedPreferences.setMockInitialValues(<String, Object>{});
-    final container = ProviderContainer();
+    final container = ProviderContainer(
+      overrides: [v2exApiProvider.overrideWithValue(fixtureApi())],
+    );
     addTearDown(container.dispose);
 
     await tester.pumpWidget(

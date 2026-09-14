@@ -1,13 +1,13 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mv2/core/data/home_tab.dart';
-import 'package:mv2/core/data/v2ex_api.dart';
 import 'package:mv2/core/data/v2ex_providers.dart';
 import 'package:mv2/features/blocked/application/blocked_users_controller.dart';
 import 'package:mv2/features/feed/application/feed_providers.dart';
 import 'package:mv2/shared/models/models.dart';
 import 'package:mv2/shared/models/node_visuals.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'support/fixture_api.dart';
 
 V2Topic _topic(String author) => V2Topic(
   id: author.hashCode,

@@ -5,6 +5,8 @@ import 'package:mv2/design_system/theme/mv2_theme.dart';
 import 'package:mv2/features/composer/presentation/reply_composer_page.dart';
 import 'package:mv2/shared/models/models.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'support/test_container.dart';
+import 'package:mv2/core/data/v2ex_providers.dart';
 
 /// The composer's quote block must mirror the reply the user tapped 引用 on
 /// instead of rendering a fixed fixture.
@@ -26,7 +28,9 @@ void main() {
     tester,
   ) async {
     SharedPreferences.setMockInitialValues(<String, Object>{});
-    final container = ProviderContainer();
+    final container = ProviderContainer(
+      overrides: [v2exApiProvider.overrideWithValue(fixtureApi())],
+    );
     addTearDown(container.dispose);
 
     const reply = V2Reply(
@@ -56,7 +60,9 @@ void main() {
     tester,
   ) async {
     SharedPreferences.setMockInitialValues(<String, Object>{});
-    final container = ProviderContainer();
+    final container = ProviderContainer(
+      overrides: [v2exApiProvider.overrideWithValue(fixtureApi())],
+    );
     addTearDown(container.dispose);
 
     await pumpComposer(
@@ -78,7 +84,9 @@ void main() {
     tester,
   ) async {
     SharedPreferences.setMockInitialValues(<String, Object>{});
-    final container = ProviderContainer();
+    final container = ProviderContainer(
+      overrides: [v2exApiProvider.overrideWithValue(fixtureApi())],
+    );
     addTearDown(container.dispose);
 
     await pumpComposer(
@@ -98,7 +106,9 @@ void main() {
     SharedPreferences.setMockInitialValues(<String, Object>{
       'mv2.draft.topic.1': '我之前的草稿',
     });
-    final container = ProviderContainer();
+    final container = ProviderContainer(
+      overrides: [v2exApiProvider.overrideWithValue(fixtureApi())],
+    );
     addTearDown(container.dispose);
 
     await pumpComposer(

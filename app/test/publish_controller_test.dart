@@ -2,7 +2,6 @@ import 'dart:convert';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:mv2/core/data/v2ex_api.dart';
 import 'package:mv2/core/data/v2ex_providers.dart';
 import 'package:mv2/core/errors/failures.dart';
 import 'package:mv2/features/auth/application/auth_controller.dart';
@@ -11,6 +10,7 @@ import 'package:mv2/features/auth/domain/auth_session.dart';
 import 'package:mv2/features/composer/application/publish_providers.dart';
 import 'package:mv2/shared/models/publish_form.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'support/fixture_api.dart';
 
 /// In-memory session store so the auth controller never touches the keychain.
 class _MemoryAuthStore extends AuthStore {

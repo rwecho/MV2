@@ -15,14 +15,16 @@ flutter pub get
 flutter run -d <device-id>
 ```
 
-### 数据来源：fixture 与真实站点
+### 数据来源：真实站点
 
-默认走**内置样本页**（`assets/fixtures/`），这样在没有网络或无法访问
-`www.v2ex.com` 的环境里也能开发和截图；样本页会经过**与线上完全相同的解析器**。
+客户端**只连真实站点**（`www.v2ex.com` + `sov2ex`），没有内置样本数据。
+取数失败时页面渲染标准错误态（`Mv2StateView`，带「重试」）并弹出失败提示，
+不会用假数据冒充成功。
 
 ```bash
-# 走真实站点（需要能访问 www.v2ex.com）
-flutter run --dart-define=MV2_FIXTURES=false
+# 直连 www.v2ex.com；本机 DNS 被污染时补代理
+flutter run
+flutter run --dart-define=MV2_PROXY=http://127.0.0.1:7897
 ```
 
 真实模式下客户端会：关闭自动重定向（靠 302 判断写操作成功）、逐请求带

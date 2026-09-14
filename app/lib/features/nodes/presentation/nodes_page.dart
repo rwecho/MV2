@@ -6,7 +6,6 @@ import '../../../design_system/effects/mv2_glass.dart';
 import '../../../design_system/theme/mv2_theme.dart';
 import '../../../design_system/tokens/mv2_radius.dart';
 import '../../../design_system/tokens/mv2_spacing.dart';
-import '../../../shared/mock/mock_data.dart';
 import '../../../ui/components/mv2_error_feedback.dart';
 import '../../../ui/components/mv2_page_header.dart';
 import '../../../ui/components/mv2_page_scaffold.dart';
@@ -27,25 +26,16 @@ class NodesPage extends ConsumerStatefulWidget {
 }
 
 class _NodesPageState extends ConsumerState<NodesPage> {
-  /// Resolves a 最近访问 display name to its slug via the loaded node list.
-  ///
-  /// Falls back to a no-op when the node has not loaded yet.
-  void _openRecentNode(String name) {
-    final hotNodes = ref.read(nodesProvider).value;
-    if (hotNodes == null) return;
-    for (final node in hotNodes) {
-      if (node.name == name) {
-        context.push(
-          '/node/${node.key}?name=${Uri.encodeComponent(node.name)}',
-        );
-        return;
-      }
-    }
+  /// Navigates to a 最近访问 node; the slug comes straight from the local
+  /// history snapshot, so no cross-reference with the hot list is needed.
+  void _openRecentNode(RecentVisitedNode node) {
+    context.push('/node/${node.key}?name=${Uri.encodeComponent(node.title)}');
   }
 
   @override
   Widget build(BuildContext context) {
     final nodes = ref.watch(nodesProvider);
+    final recentNodes = ref.watch(recentVisitedNodesProvider);
     ref.listen(nodesProvider, (p, n) => mv2ToastLoadError(context, p, n));
 
     return Mv2PageScaffold(
@@ -73,17 +63,22 @@ class _NodesPageState extends ConsumerState<NodesPage> {
           children: <Widget>[
             _SearchField(onTap: () => context.push('/nodes/all')),
             const SizedBox(height: Mv2Spacing.x5),
-            _SectionHeader(
-              title: '最近访问',
-              actionLabel: '查看全部',
-              onAction: () => context.push('/nodes/all'),
-            ),
-            const SizedBox(height: Mv2Spacing.x3),
-            _RecentNodes(
-              names: MockData.recentNodeNames,
-              onSelect: _openRecentNode,
-            ),
-            const SizedBox(height: Mv2Spacing.x5),
+            // 最近访问 comes purely from local history; the whole section
+            // stays hidden until at least one node has been visited.
+            if (recentNodes.value case final recentNodesValue?
+                when recentNodesValue.isNotEmpty) ...<Widget>[
+              _SectionHeader(
+                title: '最近访问',
+                actionLabel: '查看全部',
+                onAction: () => context.push('/nodes/all'),
+              ),
+              const SizedBox(height: Mv2Spacing.x3),
+              _RecentNodes(
+                nodes: recentNodesValue,
+                onSelect: _openRecentNode,
+              ),
+              const SizedBox(height: Mv2Spacing.x5),
+            ],
             _SectionHeader(
               title: '热门节点',
               actionLabel: '查看更多',
@@ -201,10 +196,10 @@ class _SectionHeader extends StatelessWidget {
 
 /// Horizontally scrollable recent-node pills.
 class _RecentNodes extends StatelessWidget {
-  const _RecentNodes({required this.names, required this.onSelect});
+  const _RecentNodes({required this.nodes, required this.onSelect});
 
-  final List<String> names;
-  final ValueChanged<String> onSelect;
+  final List<RecentVisitedNode> nodes;
+  final ValueChanged<RecentVisitedNode> onSelect;
 
   @override
   Widget build(BuildContext context) {
@@ -212,9 +207,9 @@ class _RecentNodes extends StatelessWidget {
       scrollDirection: Axis.horizontal,
       child: Row(
         children: <Widget>[
-          for (var i = 0; i < names.length; i++) ...<Widget>[
+          for (var i = 0; i < nodes.length; i++) ...<Widget>[
             if (i > 0) const SizedBox(width: Mv2Spacing.x2),
-            Mv2Chip(label: names[i], onTap: () => onSelect(names[i])),
+            Mv2Chip(label: nodes[i].title, onTap: () => onSelect(nodes[i])),
           ],
         ],
       ),

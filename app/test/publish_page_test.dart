@@ -4,6 +4,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:mv2/design_system/theme/mv2_theme.dart';
 import 'package:mv2/features/composer/presentation/publish_topic_page.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'support/test_container.dart';
+import 'package:mv2/core/data/v2ex_providers.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -12,6 +14,7 @@ void main() {
     SharedPreferences.setMockInitialValues(<String, Object>{});
     await tester.pumpWidget(
       ProviderScope(
+        overrides: [v2exApiProvider.overrideWithValue(fixtureApi())],
         child: MaterialApp(
           theme: Mv2ThemeData.light(),
           home: const PublishTopicPage(),

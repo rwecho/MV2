@@ -2,8 +2,8 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mv2/core/data/home_tab.dart';
-import 'package:mv2/core/data/v2ex_api.dart';
 import 'package:mv2/core/parser/xna_parser.dart';
+import 'support/fixture_api.dart';
 
 /// Parser regression tests against the **real** `/xna` capture.
 ///
@@ -12,7 +12,6 @@ import 'package:mv2/core/parser/xna_parser.dart';
 String fixture(String name) => File('test/fixtures/$name').readAsStringSync();
 
 void main() {
-  // `FixtureV2exApi` reads the packaged `assets/fixtures/` through `rootBundle`.
   TestWidgetsFlutterBinding.ensureInitialized();
 
   group('XnaParser — /xna (real markup)', () {

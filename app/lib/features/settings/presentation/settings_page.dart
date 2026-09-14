@@ -10,11 +10,11 @@ import '../../../core/push/push_providers.dart';
 import '../../../design_system/theme/mv2_theme.dart';
 import '../../../design_system/tokens/mv2_radius.dart';
 import '../../../design_system/tokens/mv2_spacing.dart';
-import '../../../shared/mock/mock_data.dart';
 import '../../../ui/components/mv2_page_header.dart';
 import '../../../ui/components/mv2_page_scaffold.dart';
 import '../../../ui/components/mv2_settings_row.dart';
 import '../application/settings_controller.dart';
+import '../application/settings_providers.dart';
 
 /// `设置` — `designs/08-settings.png`.
 ///
@@ -218,10 +218,10 @@ class SettingsPage extends ConsumerWidget {
                   icon: Icons.info_outline_rounded,
                   onTap: () => context.push('/about'),
                 ),
-                const Mv2SettingsRow(
+                Mv2SettingsRow(
                   label: '当前版本',
                   icon: Icons.new_releases_outlined,
-                  value: MockData.appVersion,
+                  value: ref.watch(appVersionProvider).value ?? '…',
                   showChevron: false,
                 ),
                 Mv2SettingsRow(

@@ -95,13 +95,8 @@ class _LoginPageState extends ConsumerState<LoginPage> {
         setState(() {
           _loadingForm = false;
           _formUnavailable = true;
-          // Fixture mode has no login endpoint at all, so say so instead of
-          // blaming the network.
           _errors = <String>[
-            kUseFixtureApi
-                ? '离线样本模式没有登录接口。请用 '
-                      '--dart-define=MV2_FIXTURES=false 连接 V2EX 后再登录。'
-                : 'V2EX 没有返回可用的登录表单（页面结构可能已变更），请稍后重试。',
+            'V2EX 没有返回可用的登录表单（页面结构可能已变更），请稍后重试。',
           ];
         });
         return;
@@ -272,11 +267,10 @@ class _LoginPageState extends ConsumerState<LoginPage> {
     context.pop();
   }
 
-  /// A concrete failure outranks the fixture-mode hint: if V2EX actually told
-  /// us something (rate limit, network), that is what the user needs to see.
+  /// A concrete failure outranks a generic hint: if V2EX actually told us
+  /// something (rate limit, network), that is what the user needs to see.
   String get _formTitle {
     if (_formFailure is RateLimitFailure) return '登录尝试过于频繁';
-    if (kUseFixtureApi) return '离线样本模式无法登录';
     return _formTitleForFailure(_formFailure);
   }
 

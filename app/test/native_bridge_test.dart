@@ -1,7 +1,6 @@
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:mv2/core/data/v2ex_api.dart';
 import 'package:mv2/core/data/v2ex_providers.dart';
 import 'package:mv2/core/native/mv2_native_bridge.dart';
 import 'package:mv2/core/native/widget_snapshot.dart';
@@ -14,6 +13,7 @@ import 'package:mv2/shared/models/account_info.dart';
 import 'package:mv2/shared/models/models.dart';
 import 'package:mv2/shared/models/notification_page.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'support/fixture_api.dart';
 
 const MethodChannel _channel = MethodChannel('mv2/native');
 
