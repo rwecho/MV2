@@ -89,14 +89,14 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: android-bundle
-          path: build/app/outputs/bundle/release/app-release.aab
+          path: app/build/app/outputs/bundle/release/app-release.aab
 
       - name: Upload to Google Play (internal track)
         uses: r0adkll/upload-google-play@v1
         with:
           serviceAccountJsonPlainText: ${{ secrets.GOOGLE_PLAY_SERVICE_ACCOUNT_JSON }}
           packageName: ${{ env.BUNDLE_ID }}
-          releaseFiles: build/app/outputs/bundle/release/app-release.aab
+          releaseFiles: app/build/app/outputs/bundle/release/app-release.aab
           track: internal
 
   build-ios:
@@ -131,11 +131,8 @@ jobs:
         run: |
           PP="$HOME/Library/MobileDevice/Provisioning Profiles"
           mkdir -p "$PP"
-          for f in ios/profiles/*.mobileprovision; do
-            u=$(/usr/libexec/PlistBuddy -c "Print :UUID" "$f" 2>/dev/null)
-            cp "$f" "$PP/$u.mobileprovision"
-            echo "  installed: $(basename $f) → $u"
-          done
+          cp ios/profiles/tech_zb_v2ex_maui_app.mobileprovision "$PP/66aa10d5-cd15-4941-b2ee-c3b174492454.mobileprovision"
+          cp ios/profiles/mv2_widget_app_store.mobileprovision "$PP/7cf1e83f-70aa-4fea-b50a-fdc365fb21c7.mobileprovision"
 
       - name: Build IPA
         env:
