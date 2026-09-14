@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!--
+  MV2 mark on transparency (no background field) — the natural-size V plus its
+  pink dot. Used for the launch/splash image and, zoomed 1.2×, for the Android
+  adaptive-icon foreground. The app icon itself is `mv2_logo.svg`.
+-->
+<svg width="456" height="456" viewBox="0 0 456 456" version="1.1"
+     xmlns="http://www.w3.org/2000/svg">
+    <defs>
+        <linearGradient id="mainGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" stop-color="#7c3aed" />
+            <stop offset="50%" stop-color="#6366f1" />
+            <stop offset="100%" stop-color="#ec4899" />
+        </linearGradient>
+        <linearGradient id="accentGradient" x1="100%" y1="0%" x2="0%" y2="100%">
+            <stop offset="0%" stop-color="#3b82f6" />
+            <stop offset="100%" stop-color="#f472b6" />
+        </linearGradient>
+    </defs>
+
+    <!-- 主V形状 - 左笔 -->
+    <path d="M 135 140 Q 185 235 205 335"
+          style="fill:none;stroke:url(#mainGradient);stroke-width:32;stroke-linecap:round;stroke-linejoin:round" />
+
+    <!-- 主V形状 - 右笔 -->
+    <path d="M 321 140 Q 271 235 251 335"
+          style="fill:none;stroke:url(#accentGradient);stroke-width:32;stroke-linecap:round;stroke-linejoin:round" />
+
+    <!-- V底部高亮圆点 -->
+    <circle cx="228" cy="350" r="10" style="fill:#ec4899" />
+    <circle cx="228" cy="350" r="6" style="fill:#ffffff;opacity:0.7" />
+</svg>

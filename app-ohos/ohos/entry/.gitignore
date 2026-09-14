@@ -1,0 +1,13 @@
+/node_modules
+/oh_modules
+/.preview
+/build
+/.cxx
+/.test
+GeneratedPluginRegistrant.ets
+
+# AppGallery Connect credentials for HMS Push Kit. The publisher drops the real
+# agconnect-services.json here (the entry module root); it carries project
+# secrets and must never be committed. The matching client_id goes into
+# src/main/module.json5. See README.md §7.3.
+/agconnect-services.json

@@ -1,0 +1,15 @@
+name: share_plus
+description: >-
+  HarmonyOS (ohos) shim for share_plus. NOT the real plugin: there is no
+  HarmonyOS implementation, so `SharePlus.instance.share` throws and MV2's
+  existing catch path copies the link to the clipboard and shows a SnackBar.
+  See app-ohos/README.md.
+version: 13.3.0
+publish_to: 'none'
+
+environment:
+  sdk: ^3.11.0
+
+dependencies:
+  flutter:
+    sdk: flutter

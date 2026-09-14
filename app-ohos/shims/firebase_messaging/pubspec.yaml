@@ -1,0 +1,16 @@
+name: firebase_messaging
+description: >-
+  HarmonyOS (ohos) shim for firebase_messaging. NOT Firebase: it keeps the Dart
+  API `Mv2PushGateway` uses but push is permanently unavailable on ohos. See
+  app-ohos/README.md.
+version: 16.6.0
+publish_to: 'none'
+
+environment:
+  sdk: ^3.11.0
+
+dependencies:
+  flutter:
+    sdk: flutter
+  firebase_core:
+    path: ../firebase_core

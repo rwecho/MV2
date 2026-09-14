@@ -1,0 +1,124 @@
+name: mv2
+description: "MV2 — 更好的 V2EX 客户端（Flutter 重写版，HarmonyOS / ohos 变体）"
+# The following line prevents the package from being accidentally published to
+# pub.dev using `flutter pub publish`. This is preferred for private packages.
+publish_to: 'none' # Remove this line if you wish to publish to pub.dev
+
+# ---------------------------------------------------------------------------
+# HARMONYOS (ohos) VARIANT
+#
+# This pubspec intentionally differs from `../app/pubspec.yaml`. It is built with
+# the HarmonyOS Flutter fork (Flutter 3.41.10-ohos / Dart 3.11.5), which is older
+# than the mainline Dart 3.13.3. Every version change below is forced by either
+#   (a) an `environment.sdk` constraint that requires Dart >= 3.12, or
+#   (b) a native plugin that has no usable HarmonyOS implementation.
+#
+# See ../app-ohos/README.md for the full rationale and the feature matrix.
+# ---------------------------------------------------------------------------
+
+# Same rationale as mainline: stay ahead of the released MAUI client `v1.2.34`.
+version: 1.2.35+1002035000
+
+environment:
+  # Mainline is ^3.13.3; the ohos fork ships Dart 3.11.5.
+  sdk: ^3.11.0
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  cupertino_icons: ^1.0.8
+
+  # --- pure Dart / no native code: unchanged from mainline --------------------
+  dio: ^5.11.1
+  dio_cookie_manager: ^3.5.0
+  cookie_jar: ^4.0.9
+  html: ^0.15.7
+
+  # 18.0.x requires Dart ^3.12.0 -> last release supporting 3.11 is 17.5.0.
+  go_router: ^17.5.0
+
+  # 3.4.x requires Dart ^3.12.0 -> 3.3.2 is the newest release on `^3.7.0`.
+  flutter_riverpod: ^3.3.2
+
+  # 0.56.3 already allows Dart >=3.11.0, but every one of its exhaustive
+  # `switch (TargetPlatform)` statements omits `TargetPlatform.ohos` (added by
+  # the HarmonyOS fork), which is a hard kernel-compile error. Vendored under
+  # `vendor/shadcn_ui/` with four one-line `case TargetPlatform.ohos:` patches.
+  shadcn_ui:
+    path: vendor/shadcn_ui
+
+  # 4.0.0 requires Dart ^3.12.0 -> fall back to the 3.4.1 line.
+  cached_network_image: ^3.4.1
+
+  # drift_dev 2.34.x (the newest on analyzer 10.x) refuses drift >=2.35.0, so the
+  # runtime and the generator are rolled back together.
+  drift: 2.34.4
+  drift_flutter: ^0.3.1
+  # Direct dependency only so `cacheDatabaseProvider` can probe whether the
+  # sqlite3 native asset actually loads on HarmonyOS before opening Drift.
+  sqlite3: ^3.5.2
+  freezed_annotation: ^3.1.0
+  json_annotation: ^4.12.0
+
+  # --- native plugins: real HarmonyOS ports from pub.dev ---------------------
+  # These federated implementations declare `implements: <parent>` for the
+  # `ohos` platform, so the mainline Dart call sites are untouched.
+  shared_preferences: ^2.5.5
+  shared_preferences_ohos: ^2.2.0
+  path_provider: ^2.1.6
+  path_provider_ohos: ^2.2.1
+  url_launcher: ^6.3.2
+  url_launcher_ohos: ^6.3.0
+  # Critical for the reader's 原文 mode (ArkWeb-backed WebView).
+  webview_flutter: ^4.14.1
+  webview_flutter_ohos: ^3.15.0
+
+  # --- native plugins: no usable HarmonyOS implementation -> local shims -----
+  # Each shim keeps the exact Dart API the mainline uses, so no `lib/` call site
+  # has to change. All of them are no-ops / degraded; see README.md.
+  #
+  # `image_picker` is deliberately NOT listed anymore: the composer's photo
+  # source is now the local `mv2/image_picker` ArkTS bridge behind the
+  # `Mv2ImagePicker` interface (see ImagePickerBridge.ets and README.md).
+  flutter_secure_storage:
+    path: shims/flutter_secure_storage
+  share_plus:
+    path: shims/share_plus
+  app_links:
+    path: shims/app_links
+  firebase_core:
+    path: shims/firebase_core
+  firebase_messaging:
+    path: shims/firebase_messaging
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+
+  flutter_lints: ^6.0.0
+
+  # Codegen tools. These have no `environment.sdk` blocker of their own, but the
+  # *analyzer* they share does: the newest `build_runner` (2.16.x) and
+  # `drift_dev` (2.35.x) need analyzer >= 13, while the newest `freezed` that
+  # supports Dart 3.11 (3.2.5) needs analyzer < 11. The only coherent window is
+  # analyzer 10.x, which pins the whole toolchain:
+  build_runner: 2.15.1
+  freezed: ^3.2.5
+  json_serializable: ^6.14.1
+  drift_dev: 2.34.0
+
+flutter:
+  assets:
+    - assets/fixtures/
+    # Mozilla @mozilla/readability@0.6.0 — injected into the WebView by the
+    # in-app reader (`lib/features/reader`).
+    - assets/vendor/readability.js
+
+  uses-material-design: true
+
+# NOTE: the mainline `hooks: user_defines: sqlite3: source: system` block is
+# deliberately dropped here. On HarmonyOS there is no `sqlite3` in the
+# OpenHarmony sysroot, so the build hook cannot satisfy `source: system`; the
+# ohos variant never opens a SQLite file (see
+# `lib/core/storage/ohos_cache_database.dart`) so the hook is not needed.

@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!--
+  B · 同 A，但加上胶囊接缝（白色横线），让"药丸"读起来更像胶囊而不是线条。
+-->
+<svg width="456" height="456" viewBox="0 0 456 456" version="1.1"
+     xmlns="http://www.w3.org/2000/svg">
+    <rect x="0" y="0" width="456" height="456" fill="#ffffff" />
+
+    <line x1="250" y1="344" x2="306" y2="140"
+          stroke="#2563EB" stroke-width="40" stroke-linecap="round" />
+    <line x1="206" y1="344" x2="150" y2="140"
+          stroke="#E5484D" stroke-width="40" stroke-linecap="round" />
+
+    <!-- 胶囊接缝 -->
+    <line x1="261.6" y1="237.5" x2="294.4" y2="246.5"
+          stroke="#ffffff" stroke-width="5" />
+    <line x1="161.6" y1="246.5" x2="194.4" y2="237.5"
+          stroke="#ffffff" stroke-width="5" />
+
+    <circle cx="228" cy="306" r="23" fill="#111827" />
+    <path d="M 191 400 Q 191 325 228 325 Q 265 325 265 400 Z" fill="#111827" />
+</svg>

@@ -1,0 +1,16 @@
+
+{
+  "name": "entry",
+  "version": "1.0.0",
+  "description": "Please describe the basic information.",
+  "main": "",
+  "author": "",
+  "license": "",
+  // HMS Push Kit needs no ohpm entry: `@kit.PushKit` (and its
+  // `@hms.core.push.pushService` module) ships inside the DevEco HarmonyOS SDK
+  // and is resolved because the `default` product sets
+  // `runtimeOS: "HarmonyOS"`. The runtime side only needs the AGC
+  // configuration in `module.json5` (`client_id` metadata) and the
+  // publisher-supplied `agconnect-services.json` in this module's root.
+  "dependencies": {},
+}

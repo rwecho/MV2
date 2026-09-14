@@ -1,0 +1,15 @@
+name: app_links
+description: >-
+  HarmonyOS (ohos) shim for app_links. NOT the real plugin: it keeps the Dart
+  API MV2 uses but the warm deep-link stream is always empty. The clipboard
+  pasteboard deep-link path (the only way `https://www.v2ex.com/...` shares
+  reach the app) still works. See app-ohos/README.md.
+version: 7.2.1
+publish_to: 'none'
+
+environment:
+  sdk: ^3.11.0
+
+dependencies:
+  flutter:
+    sdk: flutter

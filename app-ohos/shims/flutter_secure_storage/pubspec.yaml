@@ -1,0 +1,17 @@
+name: flutter_secure_storage
+description: >-
+  HarmonyOS (ohos) shim for flutter_secure_storage. NOT the real plugin: it
+  keeps the Dart API MV2 uses but persists through shared_preferences, which has
+  a real HarmonyOS implementation (shared_preferences_ohos). There is no
+  keystore-backed secure storage on this target yet, so the session cookie is
+  stored unencrypted in the app sandbox. See app-ohos/README.md.
+version: 11.1.0
+publish_to: 'none'
+
+environment:
+  sdk: ^3.11.0
+
+dependencies:
+  flutter:
+    sdk: flutter
+  shared_preferences: ^2.5.5

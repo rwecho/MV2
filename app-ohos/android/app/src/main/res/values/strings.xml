@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Shown in Android's 设置 → 通知 list; keep in sync with the app's zh
+         copy. The id (`mv2_default`) lives in MainActivity and the manifest. -->
+    <string name="mv2_notification_channel_name">通知</string>
+    <string name="mv2_notification_channel_description">回复、提及、收藏与感谢提醒</string>
+</resources>
