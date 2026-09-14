@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="zh-CN"><head><title>V2EX › 登录</title></head><body>
+<div id="Wrapper">
+<div class="box">
+<form method="post" action="/signin">
+        <table cellpadding="5" cellspacing="0" border="0" width="100%">
+            <tr>
+                <td width="120" align="right">用户名</td>
+                <td width="auto" align="left"><input type="text" class="sl" name="03945380ef98500a49e368618cc08f5705e2a65633566259e26e8b0875c1d35e" value="" autofocus="autofocus" autocorrect="off" spellcheck="false" autocapitalize="off" placeholder="用户名或电子邮件地址" /></td>
+            </tr>
+            <tr>
+                <td width="120" align="right">密码</td>
+                <td width="auto" align="left"><input type="password" class="sl" name="a0dd3ecea3b410fe9a65490e47327f96e729175b06fef764d4c25232108aeeaf" value="" autocorrect="off" spellcheck="false" autocapitalize="off" /></td>
+            </tr>
+            <tr>
+                <td width="120" align="right">你是机器人吗？</td>
+                <td width="auto" align="left">
+                    <img id="captcha-image" width="320" height="80" src="/_captcha" alt="CAPTCHA" onclick="refreshCaptcha()">
+                    <div class="sep10"></div>
+                    <input type="text" class="sl" name="41e61f8c11c5e5be984fa7eaa7bc027417863c32ba22ea0e0b46f37c12536aaf" value="" autocorrect="off" spellcheck="false" autocapitalize="off" placeholder="请输入上图中的验证码，点击可以更换图片">
+                </td>
+            </tr>
+            <tr>
+                <td width="120" align="right"></td>
+                <td width="auto" align="left"><input type="hidden" value="84014" name="once" /><input type="submit" class="super normal button" value="登录" /></td>
+            </tr>
+            <tr>
+                <td width="120" align="right"></td>
+                <td width="auto" align="left"><a href="/forgot">我忘记密码了</a></td>
+            </tr>
+        </table>
+        
+        <input type="hidden" value="/" name="next" />
+        
+        </form>
+</div>
+</div>
+</body></html>

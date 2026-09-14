@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!--
+  E · 两粒比例正确的药丸（长宽比 ~2.4:1）斜成 V，人独立站在下方，
+  与药丸之间留出清晰间隙，缩小后不会糊成一团。
+-->
+<svg width="456" height="456" viewBox="0 0 456 456" version="1.1"
+     xmlns="http://www.w3.org/2000/svg">
+    <rect x="0" y="0" width="456" height="456" fill="#ffffff" />
+
+    <line x1="280" y1="236" x2="344" y2="144"
+          stroke="#2563EB" stroke-width="46" stroke-linecap="round" />
+    <line x1="176" y1="236" x2="112" y2="144"
+          stroke="#E5484D" stroke-width="46" stroke-linecap="round" />
+
+    <circle cx="228" cy="306" r="28" fill="#111827" />
+    <path d="M 194 414 Q 194 350 228 350 Q 262 350 262 414 Z" fill="#111827" />
+</svg>

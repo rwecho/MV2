@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- APNs environment. `development` matches a development provisioning
+	     profile (Xcode / `flutter run` on a device → sandbox APNs). Distribution
+	     builds are re-signed against the App Store profile, whose
+	     aps-environment is `production`, so TestFlight and release pushes work
+	     without changing this file. -->
+	<key>aps-environment</key>
+	<string>development</string>
+	<!-- Shared container between the app and the MV2Widget extension.
+	     The Dart side writes the widget snapshot through the `mv2/native`
+	     channel; the extension only reads it. Keep this id in sync with
+	     `MV2Widget/MV2Widget.entitlements` and
+	     `lib/core/widgets/widget_bridge.dart`. -->
+	<key>com.apple.security.application-groups</key>
+	<array>
+		<string>group.tech.zb.v2ex.maui.app</string>
+	</array>
+</dict>
+</plist>

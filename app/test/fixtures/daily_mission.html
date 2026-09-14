@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<!--
+  SYNTHETIC FIXTURE (test/fixtures/daily_mission.html).
+
+  `/mission/daily` is login-only (anonymous GET answers `302 → /signin`), so it
+  could not be captured. Built from the `docs/12` §2.2 / §4 contract that
+  `DailyMissionParser` implements:
+
+    * the `已连续 N 天` streak sentence lives inside a `div.cell`;
+    * the redeem action is an `input[type="button"]` whose inline `onclick`
+      carries `/mission/daily/redeem?once=...`.
+-->
+<html lang="zh-CN">
+<head>
+<meta name="Content-Type" content="text/html;charset=utf-8">
+<title>V2EX › 每日签到</title>
+</head>
+<body>
+<div id="Wrapper">
+  <div class="box">
+    <div class="cell">
+      <span class="bigger">已连续登录 12 天</span>
+      <div class="sep10"></div>
+      <input type="button" class="super normal button" value="领取每日登录奖励" onclick="if (confirm('确认领取每日登录奖励？')) { location.href = '/mission/daily/redeem?once=55555'; }" />
+    </div>
+  </div>
+</div>
+</body>
+</html>

@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "861040628994",
+    "project_id": "v2ex-maui2",
+    "storage_bucket": "v2ex-maui2.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:861040628994:android:7aa358cdefd71f1d5f9e1b",
+        "android_client_info": {
+          "package_name": "tech.zb.v2ex.maui.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCzxme9Ih59rrF6GBBoXDzBMcZm6f7jdGo"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

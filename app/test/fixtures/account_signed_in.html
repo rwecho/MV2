@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<!--
+  SYNTHETIC FIXTURE (test/fixtures/account_signed_in.html).
+
+  `/` requires a session to render the avatar sidebar and this project has no
+  V2EX account, so this page could not be captured. It is built from the
+  `docs/12` §UserInfo / #Rightbar contract that `AccountParser` implements:
+
+    * `div#Rightbar` marks the signed-in sidebar (the anonymous shell renders a
+      登录/注册 box instead and carries no `img.avatar`).
+    * `img.avatar[alt=data-uid][src]` supplies username, member id and avatar.
+    * the member anchor `a[href^="/member/"]` is the username fallback.
+    * `a[href="/notifications"]` supplies the unread count.
+    * `div#money img[alt="G"|"S"|"B"]` is preceded by the balance text node.
+
+  The avatar URL is a real cdn.v2ex.com shape (member 94728) so URL
+  normalisation is exercised with an absolute URL.
+-->
+<html lang="zh-CN">
+<head>
+<meta name="Content-Type" content="text/html;charset=utf-8">
+<title>V2EX › 首页</title>
+</head>
+<body>
+<div id="Wrapper">
+<div id="Rightbar">
+  <div class="box">
+    <div class="cell">
+      <table cellpadding="0" cellspacing="0" border="0" width="100%">
+        <tr>
+          <td width="48" valign="top" align="center">
+            <a href="/member/rwecho"><img src="https://cdn.v2ex.com/avatar/a1b2/c3d4/94728_large.png?m=1789110000" class="avatar" border="0" align="default" width="48" style="width: 48px; max-height: 48px;" alt="rwecho" data-uid="94728" /></a>
+          </td>
+          <td width="10"></td>
+          <td width="auto" valign="top" align="left">
+            <span class="bigger"><a href="/member/rwecho">rwecho</a></span>
+            <div class="sep5"></div>
+            <span class="fade">V2EX 第 94728 号会员</span>
+          </td>
+        </tr>
+      </table>
+    </div>
+    <div class="inner">
+      <span class="fade">未读提醒</span>
+      <a href="/notifications" class="fade">3</a>
+    </div>
+  </div>
+  <div class="sep20"></div>
+  <div id="money" class="box">
+    <div class="cell">
+      <span class="bigger">9.6</span> <img src="/static/img/gold@2x.png" alt="G" border="0" />
+      <span class="sep5"></span>
+      <span class="bigger">120</span> <img src="/static/img/silver@2x.png" alt="S" border="0" />
+      <span class="sep5"></span>
+      <span class="bigger">0</span> <img src="/static/img/bronze@2x.png" alt="B" border="0" />
+    </div>
+  </div>
+</div>
+</div>
+</body>
+</html>
