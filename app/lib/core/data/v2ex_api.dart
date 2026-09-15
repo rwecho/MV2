@@ -12,6 +12,7 @@ import '../errors/failures.dart';
 import '../network/mv2_http_client.dart';
 import '../network/v2ex_endpoints.dart';
 import '../storage/http_cache.dart';
+import '../telemetry/mv2_telemetry.dart';
 import '../parser/account_parser.dart';
 import '../parser/feed_parser.dart';
 import '../parser/html_dom.dart';
@@ -223,12 +224,23 @@ class RemoteV2exApi implements V2exApi {
     // Every topic tab is the same page with a different `?tab=` value; the
     // page renders the tab's rows inside the usual `div.cell.item` list, so a
     // single parser covers them all (verified live on `hot`/`all`/`r2`).
-    return FeedParser.parseTopicList(
-      await _getHtml(
-        tab.path,
-        referer: '${V2exEndpoints.baseUrl}${V2exEndpoints.home}',
-      ),
+    final html = await _getHtml(
+      tab.path,
+      referer: '${V2exEndpoints.baseUrl}${V2exEndpoints.home}',
     );
+    try {
+      return FeedParser.parseTopicList(html);
+    } catch (error, stack) {
+      // A device/region-specific page variant (anti-bot, carrier injection)
+      // surfaces here first — report it with the payload size so the console
+      // shows what was actually served.
+      Mv2Telemetry.recordNonFatal(
+        error,
+        stack,
+        reason: 'feed ${tab.path} (${html.length}B)',
+      );
+      rethrow;
+    }
   }
 
   @override

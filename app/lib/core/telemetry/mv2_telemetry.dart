@@ -4,6 +4,7 @@ import 'package:firebase_analytics/firebase_analytics.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_crashlytics/firebase_crashlytics.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/widgets.dart' show WidgetsBinding;
 
 /// Firebase crash reporting + analytics.
 ///
@@ -72,6 +73,20 @@ abstract final class Mv2Telemetry {
         reason: reason,
         fatal: false,
       ),
+    );
+  }
+
+  /// Attaches the current theme context as Crashlytics custom keys, so a
+  /// "颜色不对" report can be read against what the app actually applied
+  /// (in-app preference × system brightness).
+  static void setThemeContext({required String colorMode}) {
+    if (!_ready) return;
+    final brightness = WidgetsBinding
+        .instance.platformDispatcher.platformBrightness;
+    FirebaseCrashlytics.instance.setCustomKey('colorMode', colorMode);
+    FirebaseCrashlytics.instance.setCustomKey(
+      'systemBrightness',
+      brightness.name,
     );
   }
 

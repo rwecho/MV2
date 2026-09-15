@@ -8,6 +8,7 @@ import 'package:dio/io.dart';
 import 'package:dio_cookie_manager/dio_cookie_manager.dart';
 
 import '../errors/failures.dart';
+import '../telemetry/mv2_telemetry.dart';
 import 'cookie_storage.dart';
 import 'v2ex_endpoints.dart';
 
@@ -155,7 +156,7 @@ class Mv2HttpClient {
         );
         return _toResult(response);
       } catch (error, stack) {
-        throw mapError(error, stack);
+        throw mapError(error, stack, path: path);
       }
     });
   }
@@ -168,7 +169,7 @@ class Mv2HttpClient {
     String? referer,
   }) async {
     final result = await get(path, query: query, referer: referer);
-    return decodeJson(result);
+    return decodeJson(result, path: path);
   }
 
   /// JSON endpoints on a different host (sov2ex).
@@ -178,7 +179,7 @@ class Mv2HttpClient {
     Map<String, dynamic>? query,
   }) async {
     final result = await get(path, query: query, baseUrl: baseUrl);
-    return decodeJson(result);
+    return decodeJson(result, path: path);
   }
 
   /// Form POST. `followRedirects` stays off so callers can inspect the `302`.
@@ -203,7 +204,7 @@ class Mv2HttpClient {
         );
         return _toResult(response);
       } catch (error, stack) {
-        throw mapError(error, stack);
+        throw mapError(error, stack, path: path);
       }
     });
   }
@@ -222,7 +223,7 @@ class Mv2HttpClient {
         );
         return _toResult(response);
       } catch (error, stack) {
-        throw mapError(error, stack);
+        throw mapError(error, stack, path: path);
       }
     });
   }
@@ -243,7 +244,7 @@ class Mv2HttpClient {
         }
         return response.data ?? const <int>[];
       } catch (error, stack) {
-        throw mapError(error, stack);
+        throw mapError(error, stack, path: path);
       }
     });
   }
@@ -280,18 +281,20 @@ class Mv2HttpClient {
     );
   }
 
-  dynamic decodeJson(HttpResult result) {
+  dynamic decodeJson(HttpResult result, {String path = '?'}) {
     if (!result.isSuccess) {
       throw _mapStatus(result.statusCode);
     }
     try {
       return jsonDecode(result.body);
     } on FormatException catch (error, stack) {
-      throw ParseFailure(
+      final failure = ParseFailure(
         'JSON decode failed: ${result.body.length} bytes',
         cause: error,
         stackTrace: stack,
       );
+      Mv2Telemetry.recordNonFatal(failure, stack, reason: 'GET $path');
+      throw failure;
     }
   }
 
@@ -312,7 +315,26 @@ class Mv2HttpClient {
   }
 
   /// Translates a transport-level error into a [Failure].
-  Failure mapError(Object error, StackTrace stack) {
+  ///
+  /// Every translated failure is reported to Crashlytics as a non-fatal with
+  /// the request path — the one observability hook shared by every feature
+  /// (feed, notifications, nodes, search, …), so a device-specific outage like
+  /// an anti-bot challenge or carrier interference shows up in the console
+  /// with its real shape instead of a generic UI error state.
+  Failure mapError(Object error, StackTrace stack, {String path = '?'}) {
+    final failure = _mapError(error, stack);
+    final status = error is DioException ? error.response?.statusCode : null;
+    Mv2Telemetry.recordNonFatal(
+      failure,
+      stack,
+      reason: 'GET/POST $path'
+          '${status != null ? ' [HTTP $status]' : ''}'
+          ' ${failure.message}',
+    );
+    return failure;
+  }
+
+  Failure _mapError(Object error, StackTrace stack) {
     if (error is Failure) return error;
     if (error is DioException) {
       final status = error.response?.statusCode;

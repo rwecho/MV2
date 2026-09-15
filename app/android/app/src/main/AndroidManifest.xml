@@ -32,6 +32,20 @@
                 <category android:name="android.intent.category.BROWSABLE"/>
                 <data android:scheme="mv2"/>
             </intent-filter>
+            <!-- https://www.v2ex.com/... web links (topic /t/123, node /go/x,
+                 member /u). Deliberately NOT autoVerify: v2ex.com serves no
+                 assetlinks.json, so verification would fail and the filter
+                 would never match. Unverified filters make browsers offer
+                 「打开 MV2」 in the disambiguation dialog (how other V2EX
+                 clients do it). The URL lands in Mv2DeepLink._webRoute. -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW"/>
+                <category android:name="android.intent.category.DEFAULT"/>
+                <category android:name="android.intent.category.BROWSABLE"/>
+                <data android:scheme="https" android:host="www.v2ex.com"/>
+                <data android:scheme="https" android:host="v2ex.com"/>
+                <data android:scheme="http" android:host="www.v2ex.com"/>
+            </intent-filter>
         </activity>
         <!-- Don't delete the meta-data below.
              This is used by the Flutter tool to generate GeneratedPluginRegistrant.java -->

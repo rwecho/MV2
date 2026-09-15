@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/deeplink/deep_link_listener.dart';
+import '../../core/telemetry/mv2_telemetry.dart';
 import '../../core/native/widget_sync.dart';
 import '../../design_system/theme/mv2_theme.dart';
 import '../../features/settings/application/settings_controller.dart';
@@ -21,6 +22,9 @@ class Mv2App extends ConsumerWidget {
     ref.watch(sessionCacheRefreshProvider);
     // Keeps the iOS Home Screen widget's snapshot in step with the app.
     ref.watch(widgetSyncProvider);
+    // Theme context on every crash/non-fatal report: 颜色 reports are only
+    // diagnosable against what the app actually applied.
+    Mv2Telemetry.setThemeContext(colorMode: settings.colorMode.name);
 
     return MaterialApp.router(
       title: 'MV2',
