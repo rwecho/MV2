@@ -149,6 +149,10 @@ jobs:
           packageName: ${{ env.BUNDLE_ID }}
           releaseFiles: app/build/app/outputs/bundle/release/app-release.aab
           track: internal
+          # Some edits (new permissions, first release of a new line) cannot be
+          # auto-committed by the API; land them as a draft and send for review
+          # from the Play Console UI instead of failing the job.
+          changesNotSentForReview: true
 
   build-ios:
     name: iOS → TestFlight
