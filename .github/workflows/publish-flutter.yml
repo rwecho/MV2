@@ -24,6 +24,11 @@ on:
         description: '手动发布的版本号（如 1.2.36）；留空则取 app/pubspec.yaml'
         required: false
         type: string
+      platforms:
+        description: '构建平台：all / ios / android（补跑单个商店用）'
+        required: false
+        type: string
+        default: 'all'
 
 permissions:
   contents: read
@@ -95,7 +100,7 @@ jobs:
           echo "releasing $VERSION (base build $BASE_BUILD)"
 
   build-android:
-    name: Android → Play (internal)
+    if: inputs.platforms == '' || inputs.platforms == 'all' || contains(inputs.platforms, 'android')    name: Android → Play (internal)
     runs-on: ubuntu-latest
     needs: version
     defaults:
@@ -142,19 +147,30 @@ jobs:
           name: android-bundle
           path: app/build/app/outputs/bundle/release/app-release.aab
 
+      # Play 的 API 行为是状态依赖的：versionCode 高于现网时必须自动送审
+      # （不允许带 changesNotSentForReview），需要人工送审的变更则相反。
+      # 所以先按默认（自动送审）上传，失败再带 flag 重试落成草稿。
       - name: Upload to Google Play (internal track)
+        id: play_upload
         uses: r0adkll/upload-google-play@v1
         with:
           serviceAccountJsonPlainText: ${{ secrets.GOOGLE_PLAY_SERVICE_ACCOUNT_JSON }}
           packageName: ${{ env.BUNDLE_ID }}
           releaseFiles: app/build/app/outputs/bundle/release/app-release.aab
           track: internal
-          # Some edits (new permissions, first release of a new line) cannot be
-          # auto-committed by the API; land them as a draft and send for review
-          # from the Play Console UI instead of failing the job.
+
+      - name: Upload to Google Play (needs manual review)
+        if: failure() && steps.play_upload.conclusion == 'failure'
+        uses: r0adkll/upload-google-play@v1
+        with:
+          serviceAccountJsonPlainText: ${{ secrets.GOOGLE_PLAY_SERVICE_ACCOUNT_JSON }}
+          packageName: ${{ env.BUNDLE_ID }}
+          releaseFiles: app/build/app/outputs/bundle/release/app-release.aab
+          track: internal
           changesNotSentForReview: true
 
   build-ios:
+    if: inputs.platforms == '' || inputs.platforms == 'all' || contains(inputs.platforms, 'ios')
     name: iOS → TestFlight
     runs-on: macos-latest
     needs: version
