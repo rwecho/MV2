@@ -1,0 +1,4 @@
+• iPad layout: two-pane lists, floating-card secondary pages, draggable divider
+• Android: open v2ex.com links straight in MV2 from your browser
+• Error telemetry for faster diagnosis
+• Fixed cold-start deep links and the Publish quick action

@@ -159,6 +159,8 @@ jobs:
           packageName: ${{ env.BUNDLE_ID }}
           releaseFiles: app/build/app/outputs/bundle/release/app-release.aab
           track: internal
+          releaseName: ${{ needs.version.outputs.DISPLAY_VERSION }}
+          whatsNewDirectory: app/whatsnew
 
       - name: Upload to Google Play (needs manual review)
         if: failure() && steps.play_upload.conclusion == 'failure'
@@ -168,6 +170,8 @@ jobs:
           packageName: ${{ env.BUNDLE_ID }}
           releaseFiles: app/build/app/outputs/bundle/release/app-release.aab
           track: internal
+          releaseName: ${{ needs.version.outputs.DISPLAY_VERSION }}
+          whatsNewDirectory: app/whatsnew
           changesNotSentForReview: true
 
   build-ios:
