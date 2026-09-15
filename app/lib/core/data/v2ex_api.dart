@@ -197,10 +197,28 @@ class RemoteV2exApi implements V2exApi {
       }
       lastResponseFromCache = false;
       onCacheFallback?.call(false);
-      await cache?.write(path, result.body);
+      try {
+        await cache?.write(path, result.body);
+      } catch (error, stack) {
+        // 缓存层坏了（数据库打不开等）绝不能杀死网络请求本身——
+        // 降级为无缓存继续。Android 上 sqlite 不可用就是这样暴露的。
+        assert(() {
+          debugPrint('MV2 cache.write failed [$path]: $error');
+          return true;
+        }());
+        Mv2Telemetry.recordNonFatal(error, stack, reason: 'cache.write $path');
+      }
       return result.body;
     } on NetworkFailure {
-      final cached = await cache?.read(path);
+      String? cached;
+      try {
+        cached = await cache?.read(path);
+      } catch (error, stack) {
+        assert(() {
+          debugPrint('MV2 cache.read failed [$path]: $error');
+          return true;
+        }());
+      }
       if (cached == null) rethrow;
       lastResponseFromCache = true;
       onCacheFallback?.call(true);

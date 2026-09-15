@@ -26,7 +26,7 @@ publish_to: 'none' # Remove this line if you wish to publish to pub.dev
 # fails the build on a mismatch instead of shipping a mislabelled binary.
 # Verify against the live versionCode in Play Console / App Store Connect before
 # uploading and raise the `+N` if the old run number was 4 digits or more.
-version: 2.0.1+2000001000
+version: 2.0.2+2000002000
 
 environment:
   sdk: ^3.13.3
@@ -133,12 +133,11 @@ flutter:
 
 # Local build hook configuration for `package:sqlite3`.
 #
-# The default mode downloads a pre-built SQLite from GitHub releases. That host
-# is not reachable from every development environment, so we opt into the
-# OS-provided library instead. iOS and macOS ship libsqlite3; before shipping
-# Android builds this must be revisited (switch back to the bundled default or
-# provide a custom `source:` build).
-hooks:
-  user_defines:
-    sqlite3:
-      source: system
+# History: this used to force `source: system` (link the OS-provided SQLite)
+# because the hook's GitHub-releases download was unreachable from some dev
+# machines. That breaks Android hard — apps cannot dlopen the system
+# libsqlite3.so, so every Drift/HttpCache call threw at runtime and the home
+# feed died on real Android devices while iOS (linkable system lib) was fine.
+# The default mode bundles a pre-built SQLite per platform instead; if the
+# download fails locally, set up proxy access to github.com rather than
+# switching back to `system`.

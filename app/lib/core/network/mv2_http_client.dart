@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:cookie_jar/cookie_jar.dart';
+import 'package:flutter/foundation.dart' show debugPrint;
 import 'package:dio/dio.dart';
 import 'package:dio/io.dart';
 import 'package:dio_cookie_manager/dio_cookie_manager.dart';
@@ -324,6 +325,15 @@ class Mv2HttpClient {
   Failure mapError(Object error, StackTrace stack, {String path = '?'}) {
     final failure = _mapError(error, stack);
     final status = error is DioException ? error.response?.statusCode : null;
+    assert(() {
+      // Debug-build only: surface the real failure shape on the console —
+      // release reports go through Mv2Telemetry instead.
+      debugPrint(
+        'MV2 HTTP failure [$path]: ${failure.runtimeType}'
+        '${status != null ? ' (HTTP $status)' : ''} ${failure.message}',
+      );
+      return true;
+    }());
     Mv2Telemetry.recordNonFatal(
       failure,
       stack,
