@@ -450,7 +450,7 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
-			shellScript = "\"${BUILD_DIR%/Build/*}/SourcePackages/checkouts/firebase-ios-sdk/Crashlytics/run\"";
+			shellScript = "SPM_ROOT=\"${BUILD_DIR%/Build/*}/SourcePackages\"\nCRASHLYTICS_RUN=\"\"\nfor p in \"$SPM_ROOT/checkouts/firebase-ios-sdk/Crashlytics/run\" \"$SPM_ROOT/packages/firebase-ios-sdk/Crashlytics/run\"; do\n  if [ -f \"$p\" ]; then\n    CRASHLYTICS_RUN=\"$p\"\n    break\n  fi\ndone\nif [ -z \"$CRASHLYTICS_RUN\" ]; then\n  CRASHLYTICS_RUN=\"$(find \"$SPM_ROOT\" -maxdepth 4 -path '*firebase-ios-sdk/Crashlytics/run' 2>/dev/null | head -n 1)\"\nfi\nif [ ! -f \"$CRASHLYTICS_RUN\" ]; then\n  echo \"warning: Crashlytics run script not found under $SPM_ROOT - skipping dSYM upload (non-fatal)\"\n  exit 0\nfi\n\"$CRASHLYTICS_RUN\"";
 			showEnvVarsInLog = 0;
 		};
 		9740EEB61CF901F6004384FC /* Run Script */ = {
