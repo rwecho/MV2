@@ -16,6 +16,7 @@ import '../../../ui/components/states/mv2_skeleton.dart';
 import '../../../ui/components/states/mv2_state_view.dart';
 import '../../../ui/components/topic_item.dart';
 import '../../../ui/primitives/mv2_avatar.dart';
+import '../../topic/application/open_topic.dart';
 import '../application/member_providers.dart';
 
 /// Public member profile (`/member/{username}`).
@@ -111,7 +112,7 @@ class _MemberBody extends StatelessWidget {
             if (i > 0) const SizedBox(height: Mv2Spacing.x3),
             TopicItem(
               topic: topics[i],
-              onTap: () => context.push('/topic/${topics[i].id}'),
+              onTap: () => openTopic(context, topics[i].id),
             ),
           ],
         ],

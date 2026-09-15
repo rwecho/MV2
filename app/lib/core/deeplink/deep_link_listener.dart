@@ -8,6 +8,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../app/router.dart';
 import '../../features/auth/application/auth_controller.dart';
 import '../../features/auth/domain/auth_session.dart';
+import '../../features/composer/presentation/composer_sheets.dart';
+import '../../ui/utils/mv2_sheet_page.dart';
 import '../native/mv2_native_bridge.dart';
 import '../push/push_payload.dart';
 import '../push/push_providers.dart';
@@ -69,13 +71,38 @@ class _Mv2DeepLinkListenerState extends ConsumerState<Mv2DeepLinkListener>
   void _startQuickActions() {
     final bridge = ref.read(nativeBridgeProvider);
     bridge.onQuickAction((String route) {
-      if (mounted) ref.read(routerProvider).go(route);
+      if (mounted) _openQuickAction(route);
     });
     unawaited(() async {
       final route = await bridge.consumePendingQuickAction();
       if (!mounted || route == null) return;
-      ref.read(routerProvider).go(route);
+      _openQuickAction(route);
     }());
+  }
+
+  /// Quick-action routes are ordinary locations, except 发布主题: the composer
+  /// is a modal sheet over wherever the user is (same as the shell's 发布
+  /// tab), not a route — `/publish` deliberately does not exist in the table.
+  void _openQuickAction(String route) {
+    if (route == '/publish') {
+      _showPublishComposer();
+      return;
+    }
+    _navigate(route);
+  }
+
+  void _showPublishComposer() {
+    // The navigator mounts with the first frame; a cold-start quick action can
+    // arrive before that, so defer one frame if it is not up yet.
+    final context = rootNavigatorKey.currentContext;
+    if (context != null) {
+      unawaited(showPublishComposer(context));
+      return;
+    }
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final context = rootNavigatorKey.currentContext;
+      if (context != null) unawaited(showPublishComposer(context));
+    });
   }
 
   /// Boots FCM and wires taps / foreground messages. Registration itself needs
@@ -121,7 +148,19 @@ class _Mv2DeepLinkListenerState extends ConsumerState<Mv2DeepLinkListener>
     final route = Mv2DeepLink.routeFor(raw);
     if (route == null) return;
     _lastSeen = Mv2DeepLink.urlIn(raw) ?? raw;
-    ref.read(routerProvider).go(route);
+    _navigate(route);
+  }
+
+  /// Sheet cards (用户主页, 节点, 设置, …) must ride above the shell: `go`
+  /// would make the card the whole stack — a dimmed void with nothing to pop
+  /// back to. Everything else (topic detail) keeps replacing the stack.
+  void _navigate(String route) {
+    final router = ref.read(routerProvider);
+    if (mv2IsSheetLocation(route)) {
+      router.push(route);
+    } else {
+      router.go(route);
+    }
   }
 
   /// Reading the pasteboard makes iOS show its "允许粘贴" prompt, so this only
@@ -149,7 +188,7 @@ class _Mv2DeepLinkListenerState extends ConsumerState<Mv2DeepLinkListener>
         duration: const Duration(seconds: 6),
         action: SnackBarAction(
           label: '打开',
-          onPressed: () => ref.read(routerProvider).go(route),
+          onPressed: () => _navigate(route),
         ),
       ),
     );

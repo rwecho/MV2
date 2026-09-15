@@ -34,6 +34,7 @@ import '../../blocked/application/blocked_content.dart';
 import '../../blocked/application/blocked_users_controller.dart';
 import '../../composer/presentation/composer_sheets.dart';
 import '../../settings/application/settings_controller.dart';
+import '../../shell/application/tablet_topic_pane.dart';
 import '../application/topic_actions.dart';
 import '../application/topic_providers.dart';
 
@@ -127,12 +128,22 @@ Future<void> _reportReply(
 /// Reading down docks the topic title into the top bar and slides the reply bar
 /// away; scrolling back restores both.
 class TopicDetailPage extends ConsumerStatefulWidget {
-  const TopicDetailPage({super.key, required this.topicId, this.initialFloor});
+  const TopicDetailPage({
+    super.key,
+    required this.topicId,
+    this.initialFloor,
+    this.inPane = false,
+  });
 
   final int topicId;
 
   /// Reply floor to scroll to once loaded (`/topic/123?floor=4`).
   final int? initialFloor;
+
+  /// Rendered inside the tablet layout's right-hand pane rather than as a
+  /// pushed route: the back affordance then closes the pane (there is no
+  /// route to pop).
+  final bool inPane;
 
   @override
   ConsumerState<TopicDetailPage> createState() => _TopicDetailPageState();
@@ -158,6 +169,7 @@ class _TopicDetailPageState extends ConsumerState<TopicDetailPage> {
       header: _TopicDetailTopBar(
         topicId: widget.topicId,
         collapsed: _collapsed,
+        inPane: widget.inPane,
       ),
       bottomBar: AnimatedSlide(
         // 1.2× the reply bar height clears its own safe-area padding.
@@ -207,10 +219,17 @@ class _TopicDetailPageState extends ConsumerState<TopicDetailPage> {
 /// (`⋯`) opens the 忽略 / 举报 sheet; the 忽略 state comes from
 /// [topicActionsProvider] so it stays in sync with the action controller.
 class _TopicDetailTopBar extends ConsumerWidget {
-  const _TopicDetailTopBar({required this.topicId, required this.collapsed});
+  const _TopicDetailTopBar({
+    required this.topicId,
+    required this.collapsed,
+    this.inPane = false,
+  });
 
   final int topicId;
   final bool collapsed;
+
+  /// Mirrors [TopicDetailPage.inPane]: close the pane instead of popping.
+  final bool inPane;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -230,7 +249,12 @@ class _TopicDetailTopBar extends ConsumerWidget {
         children: <Widget>[
           Mv2IconButton(
             icon: Icons.arrow_back_ios_new_rounded,
-            onPressed: () => context.pop(),
+            onPressed: inPane
+                // Dismiss the tablet detail pane (no pushed route to pop).
+                ? () => ProviderScope.containerOf(context, listen: false)
+                    .read(tabletTopicPaneProvider.notifier)
+                    .close()
+                : () => context.pop(),
           ),
           Expanded(
             child: AnimatedOpacity(

@@ -14,6 +14,8 @@ import '../../../ui/components/mv2_rich_text.dart';
 import '../../../ui/components/states/mv2_skeleton.dart';
 import '../../../ui/components/states/mv2_state_view.dart';
 import '../../../ui/primitives/mv2_buttons.dart';
+import '../../../ui/utils/mv2_breakpoints.dart';
+import '../../shell/application/tablet_topic_pane.dart';
 import '../application/publish_providers.dart';
 import 'composer_emoji_panel.dart';
 import 'composer_image_button.dart';
@@ -85,6 +87,15 @@ class _PublishTopicPageState extends ConsumerState<PublishTopicPage> {
     if (!published || !mounted) return;
 
     final topicId = ref.read(publishProvider).publishedTopicId;
+    // Decide the post-publish destination before popping: on tablets the topic
+    // goes into the shell's detail pane (the provider lives in the root
+    // container, so the write survives the pop), on phones it is pushed after.
+    final openInPane = topicId != null && mv2IsTwoPane(context);
+    if (openInPane) {
+      ProviderScope.containerOf(context, listen: false)
+          .read(tabletTopicPaneProvider.notifier)
+          .open(topicId, null);
+    }
     // Pop before showing the confirmation: a SnackBar attached to a scaffold
     // that is being disposed in the same frame caused a Hero-tag crash on the
     // login page (`docs/13` Phase 3). The root messenger outlives the route.
@@ -92,7 +103,7 @@ class _PublishTopicPageState extends ConsumerState<PublishTopicPage> {
     messenger
       ..hideCurrentSnackBar()
       ..showSnackBar(const SnackBar(content: Text('主题已发布')));
-    if (topicId != null) router.push('/topic/$topicId');
+    if (topicId != null && !openInPane) router.push('/topic/$topicId');
   }
 
   Future<void> _pickNode() async {

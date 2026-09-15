@@ -16,6 +16,7 @@ import '../../../ui/components/states/mv2_skeleton.dart';
 import '../../../ui/components/states/mv2_state_view.dart';
 import '../../../ui/primitives/mv2_buttons.dart';
 import '../../auth/presentation/mv2_account_avatar.dart';
+import '../../topic/application/open_topic.dart';
 import '../application/notifications_providers.dart';
 
 /// Grouped notification feed for `designs/06-notifications.png`.
@@ -161,13 +162,14 @@ class _NotificationGroups extends StatelessWidget {
       for (var j = 0; j < items.length; j++) {
         if (j > 0) children.add(const SizedBox(height: Mv2Spacing.x3));
         final item = items[j];
+        final topicId = item.topicId;
         children.add(
           NotificationItem(
             notification: item,
             // The `a.topic-link` href supplies the destination topic.
-            onTap: item.topicId == null
+            onTap: topicId == null
                 ? null
-                : () => context.push('/topic/${item.topicId}'),
+                : () => openTopic(context, topicId),
           ),
         );
       }

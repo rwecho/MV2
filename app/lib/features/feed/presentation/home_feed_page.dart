@@ -18,6 +18,7 @@ import '../../../ui/components/xna_item.dart';
 import '../../../ui/primitives/mv2_buttons.dart';
 import '../../auth/presentation/mv2_account_avatar.dart';
 import '../../shell/application/shell_chrome.dart';
+import '../../topic/application/open_topic.dart';
 import '../application/feed_providers.dart';
 
 /// Home feed page.
@@ -192,7 +193,7 @@ class _TopicFeedBody extends ConsumerWidget {
                   final topic = topics[index];
                   return TopicItem(
                     topic: topic,
-                    onTap: () => context.push('/topic/${topic.id}'),
+                    onTap: () => openTopic(context, topic.id),
                   );
                 },
               ),

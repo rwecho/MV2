@@ -21,6 +21,7 @@ import '../../../ui/primitives/mv2_avatar.dart';
 import '../../../ui/primitives/mv2_buttons.dart';
 import '../../../ui/primitives/mv2_chips.dart';
 import '../../nodes/application/nodes_providers.dart';
+import '../../topic/application/open_topic.dart';
 import '../application/search_providers.dart';
 
 /// Search page (`designs/05-search.png`).
@@ -353,7 +354,7 @@ class _SearchPageState extends ConsumerState<SearchPage> {
                   final topic = results[index];
                   return TopicItem(
                     topic: topic,
-                    onTap: () => context.push('/topic/${topic.id}'),
+                    onTap: () => openTopic(context, topic.id),
                   );
                 }),
           loading: () => _loading(bottomInset),

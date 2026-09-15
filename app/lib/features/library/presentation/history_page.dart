@@ -12,6 +12,7 @@ import '../../../ui/components/states/mv2_skeleton.dart';
 import '../../../ui/components/states/mv2_state_view.dart';
 import '../../../ui/components/topic_item.dart';
 import '../../../ui/primitives/mv2_buttons.dart';
+import '../../topic/application/open_topic.dart';
 import '../application/library_providers.dart';
 import 'confirm_dialog.dart';
 
@@ -87,7 +88,7 @@ class HistoryPage extends ConsumerWidget {
                   onLongPress: () => _removeOne(context, ref, topic),
                   child: TopicItem(
                     topic: topic,
-                    onTap: () => context.push('/topic/${topic.id}'),
+                    onTap: () => openTopic(context, topic.id),
                   ),
                 );
               },

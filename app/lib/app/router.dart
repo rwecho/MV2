@@ -22,22 +22,50 @@ import '../features/settings/presentation/about_page.dart';
 import '../features/settings/presentation/settings_page.dart';
 import '../features/shell/presentation/app_shell.dart';
 import '../features/topic/presentation/topic_detail_page.dart';
+import '../ui/utils/mv2_sheet_page.dart';
+
+/// pageBuilder for the secondary destinations: a floating card on wide
+/// viewports, the plain full-screen push on phones (see [mv2SheetPage]).
+Page<dynamic> _sheet(
+  BuildContext context,
+  GoRouterState state,
+  Widget child,
+) =>
+    mv2SheetPage<dynamic>(
+      context: context,
+      key: state.pageKey,
+      // `mv2IsSheetLocation` matches on this name (openTopic pops the card
+      // once a topic opens in the shell's detail pane).
+      name: state.matchedLocation,
+      child: child,
+    );
 
 /// Route table (`docs/03` §2 — declaration lives in `app/`).
 ///
 /// Four shell branches keep the floating tab bar stable; topic detail,
 /// composer, publish and settings are full-screen destinations that hide it
 /// (`docs/06-page-specifications.md`).
+
+/// The root navigator's key — lets code without a context under the navigator
+/// (Home Screen quick actions, deep links arriving at the listener) reach it.
+final rootNavigatorKey = GlobalKey<NavigatorState>();
+
 final routerProvider = Provider<GoRouter>((ref) {
   return GoRouter(
+    navigatorKey: rootNavigatorKey,
     // A cold start from a link (`mv2://topic/123`, or a pasted V2EX URL the
     // platform handed us) opens straight into that page; everything else lands
     // on the home feed. Warm links are handled by `Mv2DeepLinkListener`.
-    initialLocation:
-        Mv2DeepLink.routeFor(
-          WidgetsBinding.instance.platformDispatcher.defaultRouteName,
-        ) ??
-        '/feed',
+    initialLocation: () {
+      final route = Mv2DeepLink.routeFor(
+        WidgetsBinding.instance.platformDispatcher.defaultRouteName,
+      );
+      // A sheet card must always sit above the shell (`mv2://member/x`): as
+      // the base route it would dim an empty void with nothing to pop back
+      // to. The deep-link listener pushes the card onto the feed instead.
+      if (route != null && mv2IsSheetLocation(route)) return '/feed';
+      return route ?? '/feed';
+    }(),
     // The platform may also hand the raw link over *after* the router exists
     // (a warm link, or a cold start where iOS delivers `openURL` late), which
     // would otherwise hit go_router as `mv2://topic/123` — "no routes for
@@ -101,66 +129,97 @@ final routerProvider = Provider<GoRouter>((ref) {
       ),
       GoRoute(
         path: '/reader',
-        builder: (context, state) => ReaderPage(
-          url: state.uri.queryParameters['url'] ?? '',
-          // `?mode=original` opens straight into 原文; absent → the persisted
-          // 外链打开方式 setting decides.
-          mode: state.uri.queryParameters['mode'],
+        pageBuilder: (context, state) => _sheet(
+          context,
+          state,
+          ReaderPage(
+            url: state.uri.queryParameters['url'] ?? '',
+            // `?mode=original` opens straight into 原文; absent → the persisted
+            // 外链打开方式 setting decides.
+            mode: state.uri.queryParameters['mode'],
+          ),
         ),
       ),
       GoRoute(
         path: '/member/:username',
-        builder: (context, state) =>
-            MemberPage(username: state.pathParameters['username'] ?? ''),
+        pageBuilder: (context, state) => _sheet(
+          context,
+          state,
+          MemberPage(username: state.pathParameters['username'] ?? ''),
+        ),
       ),
       GoRoute(
         path: '/nodes/all',
-        builder: (context, state) => const AllNodesPage(),
+        pageBuilder: (context, state) =>
+            _sheet(context, state, const AllNodesPage()),
       ),
-      GoRoute(path: '/about', builder: (context, state) => const AboutPage()),
-      GoRoute(path: '/login', builder: (context, state) => const LoginPage()),
+      GoRoute(
+        path: '/about',
+        pageBuilder: (context, state) => _sheet(context, state, const AboutPage()),
+      ),
+      GoRoute(
+        path: '/login',
+        pageBuilder: (context, state) => _sheet(context, state, const LoginPage()),
+      ),
       GoRoute(
         path: '/node/:key',
-        builder: (context, state) => NodeTopicPage(
-          nodeName: state.pathParameters['key'] ?? '',
-          // The slug is not the display name; callers pass it when known.
-          displayName: state.uri.queryParameters['name'],
+        pageBuilder: (context, state) => _sheet(
+          context,
+          state,
+          NodeTopicPage(
+            nodeName: state.pathParameters['key'] ?? '',
+            // The slug is not the display name; callers pass it when known.
+            displayName: state.uri.queryParameters['name'],
+          ),
         ),
       ),
       GoRoute(
         path: '/settings',
-        builder: (context, state) => const SettingsPage(),
+        pageBuilder: (context, state) =>
+            _sheet(context, state, const SettingsPage()),
       ),
       GoRoute(
         path: '/read-later',
-        builder: (context, state) => const ReadLaterPage(),
+        pageBuilder: (context, state) =>
+            _sheet(context, state, const ReadLaterPage()),
       ),
       GoRoute(
         path: '/history',
-        builder: (context, state) => const HistoryPage(),
+        pageBuilder: (context, state) => _sheet(context, state, const HistoryPage()),
       ),
       GoRoute(
         path: '/blocked-users',
-        builder: (context, state) => const BlockedUsersPage(),
+        pageBuilder: (context, state) =>
+            _sheet(context, state, const BlockedUsersPage()),
       ),
       GoRoute(
         path: '/my/topics',
-        builder: (context, state) =>
-            const MyTopicListPage(kind: MyListKind.topics),
+        pageBuilder: (context, state) => _sheet(
+          context,
+          state,
+          const MyTopicListPage(kind: MyListKind.topics),
+        ),
       ),
       GoRoute(
         path: '/my/replies',
-        builder: (context, state) =>
-            const MyTopicListPage(kind: MyListKind.replies),
+        pageBuilder: (context, state) => _sheet(
+          context,
+          state,
+          const MyTopicListPage(kind: MyListKind.replies),
+        ),
       ),
       GoRoute(
         path: '/my/favorites',
-        builder: (context, state) =>
-            const MyTopicListPage(kind: MyListKind.favorites),
+        pageBuilder: (context, state) => _sheet(
+          context,
+          state,
+          const MyTopicListPage(kind: MyListKind.favorites),
+        ),
       ),
       GoRoute(
         path: '/my/nodes',
-        builder: (context, state) => const MyNodesPage(),
+        pageBuilder: (context, state) =>
+            _sheet(context, state, const MyNodesPage()),
       ),
     ],
   );

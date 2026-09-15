@@ -65,6 +65,13 @@ enum Mv2ReplySort {
   final String label;
 }
 
+/// Left pane's share of the window in the tablet two-pane layout — the value
+/// the 拖拽分隔条 writes back. Bounds keep the list scannable without ever
+/// squeezing the detail pane unreadable; enforced again at layout time.
+const double defaultSplitRatio = 5 / 12;
+const double minSplitRatio = 0.25;
+const double maxSplitRatio = 0.55;
+
 @immutable
 class AppSettings {
   const AppSettings({
@@ -76,6 +83,7 @@ class AppSettings {
     this.hapticsEnabled = true,
     this.pushEnabled = true,
     this.replySort = Mv2ReplySort.time,
+    this.splitRatio = defaultSplitRatio,
   });
 
   final Mv2ColorMode colorMode;
@@ -92,6 +100,11 @@ class AppSettings {
 
   final Mv2ReplySort replySort;
 
+  /// Left pane share of the window width in the two-pane tablet layout; see
+  /// [defaultSplitRatio]. A ratio, not a width, so rotation re-derives a sane
+  /// pane width from whatever the window became.
+  final double splitRatio;
+
   ThemeMode get themeMode => switch (colorMode) {
     Mv2ColorMode.system => ThemeMode.system,
     Mv2ColorMode.light => ThemeMode.light,
@@ -107,6 +120,7 @@ class AppSettings {
     bool? hapticsEnabled,
     bool? pushEnabled,
     Mv2ReplySort? replySort,
+    double? splitRatio,
   }) {
     return AppSettings(
       colorMode: colorMode ?? this.colorMode,
@@ -117,6 +131,7 @@ class AppSettings {
       hapticsEnabled: hapticsEnabled ?? this.hapticsEnabled,
       pushEnabled: pushEnabled ?? this.pushEnabled,
       replySort: replySort ?? this.replySort,
+      splitRatio: splitRatio ?? this.splitRatio,
     );
   }
 }
@@ -132,6 +147,7 @@ class SettingsController extends Notifier<AppSettings> {
   static const _kHaptics = 'mv2.haptics';
   static const _kPush = 'mv2.push.enabled';
   static const _kReplySort = 'mv2.replySort';
+  static const _kSplitRatio = 'mv2.splitRatio';
 
   SharedPreferences? _prefs;
 
@@ -178,6 +194,11 @@ class SettingsController extends Notifier<AppSettings> {
       hapticsEnabled: prefs.getBool(_kHaptics) ?? true,
       pushEnabled: prefs.getBool(_kPush) ?? true,
       replySort: _replySort(prefs.getString(_kReplySort)),
+      splitRatio:
+          (prefs.getDouble(_kSplitRatio) ?? defaultSplitRatio).clamp(
+        minSplitRatio,
+        maxSplitRatio,
+      ),
     );
   }
 
@@ -227,6 +248,17 @@ class SettingsController extends Notifier<AppSettings> {
     _dirty = true;
     state = state.copyWith(replySort: sort);
     await _save((p) => p.setString(_kReplySort, sort.name));
+  }
+
+  /// Left-pane share of the two-pane layout; the 拖拽分隔条 drives this while
+  /// the user drags, so it fires many times per gesture — the no-op guard
+  /// keeps identical writes from re-notifying listeners.
+  Future<void> setSplitRatio(double ratio) async {
+    final clamped = ratio.clamp(minSplitRatio, maxSplitRatio);
+    if (clamped == state.splitRatio) return;
+    _dirty = true;
+    state = state.copyWith(splitRatio: clamped);
+    await _save((p) => p.setDouble(_kSplitRatio, clamped));
   }
 
   Future<void> _save(Future<void> Function(SharedPreferences) op) async {

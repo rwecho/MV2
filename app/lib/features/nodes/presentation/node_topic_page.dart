@@ -10,6 +10,7 @@ import '../../../ui/components/mv2_refreshable.dart';
 import '../../../ui/components/states/mv2_skeleton.dart';
 import '../../../ui/components/states/mv2_state_view.dart';
 import '../../../ui/components/topic_item.dart';
+import '../../topic/application/open_topic.dart';
 import '../application/nodes_providers.dart';
 
 /// Topic stream for a single node (`/go/{node}`).
@@ -78,7 +79,7 @@ class NodeTopicPage extends ConsumerWidget {
                 final topic = data.topics[index];
                 return TopicItem(
                   topic: topic,
-                  onTap: () => context.push('/topic/${topic.id}'),
+                  onTap: () => openTopic(context, topic.id),
                 );
               },
             ),
