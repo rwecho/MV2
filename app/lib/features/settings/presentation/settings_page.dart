@@ -248,8 +248,8 @@ class SettingsPage extends ConsumerWidget {
 
 /// Project repository and the two policy pages published from it.
 const String _githubUrl = 'https://github.com/rwecho/V2ex.Maui2';
-const String _privacyUrl = 'https://rwecho.github.io/V2ex.Maui2/privacy.html';
-const String _deletionUrl = 'https://rwecho.github.io/V2ex.Maui2/deletion.html';
+const String _privacyUrl = 'https://rwecho.github.io/MV2/privacy.html';
+const String _deletionUrl = 'https://rwecho.github.io/MV2/deletion.html';
 
 /// Opens an external page in the OS browser (never an in-app webview).
 Future<void> _openExternal(String url) async {
