@@ -6,6 +6,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../design_system/theme/mv2_theme.dart';
 import '../../../design_system/tokens/mv2_motion.dart';
+import '../../../design_system/tokens/mv2_spacing.dart';
 import '../../../ui/components/mv2_floating_tab_bar.dart';
 import '../../../ui/components/states/mv2_state_view.dart';
 import '../../../ui/mv2_haptics.dart';
@@ -137,49 +138,55 @@ class _AppShellState extends ConsumerState<AppShell> {
     // navigationShell and discard all four branches' navigator state when the
     // window crosses the two-pane breakpoint. On phones the width is the whole
     // window, pixel-identical to the previous Stack layout.
-    return Row(
-      children: <Widget>[
-        SizedBox(
-          width: leftWidth,
-          child: Stack(
-            children: <Widget>[
-              widget.navigationShell,
-              Positioned(
-                left: 0,
-                right: 0,
-                bottom: 0,
-                child: AnimatedSlide(
-                  // Slide the whole padded bar (bar + safe area) below the
-                  // viewport.
-                  offset: barCollapsed ? const Offset(0, 1.2) : Offset.zero,
-                  duration: Mv2Motion.sheet,
-                  curve: Mv2Motion.standard,
-                  child: Mv2FloatingTabBar(
-                    current: _current,
-                    onSelect: (tab) => _onSelect(context, tab),
-                    notificationUnread: ref.watch(notificationUnreadProvider),
+    // The canvas fill covers the two-pane divider strip: the Row is the route
+    // root, `scaffoldBackgroundColor` lives inside each pane's `Scaffold`, so
+    // an unpainted strip would show the raw window backing (black) between
+    // the panes.
+    return ColoredBox(
+      color: context.colors.background,
+      child: Row(
+        children: <Widget>[
+          SizedBox(
+            width: leftWidth,
+            child: Stack(
+              children: <Widget>[
+                widget.navigationShell,
+                Positioned(
+                  left: 0,
+                  right: 0,
+                  bottom: 0,
+                  child: AnimatedSlide(
+                    // Slide the whole padded bar (bar + safe area) below the
+                    // viewport.
+                    offset: barCollapsed ? const Offset(0, 1.2) : Offset.zero,
+                    duration: Mv2Motion.sheet,
+                    curve: Mv2Motion.standard,
+                    child: Mv2FloatingTabBar(
+                      current: _current,
+                      onSelect: (tab) => _onSelect(context, tab),
+                      notificationUnread: ref.watch(notificationUnreadProvider),
+                    ),
                   ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
-        ),
-        // Two-pane: opened topics render beside the lists instead of pushing
-        // a full-screen route (see `openTopic`). The divider doubles as the
-        // drag handle for the pane split.
-        if (twoPane) ...<Widget>[
-          _PaneDivider(
-            key: const Key('pane_divider'),
-            leftWidth: leftWidth,
-            windowWidth: windowWidth,
-            onDrag:
-                (leftWidth) => ref
-                    .read(settingsProvider.notifier)
-                    .setSplitRatio(leftWidth / windowWidth),
-          ),
-          const Expanded(child: _TabletDetailPane()),
+          // Two-pane: opened topics render beside the lists instead of pushing
+          // a full-screen route (see `openTopic`). The divider doubles as the
+          // drag handle for the pane split.
+          if (twoPane) ...<Widget>[
+            _PaneDivider(
+              key: const Key('pane_divider'),
+              leftWidth: leftWidth,
+              windowWidth: windowWidth,
+              onDrag: (leftWidth) => ref
+                  .read(settingsProvider.notifier)
+                  .setSplitRatio(leftWidth / windowWidth),
+            ),
+            const Expanded(child: _TabletDetailPane()),
+          ],
         ],
-      ],
+      ),
     );
   }
 }
@@ -194,7 +201,9 @@ const double minDetailWidth = 420.0;
 /// The draggable handle between the two panes: a hairline that widens into an
 /// accent bar while dragging, with a finger-sized (24pt) hit strip. The strip
 /// is its own gesture area, so it never competes with the list's horizontal
-/// page swipes.
+/// page swipes. The painted line is the stock `VerticalDivider`, so its idle
+/// color comes from `DividerTheme` (wired to `Mv2Colors.divider`) and follows
+/// light/dark automatically instead of a hand-painted `Container`.
 class _PaneDivider extends StatefulWidget {
   const _PaneDivider({
     super.key,
@@ -244,12 +253,15 @@ class _PaneDividerState extends State<_PaneDivider> {
         },
         child: SizedBox(
           width: paneDividerWidth,
-          child: Center(
-            child: Container(
-              width: _dragging ? 3.0 : 1.0,
-              height: double.infinity,
-              color: _dragging ? colors.accent : Theme.of(context).dividerColor,
-            ),
+          child: VerticalDivider(
+            width: _dragging ? 3.0 : 1.0,
+            thickness: _dragging ? 3.0 : 1.0,
+            indent: Mv2Spacing.x6,
+            endIndent: Mv2Spacing.x6,
+            // Canvas-level hairline: `Mv2Colors.border`, the same token as
+            // every card outline on the page canvas. (DividerTheme's
+            // in-surface `divider` token vanishes against the canvas fill.)
+            color: _dragging ? colors.accent : colors.border,
           ),
         ),
       ),
