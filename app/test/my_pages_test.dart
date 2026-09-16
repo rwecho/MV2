@@ -31,6 +31,7 @@ class _FakeClient extends Mv2HttpClient {
     Map<String, dynamic>? query,
     String? referer,
     String? baseUrl,
+    String? userAgent,
   }) async => HttpResult(
     statusCode: 200,
     body: body,

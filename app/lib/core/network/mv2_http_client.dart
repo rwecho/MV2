@@ -139,11 +139,14 @@ class Mv2HttpClient {
   ///
   /// [referer] must be set for any request that follows a write action or that
   /// V2EX validates (topic detail, replies, favourites, ignore).
+  /// [userAgent] overrides the session-default mobile UA (used by content
+  /// writes so V2EX's `via` label matches the real device).
   Future<HttpResult> get(
     String path, {
     Map<String, dynamic>? query,
     String? referer,
     String? baseUrl,
+    String? userAgent,
   }) {
     return _pacer.run(() async {
       try {
@@ -151,7 +154,7 @@ class Mv2HttpClient {
           _absolute(path, baseUrl),
           queryParameters: query,
           options: Options(
-            headers: _headers(referer: referer),
+            headers: _headers(referer: referer, userAgent: userAgent),
             responseType: ResponseType.plain,
           ),
         );
@@ -184,10 +187,13 @@ class Mv2HttpClient {
   }
 
   /// Form POST. `followRedirects` stays off so callers can inspect the `302`.
+  /// [userAgent] overrides the session-default mobile UA (content writes pass
+  /// the device-honest UA — see `V2exWriteUa`).
   Future<HttpResult> postForm(
     String path, {
     required Map<String, String> data,
     String? referer,
+    String? userAgent,
   }) {
     return _pacer.run(() async {
       try {
@@ -198,6 +204,7 @@ class Mv2HttpClient {
             headers: _headers(
               referer: referer,
               contentType: Headers.formUrlEncodedContentType,
+              userAgent: userAgent,
             ),
             responseType: ResponseType.plain,
             followRedirects: false,
@@ -211,13 +218,13 @@ class Mv2HttpClient {
   }
 
   /// POST/PUT with no body (V2EX thank/ignore endpoints take `once` in the URL).
-  Future<HttpResult> post(String path, {String? referer}) {
+  Future<HttpResult> post(String path, {String? referer, String? userAgent}) {
     return _pacer.run(() async {
       try {
         final response = await _dio.post<String>(
           path,
           options: Options(
-            headers: _headers(referer: referer),
+            headers: _headers(referer: referer, userAgent: userAgent),
             responseType: ResponseType.plain,
             followRedirects: false,
           ),
@@ -259,8 +266,18 @@ class Mv2HttpClient {
   Future<void> seedCookie(String url, Cookie cookie) =>
       _cookieJar.saveFromResponse(Uri.parse(url), <Cookie>[cookie]);
 
-  Map<String, dynamic> _headers({String? referer, String? contentType}) {
-    return <String, dynamic>{'Referer': ?referer, 'Content-Type': ?contentType};
+  Map<String, dynamic> _headers({
+    String? referer,
+    String? contentType,
+    String? userAgent,
+  }) {
+    return <String, dynamic>{
+      'Referer': ?referer,
+      'Content-Type': ?contentType,
+      // Absent when null: per-request headers merge over the base ones, so an
+      // override only wins where one is supplied.
+      'User-Agent': ?userAgent,
+    };
   }
 
   HttpResult _toResult(Response<String> response) {

@@ -1,5 +1,3 @@
-• Fixed the home feed failing to load on Android
-• iPad layout: two-pane lists, floating-card secondary pages, draggable divider
-• Android: open v2ex.com links straight in MV2 from your browser
-• Error telemetry for faster diagnosis
-• Fixed cold-start deep links and the Publish quick action
+• Replies now show your real device (iPhone / Android / iPad) instead of always "iPad"
+• Fixed the iOS back-swipe on the search page and topic details
+• iPad split view: divider follows light/dark theme

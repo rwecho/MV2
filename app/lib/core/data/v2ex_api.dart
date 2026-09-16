@@ -11,6 +11,7 @@ import '../../shared/models/write_result.dart';
 import '../errors/failures.dart';
 import '../network/mv2_http_client.dart';
 import '../network/v2ex_endpoints.dart';
+import '../network/write_user_agent.dart';
 import '../storage/http_cache.dart';
 import '../telemetry/mv2_telemetry.dart';
 import '../parser/account_parser.dart';
@@ -150,7 +151,12 @@ abstract interface class V2exApi {
 
 /// Talks to `www.v2ex.com` through the paced, cookie-aware HTTP client.
 class RemoteV2exApi implements V2exApi {
-  RemoteV2exApi(this._client, {this.cache, this.onCacheFallback});
+  RemoteV2exApi(
+    this._client, {
+    this.cache,
+    this.onCacheFallback,
+    this.writeUa = V2exWriteUa.resolveSync,
+  });
 
   final Mv2HttpClient _client;
 
@@ -161,6 +167,11 @@ class RemoteV2exApi implements V2exApi {
   /// the UI can tell the user it is looking at cached content instead of
   /// silently pretending everything is fine.
   final void Function(bool fromCache)? onCacheFallback;
+
+  /// UA for content-creating writes — V2EX derives the public `via` label
+  /// from the posting request's UA, so it must name the real device. Injectable
+  /// so tests can pin a UA instead of probing the host platform.
+  final String Function() writeUa;
 
   /// True when the most recent read was served from disk because the network
   /// failed — drives the `MV2` cache indicator (`docs/12` §6, defect B6 fix).
@@ -589,6 +600,7 @@ class RemoteV2exApi implements V2exApi {
       // The write is validated against the form page it came from.
       referer:
           '${V2exEndpoints.baseUrl}${V2exEndpoints.createTopicForm(node: nodeName)}',
+      userAgent: writeUa(),
       data: <String, String>{
         'title': title,
         'syntax': 'default',
@@ -657,6 +669,7 @@ class RemoteV2exApi implements V2exApi {
     final result = await _client.postForm(
       V2exEndpoints.reply(topicId),
       referer: V2exEndpoints.topicReferer(topicId),
+      userAgent: writeUa(),
       data: <String, String>{'content': content, 'once': once},
     );
     return _writeOutcome(result);
@@ -734,6 +747,7 @@ class RemoteV2exApi implements V2exApi {
     final result = await _client.postForm(
       V2exEndpoints.append(topicId),
       referer: V2exEndpoints.topicReferer(topicId),
+      userAgent: writeUa(),
       data: <String, String>{'content': content, 'once': once},
     );
     return _writeOutcome(result);

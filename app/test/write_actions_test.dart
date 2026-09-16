@@ -425,6 +425,46 @@ void main() {
       expect(result.errors, isEmpty);
     });
 
+    test(
+      'content writes carry the device UA, other writes keep the mobile UA',
+      () async {
+        // V2EX derives the public `via <platform>` label from the posting
+        // request's UA, so reply/append/publish present the real device while
+        // everything else stays on the stable mobile read UA.
+        final adapter = _FakeAdapter(
+          (_) => _html(
+            '',
+            status: 302,
+            headers: <String, List<String>>{
+              'location': <String>['/t/123'],
+            },
+          ),
+        );
+        final api = RemoteV2exApi(
+          _clientWith(adapter),
+          writeUa: () => V2exEndpoints.iPhoneWriteUserAgent,
+        );
+
+        await api.replyToTopic(123, 'hi', 'tok');
+        await api.appendTopic(123, '补充一点', 'tok');
+        await api.publishTopic(
+          form: const V2TopicForm(once: 'tok'),
+          nodeName: 'programmer',
+          title: '标题',
+          content: '正文',
+        );
+        await api.favoriteTopic(123, 'tok');
+
+        final uas = adapter.requests
+            .map((request) => request.headers['User-Agent'])
+            .toList();
+        expect(uas[0], V2exEndpoints.iPhoneWriteUserAgent); // POST /t/123
+        expect(uas[1], V2exEndpoints.iPhoneWriteUserAgent); // POST append
+        expect(uas[2], V2exEndpoints.iPhoneWriteUserAgent); // POST /new
+        expect(uas[3], V2exEndpoints.userAgent); // GET favourite
+      },
+    );
+
     test('favourite is a GET carrying the once token', () async {
       final adapter = _FakeAdapter(
         (_) => _html(

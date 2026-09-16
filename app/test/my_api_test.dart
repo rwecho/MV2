@@ -38,6 +38,7 @@ class _FakeHttpClient extends Mv2HttpClient {
     Map<String, dynamic>? query,
     String? referer,
     String? baseUrl,
+    String? userAgent,
   }) async {
     requested.add(path);
     referers.add(referer);

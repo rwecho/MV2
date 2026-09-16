@@ -7,11 +7,45 @@ abstract final class V2exEndpoints {
   static const String baseUrl = 'https://www.v2ex.com';
   static const String searchBaseUrl = 'https://www.sov2ex.com';
 
-  /// Mobile Safari UA. V2EX serves a simpler, more stable DOM to mobile clients
-  /// and rejects some write actions from unknown agents.
+  /// Mobile Safari UA used for reads (and login writes). V2EX serves the same
+  /// DOM to mobile and desktop UAs (verified 2026-09: home, topic, node,
+  /// /signin are byte-identical modulo timestamps), so parsers are UA-agnostic;
+  /// the UA matters only because V2EX labels *content-creating* writes with a
+  /// `via <platform>` tag parsed from it — see the "write UAs" block below.
   static const String userAgent =
       'Mozilla/5.0 (iPad; CPU OS 17_0 like Mac OS X) AppleWebKit/605.1.15 '
       '(KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1';
+
+  // -------------------------------------------------------- write UAs
+  //
+  // V2EX stamps every content-creating post (reply / new topic / append) with
+  // a `via <platform>` label parsed from the *posting request's* UA. Reads
+  // keep [userAgent] for its stable mobile DOM, but that same iPad UA made
+  // every reply on every device read "来自 iPad". The writes therefore present
+  // the device we really are (resolved per platform by `V2exWriteUa`):
+  // Safari/iOS UAs label as `via iPhone` / `via iPad`, Android Chrome as
+  // `via Android`, and desktop Chrome as nothing — matching what the same
+  // devices produce on the web. V2EX normalises to the platform name only;
+  // concrete models never show up, and the label text is not client-selectable.
+
+  /// iPhone Safari — the honest label for phones (`via iPhone`).
+  static const String iPhoneWriteUserAgent =
+      'Mozilla/5.0 (iPhone; CPU iPhone OS 18_5 like Mac OS X) '
+      'AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.5 Mobile/15E148 '
+      'Safari/604.1';
+
+  /// Android Chrome, in Chrome's own reduced-UA form (`Android 10; K` is the
+  /// exact string modern Chrome sends, model never leaves the device) —
+  /// V2EX labels it `via Android`.
+  static String androidWriteUserAgent() =>
+      'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 '
+      '(KHTML, like Gecko) Chrome/139.0.0.0 Mobile Safari/537.36';
+
+  /// Desktop Chrome on macOS — produces **no** via label, like posting from
+  /// the desktop web. Used for non-handheld platforms (macOS builds).
+  static const String desktopWriteUserAgent =
+      'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 '
+      '(KHTML, like Gecko) Chrome/139.0.0.0 Safari/537.36';
 
   // ----------------------------------------------------------------- reads
 

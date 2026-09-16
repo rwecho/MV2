@@ -94,6 +94,20 @@ void main() {
       expect(request.headers['Referer'], 'https://www.v2ex.com/');
     });
 
+    test('a per-request UA override replaces the session default', () async {
+      final adapter = _FakeAdapter((_) => _html('<html></html>'));
+      final client = _clientWith(adapter);
+
+      await client.get('/t/1', userAgent: 'UA-override');
+      await client.get('/t/2');
+
+      expect(adapter.requests[0].headers['User-Agent'], 'UA-override');
+      expect(
+        adapter.requests[1].headers['User-Agent'],
+        V2exEndpoints.userAgent,
+      );
+    });
+
     test(
       'does not follow redirects so write results stay inspectable',
       () async {
