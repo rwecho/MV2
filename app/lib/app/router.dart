@@ -1,4 +1,4 @@
-import 'package:flutter/widgets.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
@@ -87,7 +87,13 @@ final routerProvider = Provider<GoRouter>((ref) {
                 routes: <RouteBase>[
                   GoRoute(
                     path: 'search',
-                    builder: (context, state) => const SearchPage(),
+                    // Same go_router 18 default-page issue as `/topic`:
+                    // explicit MaterialPage keeps the iOS back-swipe.
+                    pageBuilder: (context, state) => MaterialPage<dynamic>(
+                      key: state.pageKey,
+                      name: state.matchedLocation,
+                      child: const SearchPage(),
+                    ),
                   ),
                 ],
               ),
@@ -121,10 +127,20 @@ final routerProvider = Provider<GoRouter>((ref) {
       ),
       GoRoute(
         path: '/topic/:id',
-        builder: (context, state) => TopicDetailPage(
-          topicId: int.tryParse(state.pathParameters['id'] ?? '') ?? 0,
-          // `/topic/123?floor=4` (from a `#reply4` link) opens at that reply.
-          initialFloor: int.tryParse(state.uri.queryParameters['floor'] ?? ''),
+        // Explicit MaterialPage instead of `builder:` — go_router's default
+        // page fell through to NoTransitionPage here, which dropped the
+        // iOS interactive back-swipe (no Cupertino transition = no edge
+        // gesture strip). The sheet pages already carry their own
+        // MaterialPage for the same reason (see `mv2SheetPage`).
+        pageBuilder: (context, state) => MaterialPage<dynamic>(
+          key: state.pageKey,
+          name: state.matchedLocation,
+          child: TopicDetailPage(
+            topicId: int.tryParse(state.pathParameters['id'] ?? '') ?? 0,
+            // `/topic/123?floor=4` (from a `#reply4` link) opens at that reply.
+            initialFloor:
+                int.tryParse(state.uri.queryParameters['floor'] ?? ''),
+          ),
         ),
       ),
       GoRoute(
