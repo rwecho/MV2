@@ -163,12 +163,13 @@ App Store / Google Play 的**非消耗型**买断；权益持久化在本地
 （`mv2.pro.entitled`），换机重装走「恢复购买」。功能门控统一读
 `isProProvider`（骨架阶段尚无功能依赖它）。
 
-RevenueCat 公钥是客户端公开凭据，通过 `--dart-define` 注入，仓库不落盘：
+RevenueCat 公钥是客户端公开凭据，随二进制分发（发布流水线已内置，见
+`.github/workflows/publish-flutter.yml` 的 env）。本地开发直接带：
 
 ```bash
 flutter run \
-  --dart-define=MV2_REVENUECAT_APPLE_KEY=appl_xxx \
-  --dart-define=MV2_REVENUECAT_GOOGLE_KEY=goog_xxx
+  --dart-define=MV2_REVENUECAT_APPLE_KEY=appl_vhcSVsNoTuUwJWzgJwLgCLeQccs \
+  --dart-define=MV2_REVENUECAT_GOOGLE_KEY=goog_vPzlRtaqdnrOkwlWxMTUJlhPflb
 ```
 
 不注入 key 的构建（本地开发 / CI）付费墙显示「商店尚未配置」，不可购但一切正常。

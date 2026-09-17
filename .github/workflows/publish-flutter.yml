@@ -41,6 +41,10 @@ concurrency:
 env:
   FLUTTER_VERSION: "3.47.3"
   BUNDLE_ID: tech.zb.v2ex.maui.app
+  # RevenueCat 公开 SDK key（public key 本来就随二进制分发，不是机密，可入库；
+  # 服务端 secret key 在 cloudflare Worker 的 wrangler secret 里，不入库）。
+  MV2_REVENUECAT_APPLE_KEY: appl_vhcSVsNoTuUwJWzgJwLgCLeQccs
+  MV2_REVENUECAT_GOOGLE_KEY: goog_vPzlRtaqdnrOkwlWxMTUJlhPflb
 
 jobs:
   version:
@@ -141,7 +145,9 @@ jobs:
         run: |
           flutter build appbundle \
             --build-name="${{ needs.version.outputs.display_version }}" \
-            --build-number="${{ needs.version.outputs.build_version }}"
+            --build-number="${{ needs.version.outputs.build_version }}" \
+            --dart-define=MV2_REVENUECAT_APPLE_KEY="$MV2_REVENUECAT_APPLE_KEY" \
+            --dart-define=MV2_REVENUECAT_GOOGLE_KEY="$MV2_REVENUECAT_GOOGLE_KEY"
 
       - uses: actions/upload-artifact@v4
         with:
@@ -218,6 +224,8 @@ jobs:
           flutter build ipa --release \
             --build-name="${{ needs.version.outputs.display_version }}" \
             --build-number="${{ needs.version.outputs.build_version }}" \
+            --dart-define=MV2_REVENUECAT_APPLE_KEY="$MV2_REVENUECAT_APPLE_KEY" \
+            --dart-define=MV2_REVENUECAT_GOOGLE_KEY="$MV2_REVENUECAT_GOOGLE_KEY" \
             --export-options-plist=ios/ExportOptions.plist
 
       - name: Locate IPA
