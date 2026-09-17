@@ -29,6 +29,13 @@ Existing records without a `deviceType` keep going through FCM.
 * `POST /register` — `{feedUrl, fcmToken, deviceType}`. Idempotent; preserves the
   `lastPushed` dedup cursor on re-registration (token refresh, reinstall).
 * `POST /unregister` — `{fcmToken}`. Drops the device and its dedup cursor.
+* `POST /honors/join` — `{name, rcUserId}`. 荣誉墙登记： verifies the `pro`
+  entitlement via the RevenueCat REST API (`REVENUECAT_SECRET_KEY`), then
+  engraves `{name, joinedAt}` in KV. **Permanent by product design** — entries
+  are never removed, display names are globally unique (case-insensitive,
+  first-come-first-served), one entry per `rcUserId`.
+* `GET /honors` — the wall: `{honors: [{name, joinedAt}]}` sorted by engraving
+  time (earliest supporters first).
 * `GET /health` — liveness.
 * `GET /admin?secret=…` — small stats/history page.
 * Scheduled (`*/15 * * * *`) — the polling run.

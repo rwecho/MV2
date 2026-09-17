@@ -6,6 +6,11 @@ export interface Env {
   HMS_SERVICE_ACCOUNT_JSON?: string;
   /** AppGallery Connect app id used in the HMS Push REST path. */
   HMS_APP_ID?: string;
+  /**
+   * RevenueCat *secret* (server) key — verifies the purchase behind every
+   * honor-wall join request (wrangler secret).
+   */
+  REVENUECAT_SECRET_KEY?: string;
 }
 
 export const PUSHED_IDS_LIMIT = 200;
@@ -101,6 +106,15 @@ export default {
 
     if (request.method === "POST" && url.pathname === "/unregister") {
       return handleUnregister(request, env);
+    }
+
+    // 荣誉墙：永久买断用户登记（需 RevenueCat 核实权益）与名录。
+    if (request.method === "POST" && url.pathname === "/honors/join") {
+      return handleHonorJoin(request, env);
+    }
+
+    if (request.method === "GET" && url.pathname === "/honors") {
+      return handleHonorsList(env);
     }
 
     if (request.method === "GET" && url.pathname === "/health") {
@@ -287,6 +301,7 @@ async function handleRegister(request: Request, env: Env): Promise<Response> {
 import { fetchAndParseFeed, V2exNotification } from "./utils/v2ex";
 import { sendPushNotification } from "./utils/fcm";
 import { isHmsDevice, sendHmsPush } from "./utils/hms";
+import { handleHonorJoin, handleHonorsList } from "./honors";
 
 /**
  * Opt-out for the app's 推送通知 switch: drops the device so the cron stops
