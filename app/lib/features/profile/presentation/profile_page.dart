@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../core/telemetry/mv2_analytics.dart';
 import '../../../design_system/effects/mv2_glass.dart';
 import '../../../design_system/theme/mv2_theme.dart';
 import '../../../design_system/tokens/mv2_radius.dart';
@@ -221,16 +222,19 @@ class _DailyCheckInRow extends ConsumerWidget {
     V2DailyMission? mission,
   ) async {
     if (mission?.alreadyCheckedIn ?? false) {
+      Mv2Analytics.logDailyCheckin(result: 'already');
       ScaffoldMessenger.of(context)
           .showSnackBar(const SnackBar(content: Text('今日已领取')));
       return;
     }
     try {
       await ref.read(checkInProvider.notifier).checkIn();
+      Mv2Analytics.logDailyCheckin(result: 'success');
       if (!context.mounted) return;
       ScaffoldMessenger.of(context)
           .showSnackBar(const SnackBar(content: Text('签到成功')));
     } catch (_) {
+      Mv2Analytics.logDailyCheckin(result: 'failed');
       if (!context.mounted) return;
       ScaffoldMessenger.of(context)
           .showSnackBar(const SnackBar(content: Text('签到失败，请稍后重试')));
@@ -282,6 +286,9 @@ class _LogoutRow extends StatelessWidget {
 }
 
 /// Signed-in identity card: avatar + username + member number + stats.
+///
+/// The chevron makes it a tap target: it opens the member's own public page,
+/// the same surface every other author reference in the app leads to.
 class _ProfileCard extends StatelessWidget {
   const _ProfileCard({required this.profile});
 
@@ -292,9 +299,12 @@ class _ProfileCard extends StatelessWidget {
     final colors = context.colors;
     final user = profile.user;
     final memberLabel = user.id == null ? 'V2EX' : 'V2EX #${user.id}';
+    final username = user.username;
+    final canOpen = username.isNotEmpty && username != '匿名';
 
     return Mv2Surface(
       padding: const EdgeInsets.all(Mv2Spacing.x4),
+      onTap: canOpen ? () => context.push('/member/$username') : null,
       child: Column(
         children: <Widget>[
           Row(

@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/data/home_tab.dart';
+import '../../../core/telemetry/mv2_analytics.dart';
 import '../../../design_system/tokens/mv2_motion.dart';
 import '../../../design_system/tokens/mv2_spacing.dart';
 import '../../../ui/components/mv2_error_feedback.dart';
@@ -159,7 +160,12 @@ class _TopicFeedBody extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final bottomInset = Mv2PageScaffold.bottomContentInset(context);
-    Future<void> refresh() => ref.refresh(feedProvider(tab).future);
+    Future<void> refresh() {
+      // Mv2Refreshable 仅手势下拉触发,无需再区分触发方式。
+      Mv2Analytics.logFeedRefresh(tab: tab.slug);
+      return ref.refresh(feedProvider(tab).future);
+    }
+
     ref.listen(feedProvider(tab), (p, n) => mv2ToastLoadError(context, p, n));
 
     return ref
@@ -193,7 +199,7 @@ class _TopicFeedBody extends ConsumerWidget {
                   final topic = topics[index];
                   return TopicItem(
                     topic: topic,
-                    onTap: () => openTopic(context, topic.id),
+                    onTap: () => openTopic(context, topic.id, source: 'feed'),
                   );
                 },
               ),
@@ -222,7 +228,11 @@ class _XnaFeedBody extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final bottomInset = Mv2PageScaffold.bottomContentInset(context);
-    Future<void> refresh() => ref.refresh(xnaFeedProvider.future);
+    Future<void> refresh() {
+      Mv2Analytics.logFeedRefresh(tab: 'vxna');
+      return ref.refresh(xnaFeedProvider.future);
+    }
+
     ref.listen(xnaFeedProvider, (p, n) => mv2ToastLoadError(context, p, n));
 
     return ref

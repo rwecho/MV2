@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../core/telemetry/mv2_analytics.dart';
 import '../../../design_system/effects/mv2_glass.dart';
 import '../../../design_system/theme/mv2_theme.dart';
 import '../../../design_system/tokens/mv2_radius.dart';
@@ -91,6 +92,15 @@ class _PublishTopicPageState extends ConsumerState<PublishTopicPage> {
     // goes into the shell's detail pane (the provider lives in the root
     // container, so the write survives the pop), on phones it is pushed after.
     final openInPane = topicId != null && mv2IsTwoPane(context);
+    if (topicId != null) {
+      // 发布成功后自动打开新主题;composer 不是路由,这里是 topic_open 的
+      // 'publish' 来源唯一入口。
+      Mv2Analytics.logTopicOpen(
+        topicId: topicId,
+        source: 'publish',
+        layout: openInPane ? 'tablet' : 'phone',
+      );
+    }
     if (openInPane) {
       ProviderScope.containerOf(context, listen: false)
           .read(tabletTopicPaneProvider.notifier)

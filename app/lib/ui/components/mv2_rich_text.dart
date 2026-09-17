@@ -4,18 +4,16 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:html/dom.dart' as dom;
 import 'package:html/parser.dart' as html_parser;
-import 'package:url_launcher/url_launcher.dart';
 
 import '../../core/parser/html_dom.dart';
+import '../../core/telemetry/mv2_analytics.dart';
 import '../../design_system/theme/mv2_theme.dart';
 import '../../design_system/tokens/mv2_radius.dart';
 import '../../design_system/tokens/mv2_spacing.dart';
-import '../../features/reader/application/reader_mode.dart';
-import '../../features/settings/application/settings_controller.dart';
+import '../../features/reader/application/open_external_url.dart';
 import 'mv2_image_viewer.dart';
 
 /// Renders V2EX topic/reply HTML with MV2 typography.
@@ -486,11 +484,14 @@ class _Mv2RichTextState extends State<Mv2RichText> {
       label: '查看大图',
       child: GestureDetector(
         behavior: HitTestBehavior.opaque,
-        onTap: () => showMv2ImageViewer(
-          context,
-          images: _gallery,
-          initialIndex: index < 0 ? 0 : index,
-        ),
+        onTap: () {
+          Mv2Analytics.logImageView(source: 'content');
+          showMv2ImageViewer(
+            context,
+            images: _gallery,
+            initialIndex: index < 0 ? 0 : index,
+          );
+        },
         child: ClipRRect(
           borderRadius: Mv2Radius.allSm,
           child: Container(
@@ -882,46 +883,11 @@ class _Mv2RichTextState extends State<Mv2RichText> {
     }
     final target = Mv2RichText.internalRoute(href);
     if (target != null) {
+      Mv2Analytics.logLinkOpen(mode: 'internal', isInternal: true);
       context.push(target);
       return;
     }
-    final uri = Uri.tryParse(absoluteV2exUrl(href) ?? href);
-    if (uri == null) return;
-    // Read the preference before any await so `context` is never used across an
-    // async gap without a mounted check below.
-    final mode = _linkOpenMode(context);
-    // Only real web pages can enter reader mode; mailto:/tel:/etc. still leave
-    // the app directly.
-    if (uri.scheme != 'http' && uri.scheme != 'https') {
-      await launchUrl(uri, mode: LaunchMode.externalApplication);
-      return;
-    }
-    if (mode == Mv2LinkOpenMode.browser) {
-      await launchUrl(uri, mode: LaunchMode.externalApplication);
-      return;
-    }
-    if (!context.mounted) return;
-    context.push(
-      readerRoute(
-        uri.toString(),
-        mode: mode == Mv2LinkOpenMode.original ? ReaderMode.original : null,
-      ),
-    );
-  }
-}
-
-/// The persisted 外链打开方式 preference.
-///
-/// `Mv2RichText` is deliberately not a `ConsumerWidget` (it is used in
-/// isolated widget tests and previews), so the scope is looked up defensively
-/// and reader mode is assumed when none is mounted — the same value the
-/// setting defaults to.
-Mv2LinkOpenMode _linkOpenMode(BuildContext context) {
-  try {
-    return ProviderScope.containerOf(context, listen: false)
-        .read(settingsProvider)
-        .openLinkMode;
-  } catch (_) {
-    return Mv2LinkOpenMode.reader;
+    // External: reader / 原文 / browser — shared with the link-preview card.
+    await openExternalUrl(context, href);
   }
 }

@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../core/deeplink/deep_link.dart';
+import '../core/telemetry/mv2_analytics.dart';
 import '../features/auth/presentation/login_page.dart';
 import '../features/blocked/presentation/blocked_users_page.dart';
 import '../features/feed/presentation/home_feed_page.dart';
@@ -18,6 +19,8 @@ import '../features/notifications/presentation/notifications_page.dart';
 import '../features/profile/presentation/profile_page.dart';
 import '../features/reader/presentation/reader_page.dart';
 import '../features/search/presentation/search_page.dart';
+import '../features/pro/presentation/honor_wall_page.dart';
+import '../features/pro/presentation/paywall_page.dart';
 import '../features/settings/presentation/about_page.dart';
 import '../features/settings/presentation/settings_page.dart';
 import '../features/shell/presentation/app_shell.dart';
@@ -26,11 +29,7 @@ import '../ui/utils/mv2_sheet_page.dart';
 
 /// pageBuilder for the secondary destinations: a floating card on wide
 /// viewports, the plain full-screen push on phones (see [mv2SheetPage]).
-Page<dynamic> _sheet(
-  BuildContext context,
-  GoRouterState state,
-  Widget child,
-) =>
+Page<dynamic> _sheet(BuildContext context, GoRouterState state, Widget child) =>
     mv2SheetPage<dynamic>(
       context: context,
       key: state.pageKey,
@@ -51,7 +50,7 @@ Page<dynamic> _sheet(
 final rootNavigatorKey = GlobalKey<NavigatorState>();
 
 final routerProvider = Provider<GoRouter>((ref) {
-  return GoRouter(
+  final router = GoRouter(
     navigatorKey: rootNavigatorKey,
     // A cold start from a link (`mv2://topic/123`, or a pasted V2EX URL the
     // platform handed us) opens straight into that page; everything else lands
@@ -138,8 +137,9 @@ final routerProvider = Provider<GoRouter>((ref) {
           child: TopicDetailPage(
             topicId: int.tryParse(state.pathParameters['id'] ?? '') ?? 0,
             // `/topic/123?floor=4` (from a `#reply4` link) opens at that reply.
-            initialFloor:
-                int.tryParse(state.uri.queryParameters['floor'] ?? ''),
+            initialFloor: int.tryParse(
+              state.uri.queryParameters['floor'] ?? '',
+            ),
           ),
         ),
       ),
@@ -171,11 +171,13 @@ final routerProvider = Provider<GoRouter>((ref) {
       ),
       GoRoute(
         path: '/about',
-        pageBuilder: (context, state) => _sheet(context, state, const AboutPage()),
+        pageBuilder: (context, state) =>
+            _sheet(context, state, const AboutPage()),
       ),
       GoRoute(
         path: '/login',
-        pageBuilder: (context, state) => _sheet(context, state, const LoginPage()),
+        pageBuilder: (context, state) =>
+            _sheet(context, state, const LoginPage()),
       ),
       GoRoute(
         path: '/node/:key',
@@ -195,13 +197,35 @@ final routerProvider = Provider<GoRouter>((ref) {
             _sheet(context, state, const SettingsPage()),
       ),
       GoRoute(
+        path: '/pro',
+        pageBuilder: (context, state) => _sheet(
+          context,
+          state,
+          PaywallPage(
+            // `?source=` 归因付费墙入口，缺省视为设置页。
+            source: state.uri.queryParameters['source'] ?? 'settings',
+          ),
+        ),
+      ),
+      GoRoute(
+        path: '/honors',
+        pageBuilder: (context, state) => _sheet(
+          context,
+          state,
+          HonorWallPage(
+            source: state.uri.queryParameters['source'] ?? 'settings',
+          ),
+        ),
+      ),
+      GoRoute(
         path: '/read-later',
         pageBuilder: (context, state) =>
             _sheet(context, state, const ReadLaterPage()),
       ),
       GoRoute(
         path: '/history',
-        pageBuilder: (context, state) => _sheet(context, state, const HistoryPage()),
+        pageBuilder: (context, state) =>
+            _sheet(context, state, const HistoryPage()),
       ),
       GoRoute(
         path: '/blocked-users',
@@ -239,4 +263,25 @@ final routerProvider = Provider<GoRouter>((ref) {
       ),
     ],
   );
+
+  // screen_view:监听 delegate 的路由变化,一个监听器同时覆盖根导航与 4 个
+  // branch(FirebaseAnalyticsObserver 挂不上去 — 根导航 observers 在 go_router
+  // 构造时被拷贝,而 Firebase 启动必然晚于 router 构建)。screenName 用路由
+  // 模板(`/topic/:id`),看板按模式聚合而不按具体 id 打散;同名去重,一次
+  // 导航引发的多次通知只记一条。
+  var lastScreen = '';
+  void onRouteChanged() {
+    final config = router.routerDelegate.currentConfiguration;
+    if (config.matches.isEmpty) return;
+    final screen = config.fullPath.isNotEmpty
+        ? config.fullPath
+        : config.uri.path;
+    if (screen.isEmpty || screen == lastScreen) return;
+    lastScreen = screen;
+    Mv2Analytics.logScreenView(screenName: screen);
+  }
+
+  router.routerDelegate.addListener(onRouteChanged);
+  ref.onDispose(() => router.routerDelegate.removeListener(onRouteChanged));
+  return router;
 });

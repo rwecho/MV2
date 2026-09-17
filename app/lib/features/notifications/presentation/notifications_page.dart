@@ -14,7 +14,6 @@ import '../../../ui/components/mv2_segmented_tabs.dart';
 import '../../../ui/components/notification_item.dart';
 import '../../../ui/components/states/mv2_skeleton.dart';
 import '../../../ui/components/states/mv2_state_view.dart';
-import '../../../ui/primitives/mv2_buttons.dart';
 import '../../auth/presentation/mv2_account_avatar.dart';
 import '../../topic/application/open_topic.dart';
 import '../application/notifications_providers.dart';
@@ -55,8 +54,8 @@ class _NotificationsPageState extends ConsumerState<NotificationsPage> {
             title: '通知',
             subtitle: '与优秀的开发者社区',
             actions: <Widget>[
-              const Mv2IconButton(icon: Icons.search_rounded, filled: true),
-              const SizedBox(width: Mv2Spacing.x2),
+              // No search affordance: V2EX has no notifications search and the
+              // app has no route for one — the button used to be a dead end.
               const Mv2AccountAvatar(),
             ],
           ),
@@ -169,7 +168,7 @@ class _NotificationGroups extends StatelessWidget {
             // The `a.topic-link` href supplies the destination topic.
             onTap: topicId == null
                 ? null
-                : () => openTopic(context, topicId),
+                : () => openTopic(context, topicId, source: 'notifications'),
           ),
         );
       }

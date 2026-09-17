@@ -9,10 +9,13 @@ import '../../app/router.dart';
 import '../../features/auth/application/auth_controller.dart';
 import '../../features/auth/domain/auth_session.dart';
 import '../../features/composer/presentation/composer_sheets.dart';
+import '../../ui/utils/mv2_breakpoints.dart';
 import '../../ui/utils/mv2_sheet_page.dart';
 import '../native/mv2_native_bridge.dart';
 import '../push/push_payload.dart';
 import '../push/push_providers.dart';
+import '../telemetry/mv2_analytics.dart';
+import '../telemetry/mv2_events.dart';
 import 'deep_link.dart';
 
 /// Receives `mv2://` links while the app is running and offers to open V2EX
@@ -45,8 +48,12 @@ class _Mv2DeepLinkListenerState extends ConsumerState<Mv2DeepLinkListener>
   StreamSubscription<Map<String, Object?>>? _pushOpened;
   StreamSubscription<Map<String, Object?>>? _pushForeground;
 
+  static final RegExp _topicRoute = RegExp(r'^/topic/(\d+)');
+
   /// Last link we opened or prompted for; stops the resume loop from nagging.
   String? _lastSeen;
+
+  String get _layout => mv2IsTwoPane(context) ? 'tablet' : 'phone';
 
   @override
   void initState() {
@@ -96,12 +103,14 @@ class _Mv2DeepLinkListenerState extends ConsumerState<Mv2DeepLinkListener>
     // arrive before that, so defer one frame if it is not up yet.
     final context = rootNavigatorKey.currentContext;
     if (context != null) {
-      unawaited(showPublishComposer(context));
+      unawaited(showPublishComposer(context, source: 'quick_action'));
       return;
     }
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final context = rootNavigatorKey.currentContext;
-      if (context != null) unawaited(showPublishComposer(context));
+      if (context != null) {
+        unawaited(showPublishComposer(context, source: 'quick_action'));
+      }
     });
   }
 
@@ -127,6 +136,17 @@ class _Mv2DeepLinkListenerState extends ConsumerState<Mv2DeepLinkListener>
   void _openPushPayload(Map<String, Object?> data) {
     final route = Mv2PushPayload.routeFor(data);
     if (route == null) return;
+    // 归因:推送点开 + 若落地是主题,补一条带 push 来源的 topic_open。
+    final match = _topicRoute.firstMatch(route);
+    if (match != null) {
+      final topicId = int.parse(match.group(1)!);
+      Mv2Analytics.logPushOpen(topicId: topicId);
+      Mv2Analytics.logTopicOpen(
+        topicId: topicId,
+        source: 'push',
+        layout: _layout,
+      );
+    }
     ref.read(routerProvider).go(route);
   }
 
@@ -148,13 +168,26 @@ class _Mv2DeepLinkListenerState extends ConsumerState<Mv2DeepLinkListener>
     final route = Mv2DeepLink.routeFor(raw);
     if (route == null) return;
     _lastSeen = Mv2DeepLink.urlIn(raw) ?? raw;
-    _navigate(route);
+    Mv2Analytics.logDeeplinkOpen(kind: raw.startsWith('mv2://') ? 'mv2' : 'web');
+    _navigate(route, source: 'deeplink');
   }
 
   /// Sheet cards (用户主页, 节点, 设置, …) must ride above the shell: `go`
   /// would make the card the whole stack — a dimmed void with nothing to pop
   /// back to. Everything else (topic detail) keeps replacing the stack.
-  void _navigate(String route) {
+  ///
+  /// [source] only feeds the `topic_open` attribution when the route lands on
+  /// a topic; quick actions (which never target `/topic/…`) pass nothing and
+  /// stay unlogged here.
+  void _navigate(String route, {String source = Mv2Events.unspecified}) {
+    final match = _topicRoute.firstMatch(route);
+    if (match != null) {
+      Mv2Analytics.logTopicOpen(
+        topicId: int.parse(match.group(1)!),
+        source: source,
+        layout: _layout,
+      );
+    }
     final router = ref.read(routerProvider);
     if (mv2IsSheetLocation(route)) {
       router.push(route);
@@ -182,13 +215,17 @@ class _Mv2DeepLinkListenerState extends ConsumerState<Mv2DeepLinkListener>
 
     final messenger = ScaffoldMessenger.of(context);
     messenger.hideCurrentSnackBar();
+    Mv2Analytics.logClipboardOffer(action: 'shown');
     messenger.showSnackBar(
       SnackBar(
         content: const Text('检测到 V2EX 链接'),
         duration: const Duration(seconds: 6),
         action: SnackBarAction(
           label: '打开',
-          onPressed: () => _navigate(route),
+          onPressed: () {
+            Mv2Analytics.logClipboardOffer(action: 'accepted');
+            _navigate(route, source: 'clipboard');
+          },
         ),
       ),
     );

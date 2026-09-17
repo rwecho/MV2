@@ -4,6 +4,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../../../core/data/home_tab.dart';
 import '../../../core/data/v2ex_providers.dart';
 import '../../../core/errors/provider_retry.dart';
+import '../../../core/telemetry/mv2_analytics.dart';
 import '../../../shared/models/models.dart';
 import '../../blocked/application/blocked_content.dart';
 import '../../blocked/application/blocked_users_controller.dart';
@@ -37,6 +38,9 @@ class HomeTabController extends Notifier<HomeTab> {
   Future<void> select(HomeTab tab) async {
     if (state == tab) return;
     state = tab;
+    // 点标签与 PageView 横滑都汇到这里(单一咽喉点);_hydrate 直写 state
+    // 不经 select,启动恢复不会误记为一次浏览。
+    Mv2Analytics.logFeedTabView(tab: tab.slug);
     final prefs = _prefs ??= await SharedPreferences.getInstance();
     await prefs.setString(storageKey, tab.name);
   }

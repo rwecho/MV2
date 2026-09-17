@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/data/session_once.dart';
 import '../../../core/data/v2ex_providers.dart';
+import '../../../core/telemetry/mv2_analytics.dart';
 import '../data/auth_store.dart';
 import '../domain/auth_session.dart';
 
@@ -80,6 +81,9 @@ class AuthController extends AsyncNotifier<AuthSession> {
     // The rotated `once` belongs to the old session; never reuse it.
     ref.read(sessionOnceProvider.notifier).reset();
     lastSignOutReason = reason;
+    // 咽喉点埋点:手动退出与会话过期(handleAuthFailure / refreshAccount 的
+    // 服务器说没登录)都汇到这里,reason 区分。
+    Mv2Analytics.logLogout(reason: reason.name);
     state = const AsyncData(AuthSession.signedOut());
   }
 

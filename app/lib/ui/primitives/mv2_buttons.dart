@@ -40,7 +40,11 @@ class Mv2IconButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = context.colors;
-    final fg = color ?? colors.textPrimary;
+    // Disabled buttons must *look* disabled — an enabled-looking header button
+    // that does nothing reads as a bug (the 清空 buttons on empty list pages
+    // rely on this). Mirrors `Mv2TextButton`'s disabled treatment.
+    final enabled = onPressed != null;
+    final fg = !enabled ? colors.textTertiary : (color ?? colors.textPrimary);
 
     final Widget visual = SizedBox(
       width: size,
@@ -68,6 +72,7 @@ class Mv2IconButton extends StatelessWidget {
 
     return Semantics(
       button: true,
+      enabled: enabled,
       label: tooltip,
       child: SizedBox(
         width: size < Mv2Spacing.minTapTarget ? Mv2Spacing.minTapTarget : size,
@@ -75,7 +80,13 @@ class Mv2IconButton extends StatelessWidget {
         child: GestureDetector(
           behavior: HitTestBehavior.opaque,
           onTap: onPressed,
-          child: Center(child: surface),
+          child: Center(
+            child: AnimatedOpacity(
+              duration: Mv2Motion.tap,
+              opacity: enabled ? 1 : 0.6,
+              child: surface,
+            ),
+          ),
         ),
       ),
     );

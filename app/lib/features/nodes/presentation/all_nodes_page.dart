@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../core/telemetry/mv2_analytics.dart';
 import '../../../design_system/theme/mv2_theme.dart';
 import '../../../design_system/tokens/mv2_radius.dart';
 import '../../../design_system/tokens/mv2_spacing.dart';
@@ -51,7 +52,12 @@ class _AllNodesPageState extends ConsumerState<AllNodesPage> {
     _debounce?.cancel();
     _debounce = Timer(const Duration(milliseconds: 200), () {
       if (!mounted) return;
-      setState(() => _query = value.trim());
+      final trimmed = value.trim();
+      setState(() => _query = trimmed);
+      // 防抖落定且非空才算一次筛选;原文不入参只记长度分桶。
+      if (trimmed.isNotEmpty) {
+        Mv2Analytics.logNodesFilter(queryLength: trimmed.length);
+      }
     });
   }
 
@@ -168,9 +174,15 @@ class _AllNodesPageState extends ConsumerState<AllNodesPage> {
                                         ),
                                         child: NodeCard(
                                           node: node,
-                                          onTap: () => context.push(
-                                            '/node/${node.key}?name=${Uri.encodeComponent(node.name)}',
-                                          ),
+                                          onTap: () {
+                                            Mv2Analytics.logNodeOpen(
+                                              nodeKey: node.key,
+                                              source: 'nodes_all',
+                                            );
+                                            context.push(
+                                              '/node/${node.key}?name=${Uri.encodeComponent(node.name)}',
+                                            );
+                                          },
                                         ),
                                       );
                                     },

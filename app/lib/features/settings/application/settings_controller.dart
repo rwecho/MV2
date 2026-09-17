@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../../../core/telemetry/mv2_analytics.dart';
+
 /// Appearance mode — mirrors `designs/08-settings.png` → 外观 / 主题.
 enum Mv2ColorMode {
   system('跟随系统'),
@@ -202,53 +204,68 @@ class SettingsController extends Notifier<AppSettings> {
     );
   }
 
+  /// 埋点:通用 setting_change {key, value}(value 是枚举名或
+  /// 'true'/'false',无自由文本)。所有 setter 统一经此上报;
+  /// `setSplitRatio` 除外 — 拖动分隔条会连续触发,是噪音。
+  void _track(String key, Object? value) =>
+      Mv2Analytics.logSettingChange(key: key, value: '$value');
+
   Future<void> setColorMode(Mv2ColorMode mode) async {
     _dirty = true;
     state = state.copyWith(colorMode: mode);
+    _track('color_mode', mode.name);
     await _save((p) => p.setString(_kColorMode, mode.name));
   }
 
   Future<void> setFontSize(Mv2FontSize size) async {
     _dirty = true;
     state = state.copyWith(fontSize: size);
+    _track('font_size', size.name);
     await _save((p) => p.setString(_kFontSize, size.name));
   }
 
   Future<void> setContentWidth(Mv2ContentWidth width) async {
     _dirty = true;
     state = state.copyWith(contentWidth: width);
+    _track('content_width', width.name);
     await _save((p) => p.setString(_kContentWidth, width.name));
   }
 
   Future<void> setOpenLinkMode(Mv2LinkOpenMode mode) async {
     _dirty = true;
     state = state.copyWith(openLinkMode: mode);
+    _track('link_open_mode', mode.name);
     await _save((p) => p.setString(_kOpenLinkMode, mode.name));
   }
 
   Future<void> setAutoCollapseReplies(bool value) async {
     _dirty = true;
     state = state.copyWith(autoCollapseReplies: value);
+    _track('auto_collapse', value);
     await _save((p) => p.setBool(_kAutoCollapse, value));
   }
 
   Future<void> setHapticsEnabled(bool value) async {
     _dirty = true;
     state = state.copyWith(hapticsEnabled: value);
+    _track('haptics', value);
     await _save((p) => p.setBool(_kHaptics, value));
   }
 
   Future<void> setPushEnabled(bool value) async {
     _dirty = true;
     state = state.copyWith(pushEnabled: value);
+    _track('push_enabled', value);
     await _save((p) => p.setBool(_kPush, value));
   }
 
   Future<void> setReplySort(Mv2ReplySort sort) async {
     _dirty = true;
     state = state.copyWith(replySort: sort);
+    _track('reply_sort', sort.name);
     await _save((p) => p.setString(_kReplySort, sort.name));
   }
+
 
   /// Left-pane share of the two-pane layout; the 拖拽分隔条 drives this while
   /// the user drags, so it fires many times per gesture — the no-op guard

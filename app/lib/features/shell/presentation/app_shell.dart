@@ -9,15 +9,14 @@ import '../../../design_system/tokens/mv2_motion.dart';
 import '../../../design_system/tokens/mv2_spacing.dart';
 import '../../../ui/components/mv2_floating_tab_bar.dart';
 import '../../../ui/components/states/mv2_state_view.dart';
-import '../../../ui/mv2_haptics.dart';
 import '../../../ui/utils/mv2_breakpoints.dart';
 import '../../auth/application/auth_controller.dart';
 import '../../auth/domain/auth_session.dart';
-import '../../composer/presentation/composer_sheets.dart';
 import '../../notifications/application/notifications_providers.dart';
 import '../../settings/application/settings_controller.dart';
 import '../../topic/presentation/topic_detail_page.dart';
 import '../application/shell_chrome.dart';
+import '../application/shell_tabs.dart';
 import '../application/tablet_topic_pane.dart';
 
 /// Shell that hosts the four tabbed branches and paints the floating tab bar
@@ -47,25 +46,10 @@ class _AppShellState extends ConsumerState<AppShell> {
   };
 
   void _onSelect(BuildContext context, Mv2Tab tab) {
-    // Entering a branch always shows the chrome again, even if the previous
-    // branch was scrolled far enough to hide the bar.
-    ref.read(shellBarCollapsedProvider.notifier).reset();
-    // 设置 → 触觉反馈.
-    Mv2Haptics.tap(ref.read(settingsProvider).hapticsEnabled);
-    if (tab == Mv2Tab.publish) {
-      showPublishComposer(context);
-      return;
-    }
-    final index = switch (tab) {
-      Mv2Tab.feed => 0,
-      Mv2Tab.nodes => 1,
-      Mv2Tab.notifications => 2,
-      _ => 3,
-    };
-    widget.navigationShell.goBranch(
-      index,
-      initialLocation: index == widget.navigationShell.currentIndex,
-    );
+    // Shared with the programmatic entries (header avatar) so both behave like
+    // a real tab tap: haptics, attribution, chrome reset, branch switch. The
+    // bar is a sibling of the shell, not below it, so pass it explicitly.
+    selectShellTab(context, ref, tab, shell: widget.navigationShell);
   }
 
   /// Surfaces an expired session once, with a shortcut back into the WebView

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../core/telemetry/mv2_analytics.dart';
 import '../../../design_system/tokens/mv2_spacing.dart';
 import '../../../ui/components/mv2_page_header.dart';
 import '../../../ui/components/mv2_page_scaffold.dart';
@@ -60,9 +61,12 @@ class BlockedUsersPage extends ConsumerWidget {
                       showDivider: i < usernames.length - 1,
                       trailing: Mv2TextButton(
                         label: '解除',
-                        onPressed: () => ref
-                            .read(blockedUsersProvider.notifier)
-                            .unblock(usernames[i]),
+                        onPressed: () {
+                          Mv2Analytics.logBlockedUnblock(count: 1);
+                          ref
+                              .read(blockedUsersProvider.notifier)
+                              .unblock(usernames[i]);
+                        },
                       ),
                     ),
                 ],
@@ -79,6 +83,8 @@ class BlockedUsersPage extends ConsumerWidget {
       confirmLabel: '解除',
     );
     if (!confirmed || !context.mounted) return;
+    // build 里的 usernames 局部变量在此不可见,重新读一份计数。
+    Mv2Analytics.logBlockedUnblock(count: ref.read(blockedUsersProvider).length);
     await ref.read(blockedUsersProvider.notifier).clear();
   }
 }

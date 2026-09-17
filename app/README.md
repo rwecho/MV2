@@ -156,6 +156,41 @@ Markdown 与「预览」，草稿以 600ms 防抖写入 `SharedPreferences`（`m
 使用系统自带的 SQLite，避免从 GitHub Releases 下载预编译库。iOS/macOS 都自带
 libsqlite3；**Android 发布前必须重新评估**（改回默认 bundled 或提供 `source:` 自定义构建）。
 
+### 内购（永久买断）
+
+设置页顶部的「MV2 永久版」进入付费墙（`/pro`），走 RevenueCat 完成
+App Store / Google Play 的**非消耗型**买断；权益持久化在本地
+（`mv2.pro.entitled`），换机重装走「恢复购买」。功能门控统一读
+`isProProvider`（骨架阶段尚无功能依赖它）。
+
+RevenueCat 公钥是客户端公开凭据，通过 `--dart-define` 注入，仓库不落盘：
+
+```bash
+flutter run \
+  --dart-define=MV2_REVENUECAT_APPLE_KEY=appl_xxx \
+  --dart-define=MV2_REVENUECAT_GOOGLE_KEY=goog_xxx
+```
+
+不注入 key 的构建（本地开发 / CI）付费墙显示「商店尚未配置」，不可购但一切正常。
+商店侧需要一次性配置：
+
+1. RevenueCat 后台建 App（iOS / Android 各一把 public key），创建 entitlement
+   `pro`，把终身商品挂上去；
+2. App Store Connect：非消耗型内购，商品 id `mv2.pro.lifetime`；
+3. Google Play Console：托管商品，商品 id `mv2.pro.lifetime`（需先上传带计费
+   权限的构建才能建档）。
+
+实现：`lib/features/pro/`（`ProBackend` 抽象 + `RevenueCatProBackend` +
+`ProController` + 付费墙），埋点 `paywall_open` / `purchase_result` /
+`restore_result`。
+
+### 荣誉墙
+
+买断用户永久铭刻在「荣誉墙」（设置 → 荣誉墙，路由 `/honors`）。购买成功后弹窗
+登记展示名（预填 V2EX 用户名，可改），Worker 用 RevenueCat secret key 核验
+`pro` 权益后写入 KV；**一经铭刻不随退款移除**，展示名全局唯一（先到先得）。
+购买状态本身不门控任何功能，荣誉墙入口对所有人可见。
+
 ## 质量门
 
 ```bash

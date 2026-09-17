@@ -7,6 +7,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../core/data/v2ex_providers.dart';
 import '../../../core/errors/failures.dart';
+import '../../../core/telemetry/mv2_analytics.dart';
 import '../../../shared/emoji/mv2_emoji_library.dart';
 import '../../../shared/models/models.dart';
 import '../../../shared/models/node_visuals.dart';
@@ -150,6 +151,9 @@ class PublishController extends Notifier<PublishState> {
         nodeTitle: draft.nodeTitle,
         draftSaved: draft.hasContent,
       );
+      if (draft.hasContent) {
+        Mv2Analytics.logDraftAction(composer: 'publish', action: 'restored');
+      }
     } catch (_) {
       // Draft storage is best-effort: a failure must never block composing.
     }
@@ -223,10 +227,25 @@ class PublishController extends Notifier<PublishState> {
       draftSaved: false,
       problems: const <String>[],
     );
+    Mv2Analytics.logPublishNodeSelect(nodeKey: slug);
     _scheduleDraftSave();
   }
 
-  void togglePreview() => state = state.copyWith(preview: !state.preview);
+  void togglePreview() {
+    // 仅"开启预览"这一侧有意义(关闭是预期内回收)。
+    if (!state.preview) Mv2Analytics.logPublishPreview();
+    state = state.copyWith(preview: !state.preview);
+  }
+
+  /// 提交终态埋点:token 重试走递归,由递归那次的终态记录,天然只记一次。
+  void _trackSubmit({required String slug, required String content, required String result}) {
+    Mv2Analytics.logPublishSubmit(
+      nodeKey: slug,
+      hasImage: content.contains('![](') || content.contains('<img'),
+      titleLength: state.title.trim().length,
+      result: result,
+    );
+  }
 
   /// Publishes the topic. Returns `true` on the `302` success path.
   ///
@@ -270,6 +289,7 @@ class PublishController extends Notifier<PublishState> {
             submitting: false,
             problems: <String>[state.failure!.message],
           );
+          _trackSubmit(slug: slug, content: current.content, result: 'failed');
           return false;
         }
         return await _submit(allowTokenRefresh: false);
@@ -282,6 +302,7 @@ class PublishController extends Notifier<PublishState> {
               ? const <String>['发布失败，请稍后重试。']
               : result.errors,
         );
+        _trackSubmit(slug: slug, content: current.content, result: 'failed');
         return false;
       }
       _draftTimer?.cancel();
@@ -292,6 +313,7 @@ class PublishController extends Notifier<PublishState> {
         problems: const <String>[],
         publishedTopicId: result.topicId,
       );
+      _trackSubmit(slug: slug, content: current.content, result: 'success');
       return true;
     } on Failure catch (failure) {
       if (failure is AuthFailure) {
@@ -302,6 +324,7 @@ class PublishController extends Notifier<PublishState> {
         submitting: false,
         problems: <String>[failure.message],
       );
+      _trackSubmit(slug: slug, content: current.content, result: 'failed');
       return false;
     }
   }
@@ -325,6 +348,10 @@ class PublishController extends Notifier<PublishState> {
       await prefs.setString(_draftKey, payload);
       if (_disposed) return;
       state = state.copyWith(draftSaved: true);
+      // 空草稿写入没有信息量,不计。
+      if (state.hasDraft) {
+        Mv2Analytics.logDraftAction(composer: 'publish', action: 'saved');
+      }
     } catch (_) {
       // Ignore: the draft is a convenience, not a source of truth.
     }
@@ -334,6 +361,7 @@ class PublishController extends Notifier<PublishState> {
     try {
       final prefs = await _prefsInstance();
       await prefs.remove(_draftKey);
+      Mv2Analytics.logDraftAction(composer: 'publish', action: 'cleared');
     } catch (_) {
       // Ignore.
     }

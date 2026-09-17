@@ -8,6 +8,7 @@ import 'package:share_plus/share_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 
+import '../../../core/telemetry/mv2_analytics.dart';
 import '../../../design_system/effects/mv2_glass.dart';
 import '../../../design_system/theme/mv2_theme.dart';
 import '../../../design_system/tokens/mv2_radius.dart';
@@ -85,6 +86,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
       setting: ref.read(settingsProvider).openLinkMode,
     );
     _mode = _initialMode;
+    Mv2Analytics.logReaderOpen(mode: _mode.name);
 
     if (!_hasUrl) {
       _controller = null;
@@ -221,6 +223,7 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
   void _setMode(ReaderMode mode) {
     if (mode == ReaderMode.reader && _article == null) return;
     _userToggled = true;
+    if (mode != _mode) Mv2Analytics.logReaderModeChange(mode: mode.name);
     setState(() => _mode = mode);
   }
 

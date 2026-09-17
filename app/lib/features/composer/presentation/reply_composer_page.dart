@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/data/session_once.dart';
 import '../../../core/data/v2ex_providers.dart';
 import '../../../core/errors/failures.dart';
+import '../../../core/telemetry/mv2_analytics.dart';
 import '../../../design_system/effects/mv2_glass.dart';
 import '../../../design_system/theme/mv2_theme.dart';
 import '../../../design_system/tokens/mv2_radius.dart';
@@ -120,6 +121,7 @@ class _ReplyComposerPageState extends ConsumerState<ReplyComposerPage> {
     if (!mounted) return;
     if (saved != null && saved.isNotEmpty) {
       if (_controller.text.isEmpty) _controller.text = saved;
+      Mv2Analytics.logDraftAction(composer: 'reply', action: 'restored');
       return;
     }
     // Fresh composer: seed the floor marker only when there is no draft to
@@ -135,7 +137,10 @@ class _ReplyComposerPageState extends ConsumerState<ReplyComposerPage> {
     setState(() {});
     _draftTimer?.cancel();
     _draftTimer = Timer(const Duration(milliseconds: 500), () {
-      unawaited(_draftStore.write(_draftKey, _controller.text));
+      final text = _controller.text;
+      if (text.trim().isEmpty) return;
+      unawaited(_draftStore.write(_draftKey, text));
+      Mv2Analytics.logDraftAction(composer: 'reply', action: 'saved');
     });
   }
 
@@ -196,6 +201,13 @@ class _ReplyComposerPageState extends ConsumerState<ReplyComposerPage> {
         _submitted = true;
         _draftTimer?.cancel();
         await _draftStore.clear(_draftKey);
+        Mv2Analytics.logDraftAction(composer: 'reply', action: 'cleared');
+        Mv2Analytics.logReplySubmit(
+          topicId: widget.topicId,
+          hasQuote: widget.quotedReply != null || widget.floor != null,
+          contentLength: content.length,
+          result: 'success',
+        );
         if (!mounted) return;
         // Force the detail provider to refetch so the new reply is visible.
         ref.invalidate(topicDetailProvider(TopicDetailArgs(widget.topicId)));
@@ -209,6 +221,12 @@ class _ReplyComposerPageState extends ConsumerState<ReplyComposerPage> {
             ? const <String>['发送失败，请稍后重试。']
             : result.errors;
       });
+      Mv2Analytics.logReplySubmit(
+        topicId: widget.topicId,
+        hasQuote: widget.quotedReply != null || widget.floor != null,
+        contentLength: content.length,
+        result: 'failed',
+      );
     } on AuthFailure catch (failure) {
       // 401/403 mid-session: sign the stale session out before surfacing.
       await ref.read(authControllerProvider.notifier).handleAuthFailure();
@@ -217,6 +235,12 @@ class _ReplyComposerPageState extends ConsumerState<ReplyComposerPage> {
         _sending = false;
         _errors = <String>[failure.message];
       });
+      Mv2Analytics.logReplySubmit(
+        topicId: widget.topicId,
+        hasQuote: widget.quotedReply != null || widget.floor != null,
+        contentLength: content.length,
+        result: 'auth_required',
+      );
     } on Failure catch (failure) {
       // Includes RateLimitFailure, whose message must be shown verbatim.
       if (!mounted) return;
@@ -224,6 +248,12 @@ class _ReplyComposerPageState extends ConsumerState<ReplyComposerPage> {
         _sending = false;
         _errors = <String>[failure.message];
       });
+      Mv2Analytics.logReplySubmit(
+        topicId: widget.topicId,
+        hasQuote: widget.quotedReply != null || widget.floor != null,
+        contentLength: content.length,
+        result: failure is RateLimitFailure ? 'rate_limited' : 'failed',
+      );
     }
   }
 

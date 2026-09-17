@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/network/imgur_uploader.dart';
+import '../../../core/telemetry/mv2_analytics.dart';
 import '../../../design_system/theme/mv2_theme.dart';
 import '../../../design_system/tokens/mv2_spacing.dart';
 import '../../../ui/components/mv2_error_feedback.dart';
@@ -49,9 +50,17 @@ class _ComposerImageButtonState extends ConsumerState<ComposerImageButton> {
       final url = await ref
           .read(imgurUploaderProvider)
           .upload(picked.bytes, filename: picked.filename);
+      Mv2Analytics.logImageUpload(
+        result: 'success',
+        sizeBytes: picked.bytes.length,
+      );
       if (!mounted) return;
       widget.onInsert('![]($url)');
     } catch (error) {
+      Mv2Analytics.logImageUpload(
+        result: 'failed',
+        sizeBytes: picked.bytes.length,
+      );
       if (!mounted) return;
       mv2ShowError(context, error);
     } finally {

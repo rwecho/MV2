@@ -7,6 +7,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../../../core/data/v2ex_providers.dart';
 import '../../../core/errors/failures.dart';
+import '../../../core/telemetry/mv2_analytics.dart';
 import '../../../design_system/theme/mv2_theme.dart';
 import '../../../design_system/tokens/mv2_radius.dart';
 import '../../../design_system/tokens/mv2_spacing.dart';
@@ -56,6 +57,9 @@ class _LoginPageState extends ConsumerState<LoginPage> {
   @override
   void initState() {
     super.initState();
+    // 单点记录 login_open:所有 push('/login') 入口(收藏/感谢未登录、
+    // 会话过期、个人页登录卡…)都落到这一个 initState,不用逐个穿 source。
+    Mv2Analytics.logLoginOpen();
     _loadForm();
   }
 
@@ -185,6 +189,7 @@ class _LoginPageState extends ConsumerState<LoginPage> {
         return;
       }
       if (result.twoFactor) {
+        Mv2Analytics.logLoginSubmit(result: 'needs_2fa');
         setState(() {
           _needsTwoFactor = true;
           _submitting = false;
@@ -204,6 +209,7 @@ class _LoginPageState extends ConsumerState<LoginPage> {
         _submitting = false;
         _errors = messages;
       });
+      Mv2Analytics.logLoginSubmit(result: 'failed');
       await _loadForm(keepErrors: messages);
     } catch (error) {
       if (!mounted) return;
@@ -211,6 +217,7 @@ class _LoginPageState extends ConsumerState<LoginPage> {
         _submitting = false;
         _errors = <String>[_describe(error)];
       });
+      Mv2Analytics.logLoginSubmit(result: 'failed');
     }
   }
 
@@ -230,6 +237,7 @@ class _LoginPageState extends ConsumerState<LoginPage> {
           .twoStep(form: form, code: code);
       if (!mounted) return;
       if (result.success) {
+        Mv2Analytics.logTwoFactorSubmit(result: 'success');
         await _finishSignIn();
         return;
       }
@@ -237,17 +245,22 @@ class _LoginPageState extends ConsumerState<LoginPage> {
         _submitting = false;
         _errors = result.errors.isEmpty ? <String>['验证码不正确。'] : result.errors;
       });
+      Mv2Analytics.logTwoFactorSubmit(result: 'failed');
     } catch (error) {
       if (!mounted) return;
       setState(() {
         _submitting = false;
         _errors = <String>[_describe(error)];
       });
+      Mv2Analytics.logTwoFactorSubmit(result: 'failed');
     }
   }
 
   /// Cookies are already in the Dio jar (the CookieManager interceptor stored
   /// the `Set-Cookie` from the POST); this validates them and loads the profile.
+  ///
+  /// `login_submit` 的成败在这里结算:密码与两步验证两条路径共用,且只有
+  /// refreshAccount 确认会话真实有效才算成功。
   Future<void> _finishSignIn() async {
     await ref.read(authControllerProvider.notifier).refreshAccount();
     if (!mounted) return;
@@ -258,9 +271,11 @@ class _LoginPageState extends ConsumerState<LoginPage> {
         _submitting = false;
         _errors = <String>['登录未完成，请重试。'];
       });
+      Mv2Analytics.logLoginSubmit(result: 'failed');
       await _loadForm();
       return;
     }
+    Mv2Analytics.logLoginSubmit(result: 'success');
     // No SnackBar here: showing one in the same frame as the pop collides with
     // the outgoing route's SnackBar Hero tag, and the profile page already
     // reflects the new state.

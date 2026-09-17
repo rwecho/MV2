@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../core/telemetry/mv2_analytics.dart';
 import '../../../design_system/effects/mv2_glass.dart';
 import '../../../design_system/theme/mv2_theme.dart';
 import '../../../design_system/tokens/mv2_radius.dart';
@@ -85,12 +86,26 @@ class _SearchPageState extends ConsumerState<SearchPage> {
 
   /// Tapping a 最近搜索 chip sets the query and re-promotes the term.
   void _selectRecent(String term) {
+    Mv2Analytics.logRecentSearchSelect();
     _controller.text = term;
     ref.read(recentSearchesProvider.notifier).add(term);
   }
 
   void _submitQuery(String value) {
     _debounce?.cancel();
+    // 只在显式提交(键盘搜索键)时记;300ms 防抖的自动补发不算一次搜索。
+    // 查询词原文不入参,只记长度分桶(PII 纪律)。
+    if (value.trim().isNotEmpty) {
+      Mv2Analytics.logSearchSubmit(
+        scope: switch (_segmentIndex) {
+          1 => 'member',
+          2 => 'node',
+          _ => 'topic',
+        },
+        sort: ref.read(searchSortProvider).name,
+        queryLength: value.trim().length,
+      );
+    }
     ref.read(searchQueryProvider.notifier).setQuery(value);
     ref.read(recentSearchesProvider.notifier).add(value);
   }
@@ -354,7 +369,10 @@ class _SearchPageState extends ConsumerState<SearchPage> {
                   final topic = results[index];
                   return TopicItem(
                     topic: topic,
-                    onTap: () => openTopic(context, topic.id),
+                    onTap: () {
+                      Mv2Analytics.logSearchResultOpen(type: 'topic');
+                      openTopic(context, topic.id, source: 'search');
+                    },
                   );
                 }),
           loading: () => _loading(bottomInset),
@@ -409,7 +427,10 @@ class _SearchPageState extends ConsumerState<SearchPage> {
       shadowed: false,
       onTap: user.username.isEmpty || user.username == '匿名'
           ? null
-          : () => context.push('/member/${user.username}'),
+          : () {
+              Mv2Analytics.logSearchResultOpen(type: 'member');
+              context.push('/member/${user.username}');
+            },
       padding: const EdgeInsets.all(Mv2Spacing.x3),
       child: Row(
         children: <Widget>[
@@ -436,9 +457,12 @@ class _SearchPageState extends ConsumerState<SearchPage> {
   Widget _buildNodeCard(BuildContext context, V2Node node) {
     return NodeCard(
       node: node,
-      onTap: () => context.push(
-        '/node/${node.key}?name=${Uri.encodeComponent(node.name)}',
-      ),
+      onTap: () {
+        Mv2Analytics.logSearchResultOpen(type: 'node');
+        context.push(
+          '/node/${node.key}?name=${Uri.encodeComponent(node.name)}',
+        );
+      },
     );
   }
 

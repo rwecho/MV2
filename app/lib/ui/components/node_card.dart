@@ -54,12 +54,16 @@ class NodeCard extends StatelessWidget {
                           color: colors.textTertiary,
                         ),
                       ),
-                    const SizedBox(width: 2),
-                    Icon(
-                      Icons.chevron_right_rounded,
-                      size: 18,
-                      color: colors.textTertiary,
-                    ),
+                    // The chevron promises navigation, so only draw it when the
+                    // card is actually tappable.
+                    if (onTap != null) ...<Widget>[
+                      const SizedBox(width: 2),
+                      Icon(
+                        Icons.chevron_right_rounded,
+                        size: 18,
+                        color: colors.textTertiary,
+                      ),
+                    ],
                   ],
                 ),
                 if (node.description != null) ...<Widget>[

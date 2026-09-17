@@ -112,7 +112,7 @@ class _MemberBody extends StatelessWidget {
             if (i > 0) const SizedBox(height: Mv2Spacing.x3),
             TopicItem(
               topic: topics[i],
-              onTap: () => openTopic(context, topics[i].id),
+              onTap: () => openTopic(context, topics[i].id, source: 'member'),
             ),
           ],
         ],

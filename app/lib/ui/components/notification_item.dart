@@ -9,6 +9,15 @@ import '../../design_system/tokens/mv2_spacing.dart';
 import '../../shared/models/models.dart';
 import '../primitives/mv2_avatar.dart';
 
+/// Whether the notification's actor has a member page to open.
+///
+/// Shared by the avatar and the actor name so the two tap targets can never
+/// disagree about who is reachable (V2EX has no page for 匿名).
+bool _canOpenActor(V2Notification n) {
+  final username = n.actor.username;
+  return username.isNotEmpty && username != '匿名';
+}
+
 /// Notification row for `designs/06-notifications.png`.
 class NotificationItem extends StatelessWidget {
   const NotificationItem({super.key, required this.notification, this.onTap});
@@ -48,7 +57,16 @@ class NotificationItem extends StatelessWidget {
             ),
           ),
           const SizedBox(width: Mv2Spacing.x2),
-          Mv2Avatar(user: n.actor, size: 38),
+          // The avatar is its own tap target, matching the actor name next to
+          // it: tapping the person goes to their page, not to the topic the
+          // card points at.
+          GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: _canOpenActor(n)
+                ? () => context.push('/member/${n.actor.username}')
+                : null,
+            child: Mv2Avatar(user: n.actor, size: 38),
+          ),
           const SizedBox(width: Mv2Spacing.x3),
           Expanded(
             child: Column(
@@ -109,10 +127,7 @@ class _ActionLineState extends State<_ActionLine> {
   /// and disposed with the row instead of being rebuilt on every frame.
   TapGestureRecognizer? _actorRecognizer;
 
-  bool get _canOpen {
-    final username = widget.notification.actor.username;
-    return username.isNotEmpty && username != '匿名';
-  }
+  bool get _canOpen => _canOpenActor(widget.notification);
 
   @override
   void initState() {

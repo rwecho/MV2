@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../design_system/effects/mv2_glass.dart';
@@ -7,6 +8,12 @@ import '../../design_system/tokens/mv2_radius.dart';
 import '../../design_system/tokens/mv2_spacing.dart';
 import '../../shared/models/models.dart';
 import '../primitives/mv2_avatar.dart';
+
+/// Whether the syndicating member has a V2EX page to open.
+bool _canOpenAuthor(V2User author) {
+  final username = author.username;
+  return username.isNotEmpty && username != '匿名';
+}
 
 /// Card for one VXNA aggregator entry (`/xna`).
 ///
@@ -69,21 +76,56 @@ class XnaItem extends StatelessWidget {
           Row(
             children: <Widget>[
               if (author != null) ...<Widget>[
-                Mv2Avatar(user: author, size: 20),
-                const SizedBox(width: Mv2Spacing.x2),
-              ],
-              Flexible(
-                child: Text(
-                  author == null
-                      ? entry.sourceName
-                      : '${author.username} · ${entry.sourceName}',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: context.text.metadata.copyWith(
-                    color: colors.textSecondary,
+                // The member is its own tap target: tapping the person opens
+                // their V2EX page instead of the external article the card
+                // points at. The source label next to it stays part of the
+                // card. The author href in the payload is `/member/<name>`.
+                Flexible(
+                  child: GestureDetector(
+                    behavior: HitTestBehavior.opaque,
+                    onTap: _canOpenAuthor(author)
+                        ? () => context.push('/member/${author.username}')
+                        : null,
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: <Widget>[
+                        Mv2Avatar(user: author, size: 20),
+                        const SizedBox(width: Mv2Spacing.x2),
+                        Flexible(
+                          child: Text(
+                            author.username,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: context.text.metadata.copyWith(
+                              color: colors.textSecondary,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
-              ),
+                Flexible(
+                  child: Text(
+                    ' · ${entry.sourceName}',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: context.text.metadata.copyWith(
+                      color: colors.textSecondary,
+                    ),
+                  ),
+                ),
+              ] else
+                Flexible(
+                  child: Text(
+                    entry.sourceName,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: context.text.metadata.copyWith(
+                      color: colors.textSecondary,
+                    ),
+                  ),
+                ),
               const SizedBox(width: Mv2Spacing.x2),
               Icon(
                 Icons.open_in_new_rounded,

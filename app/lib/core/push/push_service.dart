@@ -4,11 +4,40 @@ import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../telemetry/mv2_analytics.dart';
 import 'push_gateway.dart';
 
 /// `POST`s a registration body to the worker; returns whether it was accepted.
 typedef PushRegisterPost =
     Future<bool> Function(String url, Map<String, Object?> body);
+
+/// One `register()` attempt's ending — reported as the `push_register`
+/// analytics result. 只记枚举,不记 token / feedUrl(PII)。
+enum PushRegisterOutcome {
+  /// Worker accepted the payload (or the pair was already stored).
+  registered,
+
+  /// Nothing to do: `(token, feedUrl)` identical to the last registration.
+  unchanged,
+
+  /// 推送通知 setting is off.
+  disabled,
+
+  /// Gateway/SDK unusable on this platform (no config, ohos shim, …).
+  unavailable,
+
+  /// The OS permission prompt was denied.
+  permissionDenied,
+
+  /// Account has never opened `/notifications`, so there is no feed URL yet.
+  noFeedUrl,
+
+  /// FCM handed back an empty token.
+  noToken,
+
+  /// Worker rejected the POST, or something threw.
+  failed,
+}
 
 /// Registers this device with the MV2 push worker.
 ///
@@ -96,45 +125,60 @@ class Mv2PushService {
 
   /// Enrols this device, reusing the remembered feed URL when [feedUrl] is not
   /// supplied (cold start, token rotation).
-  Future<void> register({String? feedUrl}) async {
+  ///
+  /// Every return path lands on exactly one [PushRegisterOutcome], which is
+  /// both the analytics payload and the caller-visible result.
+  Future<PushRegisterOutcome> register({String? feedUrl}) async {
     try {
-      if (!_isEnabled()) return;
+      if (!_isEnabled()) return _done(PushRegisterOutcome.disabled);
       await start();
-      if (!_gateway.isAvailable) return;
+      if (!_gateway.isAvailable) return _done(PushRegisterOutcome.unavailable);
 
       final prefs = await _prefs();
       final feed = _validFeed(feedUrl) ?? _validFeed(prefs.getString(_kFeedUrl));
       // No feed URL yet: the account has never opened /notifications.
-      if (feed == null) return;
+      if (feed == null) return _done(PushRegisterOutcome.noFeedUrl);
 
       if (feedUrl != null) await prefs.setString(_kFeedUrl, feed);
 
       // Asked here rather than at launch: by the time we know the account has
       // notifications, the prompt has context. A denial is final until the user
       // changes it in system settings.
-      if (!await _gateway.requestPermission()) return;
+      if (!await _gateway.requestPermission()) {
+        return _done(PushRegisterOutcome.permissionDenied);
+      }
 
       final token = await _gateway.token();
-      if (token == null || token.isEmpty) return;
+      if (token == null || token.isEmpty) {
+        return _done(PushRegisterOutcome.noToken);
+      }
 
       final unchanged =
           prefs.getString(_kRegisteredToken) == token &&
           prefs.getString(_kRegisteredFeed) == feed;
-      if (unchanged) return;
+      if (unchanged) return _done(PushRegisterOutcome.unchanged);
 
       final accepted = await _post('$workerBaseUrl/register', <String, Object?>{
         'feedUrl': feed,
         'fcmToken': token,
         'deviceType': _deviceType(),
       });
-      if (!accepted) return;
+      if (!accepted) return _done(PushRegisterOutcome.failed);
 
       await prefs.setString(_kRegisteredToken, token);
       await prefs.setString(_kRegisteredFeed, feed);
+      return _done(PushRegisterOutcome.registered);
     } catch (_) {
       // Push is best-effort: a network/plugin failure must not surface as a
       // broken notifications page.
+      return _done(PushRegisterOutcome.failed);
     }
+  }
+
+  /// Single exit funnel so the analytics event fires once per attempt.
+  PushRegisterOutcome _done(PushRegisterOutcome outcome) {
+    Mv2Analytics.logPushRegister(result: outcome.name);
+    return outcome;
   }
 
   /// Drops the remembered feed URL (used when the account signs out).

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../core/telemetry/mv2_analytics.dart';
 import '../../../design_system/effects/mv2_glass.dart';
 import '../../../design_system/theme/mv2_theme.dart';
 import '../../../design_system/tokens/mv2_radius.dart';
@@ -29,6 +30,7 @@ class _NodesPageState extends ConsumerState<NodesPage> {
   /// Navigates to a 最近访问 node; the slug comes straight from the local
   /// history snapshot, so no cross-reference with the hot list is needed.
   void _openRecentNode(RecentVisitedNode node) {
+    Mv2Analytics.logNodeOpen(nodeKey: node.key, source: 'recent');
     context.push('/node/${node.key}?name=${Uri.encodeComponent(node.title)}');
   }
 
@@ -43,10 +45,13 @@ class _NodesPageState extends ConsumerState<NodesPage> {
         title: '节点',
         subtitle: '发现感兴趣的内容社区',
         actions: <Widget>[
-          const Mv2IconButton(
+          // Same destination as the search field below: the 全部节点 page owns
+          // the actual filter field (it autofocuses on arrival).
+          Mv2IconButton(
             icon: Icons.filter_list_rounded,
             filled: true,
-            onPressed: null,
+            tooltip: '筛选节点',
+            onPressed: () => context.push('/nodes/all'),
           ),
         ],
       ),
@@ -99,9 +104,15 @@ class _NodesPageState extends ConsumerState<NodesPage> {
                     if (i > 0) const SizedBox(height: Mv2Spacing.x3),
                     NodeCard(
                       node: hotNodes[i],
-                      onTap: () => context.push(
-                        '/node/${hotNodes[i].key}?name=${Uri.encodeComponent(hotNodes[i].name)}',
-                      ),
+                      onTap: () {
+                        Mv2Analytics.logNodeOpen(
+                          nodeKey: hotNodes[i].key,
+                          source: 'nodes_hot',
+                        );
+                        context.push(
+                          '/node/${hotNodes[i].key}?name=${Uri.encodeComponent(hotNodes[i].name)}',
+                        );
+                      },
                     ),
                   ],
                 ],

@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/data/session_once.dart';
 import '../../../core/data/v2ex_providers.dart';
 import '../../../core/errors/failures.dart';
+import '../../../core/telemetry/mv2_analytics.dart';
 import '../../../shared/models/topic_detail.dart';
 import '../../../shared/models/write_result.dart';
 import 'topic_providers.dart';
@@ -132,15 +133,27 @@ class TopicActionsController extends Notifier<TopicActionsState> {
   bool replyThanked(String replyId, bool serverValue) =>
       state.thankedReplies.contains(replyId) || serverValue;
 
+  /// 埋点结果映射:写入终态 → success / failed / auth_required。
+  String _resultOf(Failure? failure) =>
+      failure == null ? 'success' : (failure is AuthFailure ? 'auth_required' : 'failed');
+
   /// Toggles 收藏 / 取消收藏.
   Future<Failure?> toggleFavorite() async {
     if (state.isInFlight(favoriteKey)) return null;
     final token = once;
-    if (token == null) return _requireAuth();
+    if (token == null) {
+      final failure = _requireAuth();
+      Mv2Analytics.logTopicFavorite(
+        topicId: topicId,
+        enabled: !(state.favorited ?? (_detail?.favorited ?? false)),
+        result: 'auth_required',
+      );
+      return failure;
+    }
     final detail = _detail;
     final target = !(state.favorited ?? (detail?.favorited ?? false));
     _start(favoriteKey, favorited: target);
-    return _run(
+    final failure = await _run(
       key: favoriteKey,
       initialToken: token,
       request: (String t) => target
@@ -148,6 +161,12 @@ class TopicActionsController extends Notifier<TopicActionsState> {
           : ref.read(v2exApiProvider).unfavoriteTopic(topicId, t),
       rollback: () => state = state.copyWith(favorited: !target),
     );
+    Mv2Analytics.logTopicFavorite(
+      topicId: topicId,
+      enabled: target,
+      result: _resultOf(failure),
+    );
+    return failure;
   }
 
   /// Thanks the topic. V2EX thanks cannot be withdrawn, so a second tap on an
@@ -155,16 +174,22 @@ class TopicActionsController extends Notifier<TopicActionsState> {
   Future<Failure?> thankTopic() async {
     if (state.isInFlight(thankKey)) return null;
     final token = once;
-    if (token == null) return _requireAuth();
+    if (token == null) {
+      final failure = _requireAuth();
+      Mv2Analytics.logTopicThank(topicId: topicId, result: 'auth_required');
+      return failure;
+    }
     final detail = _detail;
     if (state.thanked ?? (detail?.thanked ?? false)) return null;
     _start(thankKey, thanked: true);
-    return _run(
+    final failure = await _run(
       key: thankKey,
       initialToken: token,
       request: (String t) => ref.read(v2exApiProvider).thankTopic(topicId, t),
       rollback: () => state = state.copyWith(thanked: false),
     );
+    Mv2Analytics.logTopicThank(topicId: topicId, result: _resultOf(failure));
+    return failure;
   }
 
   /// Thanks a single reply by its V2EX reply id.
@@ -188,11 +213,19 @@ class TopicActionsController extends Notifier<TopicActionsState> {
   Future<Failure?> toggleIgnore() async {
     if (state.isInFlight(ignoreKey)) return null;
     final token = once;
-    if (token == null) return _requireAuth();
+    if (token == null) {
+      final failure = _requireAuth();
+      Mv2Analytics.logTopicIgnore(
+        topicId: topicId,
+        enabled: !(state.ignored ?? (_detail?.ignored ?? false)),
+        result: 'auth_required',
+      );
+      return failure;
+    }
     final detail = _detail;
     final target = !(state.ignored ?? (detail?.ignored ?? false));
     _start(ignoreKey, ignored: target);
-    return _run(
+    final failure = await _run(
       key: ignoreKey,
       initialToken: token,
       request: (String t) => target
@@ -200,6 +233,12 @@ class TopicActionsController extends Notifier<TopicActionsState> {
           : ref.read(v2exApiProvider).unignoreTopic(topicId, t),
       rollback: () => state = state.copyWith(ignored: !target),
     );
+    Mv2Analytics.logTopicIgnore(
+      topicId: topicId,
+      enabled: target,
+      result: _resultOf(failure),
+    );
+    return failure;
   }
 
   /// Ignores a single reply.

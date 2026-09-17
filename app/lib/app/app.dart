@@ -2,10 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/deeplink/deep_link_listener.dart';
+import '../../core/telemetry/mv2_analytics.dart';
 import '../../core/telemetry/mv2_telemetry.dart';
 import '../../core/native/widget_sync.dart';
 import '../../design_system/theme/mv2_theme.dart';
+import '../../features/auth/application/auth_controller.dart';
 import '../../features/settings/application/settings_controller.dart';
+import '../../ui/utils/mv2_breakpoints.dart';
 import '../../ui/primitives/mv2_shad_theme.dart';
 import 'router.dart';
 import 'session_cache_refresh.dart';
@@ -25,6 +28,20 @@ class Mv2App extends ConsumerWidget {
     // Theme context on every crash/non-fatal report: 颜色 reports are only
     // diagnosable against what the app actually applied.
     Mv2Telemetry.setThemeContext(colorMode: settings.colorMode.name);
+    // 用户属性(boot + 每次设置/登录态变化): 群体交叉分析的分析维度。
+    // watch isSignedInProvider 让登录/登出自动重新同步 signed_in。
+    Mv2Analytics.syncUserProperties(
+      colorMode: settings.colorMode.name,
+      fontSize: settings.fontSize.name,
+      contentWidth: settings.contentWidth.name,
+      linkOpenMode: settings.openLinkMode.name,
+      pushEnabled: '${settings.pushEnabled}',
+      replySort: settings.replySort.name,
+      signedIn: '${ref.watch(isSignedInProvider)}',
+      layout: mv2IsTwoPane(context) ? 'tablet' : 'phone',
+    );
+    // Firebase 就绪后重建一次,boot 阶段被丢弃的用户属性借此补齐。
+    ref.watch(telemetryReadyProvider);
 
     return MaterialApp.router(
       title: 'MV2',

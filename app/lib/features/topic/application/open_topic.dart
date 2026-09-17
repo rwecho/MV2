@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../core/telemetry/mv2_analytics.dart';
+import '../../../core/telemetry/mv2_events.dart';
 import '../../../ui/utils/mv2_breakpoints.dart';
 import '../../../ui/utils/mv2_sheet_page.dart';
 import '../../shell/application/tablet_topic_pane.dart';
@@ -10,11 +12,25 @@ import '../../shell/application/tablet_topic_pane.dart';
 /// right-hand detail pane on wide viewports, or as the usual full-screen
 /// `/topic/:id` push on phones.
 ///
+/// [source] 是 `topic_open` 的归因参数(调用入口:feed / search / node /
+/// member / history / read_later / my_list / notifications),单一咽喉点让
+/// 每个列表只需多传一个字符串。
+///
 /// Deliberately ref-free (reads the provider container from [context]) —
 /// several call sites live inside plain StatelessWidgets, and the publish
 /// flow needs to work across a `router.pop()`, which the root container
 /// outlives.
-void openTopic(BuildContext context, int topicId, {int? floor}) {
+void openTopic(
+  BuildContext context,
+  int topicId, {
+  int? floor,
+  String source = Mv2Events.unspecified,
+}) {
+  Mv2Analytics.logTopicOpen(
+    topicId: topicId,
+    source: source,
+    layout: mv2IsTwoPane(context) ? 'tablet' : 'phone',
+  );
   if (mv2IsTwoPane(context)) {
     ProviderScope.containerOf(context, listen: false)
         .read(tabletTopicPaneProvider.notifier)

@@ -218,7 +218,7 @@ class _MyTopicListPageState extends ConsumerState<MyTopicListPage> {
                       final topic = topics[index];
                       return TopicItem(
                         topic: topic,
-                        onTap: () => openTopic(context, topic.id),
+                        onTap: () => openTopic(context, topic.id, source: 'my_list'),
                       );
                     },
                   ),

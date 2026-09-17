@@ -79,7 +79,7 @@ class NodeTopicPage extends ConsumerWidget {
                 final topic = data.topics[index];
                 return TopicItem(
                   topic: topic,
-                  onTap: () => openTopic(context, topic.id),
+                  onTap: () => openTopic(context, topic.id, source: 'node'),
                 );
               },
             ),

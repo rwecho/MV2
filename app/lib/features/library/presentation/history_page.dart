@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../core/telemetry/mv2_analytics.dart';
 import '../../../design_system/tokens/mv2_spacing.dart';
 import '../../../shared/models/models.dart';
 import '../../../ui/components/mv2_error_feedback.dart';
@@ -88,7 +89,7 @@ class HistoryPage extends ConsumerWidget {
                   onLongPress: () => _removeOne(context, ref, topic),
                   child: TopicItem(
                     topic: topic,
-                    onTap: () => openTopic(context, topic.id),
+                    onTap: () => openTopic(context, topic.id, source: 'history'),
                   ),
                 );
               },
@@ -109,6 +110,7 @@ class HistoryPage extends ConsumerWidget {
     if (!confirmed || !context.mounted) return;
     try {
       await ref.read(libraryControllerProvider).clearHistory();
+      Mv2Analytics.logHistoryClear();
       if (!context.mounted) return;
       ScaffoldMessenger.of(context)
           .showSnackBar(const SnackBar(content: Text('浏览历史已清空')));

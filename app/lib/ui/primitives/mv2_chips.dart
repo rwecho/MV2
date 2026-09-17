@@ -7,15 +7,21 @@ import '../../design_system/tokens/mv2_spacing.dart';
 import '../../shared/models/models.dart';
 
 /// Small node label shown at the top of a feed card (`AI`, `程序员`, `.NET`).
+///
+/// [onTap] turns the label into its own tap target — the topic rows use it to
+/// open the node's topic stream (`/node/:key`) instead of the topic the card
+/// points at. Without it the label stays inert (e.g. the reply composer, where
+/// it only states where the reply will be posted).
 class Mv2NodeBadge extends StatelessWidget {
-  const Mv2NodeBadge({super.key, required this.node});
+  const Mv2NodeBadge({super.key, required this.node, this.onTap});
 
   final V2Node node;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
     final colors = context.colors;
-    return Container(
+    final badge = Container(
       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
       decoration: BoxDecoration(
         color: colors.accentSoft,
@@ -25,6 +31,16 @@ class Mv2NodeBadge extends StatelessWidget {
         node.name,
         style: context.text.badge.copyWith(color: colors.accent),
       ),
+    );
+
+    if (onTap == null) return badge;
+
+    // Opaque so the tap stops here instead of bubbling up to the enclosing
+    // card's own `onTap` (same trick as the author block in `TopicItem`).
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: onTap,
+      child: badge,
     );
   }
 }

@@ -7,12 +7,14 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../../../core/data/v2ex_providers.dart';
 import '../../../core/push/push_providers.dart';
+import '../../../core/telemetry/mv2_analytics.dart';
 import '../../../design_system/theme/mv2_theme.dart';
 import '../../../design_system/tokens/mv2_radius.dart';
 import '../../../design_system/tokens/mv2_spacing.dart';
 import '../../../ui/components/mv2_page_header.dart';
 import '../../../ui/components/mv2_page_scaffold.dart';
 import '../../../ui/components/mv2_settings_row.dart';
+import '../../pro/application/pro_controller.dart';
 import '../application/settings_controller.dart';
 import '../application/settings_providers.dart';
 
@@ -27,6 +29,7 @@ class SettingsPage extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final settings = ref.watch(settingsProvider);
     final notifier = ref.read(settingsProvider.notifier);
+    final isPro = ref.watch(isProProvider);
 
     return Mv2PageScaffold(
       header: Mv2SecondaryHeader(title: '设置', onBack: () => context.pop()),
@@ -40,6 +43,26 @@ class SettingsPage extends ConsumerWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: <Widget>[
+            // ----------------------------------------------------- 支持
+            // 付费墙入口：购买状态读全局权益，购买/恢复在 /pro 内完成。
+            Mv2SettingsGroup(
+              children: <Widget>[
+                Mv2SettingsRow(
+                  label: 'MV2 永久版',
+                  icon: Icons.workspace_premium_outlined,
+                  value: isPro ? '已解锁' : null,
+                  onTap: () => context.push('/pro?source=settings'),
+                ),
+                Mv2SettingsRow(
+                  label: '荣誉墙',
+                  icon: Icons.emoji_events_outlined,
+                  onTap: () => context.push('/honors?source=settings'),
+                  showDivider: false,
+                ),
+              ],
+            ),
+            const SizedBox(height: Mv2Spacing.x5),
+
             // ----------------------------------------------------- 外观
             Mv2SettingsGroup(
               badge: '外观',
@@ -176,6 +199,7 @@ class SettingsPage extends ConsumerWidget {
                     );
                     if (!confirmed || !context.mounted) return;
                     await ref.read(httpCacheProvider).clear();
+                    Mv2Analytics.logCacheClear(result: 'success');
                     ref.invalidate(cacheSizeProvider);
                     if (!context.mounted) return;
                     ScaffoldMessenger.of(context)
@@ -277,6 +301,7 @@ Future<void> _confirmDataDeletion(BuildContext context) async {
     confirmLabel: '打开',
   );
   if (!confirmed) return;
+  Mv2Analytics.logDataDelete(target: 'deletion_page');
   await _openExternal(_deletionUrl);
 }
 

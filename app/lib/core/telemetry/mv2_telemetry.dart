@@ -81,8 +81,8 @@ abstract final class Mv2Telemetry {
   /// (in-app preference × system brightness).
   static void setThemeContext({required String colorMode}) {
     if (!_ready) return;
-    final brightness = WidgetsBinding
-        .instance.platformDispatcher.platformBrightness;
+    final brightness =
+        WidgetsBinding.instance.platformDispatcher.platformBrightness;
     FirebaseCrashlytics.instance.setCustomKey('colorMode', colorMode);
     FirebaseCrashlytics.instance.setCustomKey(
       'systemBrightness',
@@ -94,9 +94,7 @@ abstract final class Mv2Telemetry {
     // Keep the red screen / console output in debug.
     FlutterError.presentError(details);
     if (!_ready) return;
-    unawaited(
-      FirebaseCrashlytics.instance.recordFlutterFatalError(details),
-    );
+    unawaited(FirebaseCrashlytics.instance.recordFlutterFatalError(details));
   }
 
   static bool _onPlatformError(Object error, StackTrace stack) {

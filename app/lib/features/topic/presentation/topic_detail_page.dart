@@ -11,6 +11,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../../core/data/session_once.dart';
 import '../../../core/data/v2ex_providers.dart';
 import '../../../core/errors/failures.dart';
+import '../../../core/telemetry/mv2_analytics.dart';
 import '../../../design_system/effects/mv2_glass.dart';
 import '../../../design_system/theme/mv2_theme.dart';
 import '../../../design_system/tokens/mv2_motion.dart';
@@ -33,6 +34,8 @@ import '../../../ui/primitives/mv2_chips.dart';
 import '../../blocked/application/blocked_content.dart';
 import '../../blocked/application/blocked_users_controller.dart';
 import '../../composer/presentation/composer_sheets.dart';
+import '../../nodes/application/open_node.dart';
+import '../../reader/application/open_external_url.dart';
 import '../../settings/application/settings_controller.dart';
 import '../../shell/application/tablet_topic_pane.dart';
 import '../application/topic_actions.dart';
@@ -45,6 +48,7 @@ import '../application/topic_providers.dart';
 /// build without a share target, …) the link is copied to the clipboard instead
 /// of leaving the user with a dead end.
 Future<void> _shareTopic(BuildContext context, V2Topic topic) async {
+  Mv2Analytics.logTopicShare(topicId: topic.id);
   final text = '${topic.title}  https://www.v2ex.com/t/${topic.id}';
   try {
     // Anchor the iPad/Mac popover to the invoking widget (ignored on iPhone).
@@ -71,6 +75,7 @@ Future<void> _shareTopic(BuildContext context, V2Topic topic) async {
 /// Report a topic by opening the legacy `report@v2ex.maui` address with the
 /// topic id/title prefilled in the subject (URL-encoded by [Uri]).
 Future<void> _reportTopic(BuildContext context, V2Topic topic) async {
+  Mv2Analytics.logReportSubmit(target: 'topic');
   final uri = Uri(
     scheme: 'mailto',
     path: 'report@v2ex.maui',
@@ -96,6 +101,7 @@ Future<void> _reportReply(
   int topicId,
   V2Reply reply,
 ) async {
+  Mv2Analytics.logReportSubmit(target: 'reply');
   final uri = Uri(
     scheme: 'mailto',
     path: 'report@v2ex.maui',
@@ -178,7 +184,10 @@ class _TopicDetailPageState extends ConsumerState<TopicDetailPage> {
         curve: Mv2Motion.standard,
         child: FloatingReplyBar(
           placeholder: '写下你的回复...',
-          onTap: () => showReplyComposer(context, topicId: widget.topicId),
+          onTap: () {
+            Mv2Analytics.logReplyOpen(topicId: widget.topicId, source: 'bar');
+            showReplyComposer(context, topicId: widget.topicId);
+          },
         ),
       ),
       child: NotificationListener<ScrollNotification>(
@@ -533,6 +542,11 @@ class _TopicDetailBodyState extends ConsumerState<_TopicDetailBody> {
   /// floor → index into [_replies]; rebuilt on every build.
   final Map<int, int> _replyIndexByFloor = <int, int>{};
 
+  /// 阅读计时起点(内容可渲染时才开始):离开页面 dispose 时结算为
+  /// `topic_read`。平板右栏切换主题/关闭会重建或销毁本 State,计时随之
+  /// 归零或结算。
+  late final DateTime _enteredAt = DateTime.now();
+
   @override
   void initState() {
     super.initState();
@@ -561,6 +575,11 @@ class _TopicDetailBodyState extends ConsumerState<_TopicDetailBody> {
 
   @override
   void dispose() {
+    Mv2Analytics.logTopicRead(
+      topicId: widget.topicId,
+      durationSec: DateTime.now().difference(_enteredAt).inSeconds,
+      repliesSeen: _replies.length,
+    );
     _highlightTimer?.cancel();
     _scrollController.removeListener(_onScroll);
     _scrollController.dispose();
@@ -771,6 +790,7 @@ class _TopicDetailBodyState extends ConsumerState<_TopicDetailBody> {
       username: username,
       replies: _replies,
     );
+    Mv2Analytics.logMentionTap(jumped: target != null);
     if (target == null) {
       context.push('/member/${Uri.encodeComponent(username)}');
       return;
@@ -781,8 +801,9 @@ class _TopicDetailBodyState extends ConsumerState<_TopicDetailBody> {
   /// Opens the composer quoting [reply] as a modal sheet, carrying the tapped
   /// reply so a quote from an infinite-scrolled page still renders (the provider
   /// cache only holds page 1) plus a `#floor` disambiguator when a bare `@user`
-  /// would be ambiguous.
-  void _openComposerFor(V2Reply reply) {
+  /// would be ambiguous. [source]: quote(引用按钮)|long_press(长按菜单).
+  void _openComposerFor(V2Reply reply, {required String source}) {
+    Mv2Analytics.logReplyOpen(topicId: widget.topicId, source: source);
     showReplyComposer(
       context,
       topicId: widget.topicId,
@@ -803,16 +824,34 @@ class _TopicDetailBodyState extends ConsumerState<_TopicDetailBody> {
     hasMore: _hasMore,
   );
 
-  void _onThankReply(String replyId) {
+  /// 感谢回复。楼层号只有 UI 拿得到,所以 `reply_thank` 在这里记而不是在
+  /// controller;haptics 语义与 [_runWithHaptics] 一致(失败不震动)。
+  void _onThankReply(V2Reply reply) {
+    final replyId = reply.id;
     if (!_signedIn) {
+      Mv2Analytics.logReplyThank(
+        topicId: widget.topicId,
+        floor: reply.floor,
+        result: 'auth_required',
+      );
       context.push('/login');
       return;
     }
-    _runWithHaptics(
-      () => ref
+    if (replyId == null) return;
+    unawaited(() async {
+      final failure = await ref
           .read(topicActionsProvider(widget.topicId).notifier)
-          .thankReply(replyId),
-    );
+          .thankReply(replyId);
+      Mv2Analytics.logReplyThank(
+        topicId: widget.topicId,
+        floor: reply.floor,
+        result: failure == null
+            ? 'success'
+            : (failure is AuthFailure ? 'auth_required' : 'failed'),
+      );
+      if (!mounted || failure != null) return;
+      Mv2Haptics.success(ref.read(settingsProvider).hapticsEnabled);
+    }());
   }
 
   /// Long-press sheet for one reply: 回复 / 复制 / 举报.
@@ -827,7 +866,7 @@ class _TopicDetailBodyState extends ConsumerState<_TopicDetailBody> {
         canCopy: canCopy,
         onReply: () {
           Navigator.of(sheetContext).pop();
-          _openComposerFor(reply);
+          _openComposerFor(reply, source: 'long_press');
         },
         onCopy: () {
           Navigator.of(sheetContext).pop();
@@ -842,6 +881,7 @@ class _TopicDetailBodyState extends ConsumerState<_TopicDetailBody> {
   }
 
   Future<void> _copyReply(V2Reply reply) async {
+    Mv2Analytics.logReplyCopy(topicId: widget.topicId, floor: reply.floor);
     await Clipboard.setData(ClipboardData(text: reply.content));
     if (!mounted) return;
     ScaffoldMessenger.of(context)
@@ -950,7 +990,18 @@ class _TopicDetailBodyState extends ConsumerState<_TopicDetailBody> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: <Widget>[
-              Mv2NodeBadge(node: topic.node),
+              // Same tap target as the list rows: the node label opens its
+              // topic stream, the rest of the card stays non-interactive.
+              Mv2NodeBadge(
+                node: topic.node,
+                onTap: topic.node.key.isEmpty
+                    ? null
+                    : () => openNode(
+                        context,
+                        topic.node,
+                        source: 'topic_detail',
+                      ),
+              ),
               const SizedBox(height: Mv2Spacing.x3),
               Text(
                 topic.title,
@@ -1021,8 +1072,8 @@ class _TopicDetailBodyState extends ConsumerState<_TopicDetailBody> {
             // A null id cannot be thanked; an in-flight one is disabled.
             onThank: (replyId == null || thanking)
                 ? null
-                : () => _onThankReply(replyId),
-            onQuote: () => _openComposerFor(reply),
+                : () => _onThankReply(reply),
+            onQuote: () => _openComposerFor(reply, source: 'quote'),
             onLongPress: () => unawaited(_showReplyActions(reply)),
             onMentionTap: (username) => _onMentionTap(reply, username),
             onFloorRefTap: (floor) => unawaited(_jumpToFloor(floor)),
@@ -1164,6 +1215,10 @@ class _AuthorRow extends StatelessWidget {
 }
 
 /// Inline link preview card (icon tile + title + description + url).
+///
+/// Carries a chevron, so it is a tap target: tapping opens the link the same
+/// way an inline link in the body does (reader / 原文 / browser, per 设置 →
+/// 外链打开方式).
 class _LinkPreviewCard extends StatelessWidget {
   const _LinkPreviewCard({required this.preview});
 
@@ -1176,6 +1231,9 @@ class _LinkPreviewCard extends StatelessWidget {
     return Mv2Surface(
       borderRadius: Mv2Radius.allMd,
       shadowed: false,
+      onTap: preview.url.isEmpty
+          ? null
+          : () => unawaited(openExternalUrl(context, preview.url)),
       padding: const EdgeInsets.all(Mv2Spacing.x3),
       child: Row(
         children: <Widget>[
@@ -1285,7 +1343,8 @@ class _BodyRow {
   final Widget Function() build;
 }
 
-/// Reply row mirroring `ReplyItem` metrics, but able to render V2EX HTML.
+/// Reply row for the topic page — avatar/name link to the member page, body
+/// renders V2EX HTML.
 class _ReplyRow extends StatelessWidget {
   const _ReplyRow({
     super.key,

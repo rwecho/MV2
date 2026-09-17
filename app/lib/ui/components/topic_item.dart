@@ -5,6 +5,7 @@ import '../../design_system/effects/mv2_glass.dart';
 import '../../design_system/theme/mv2_theme.dart';
 import '../../design_system/tokens/mv2_radius.dart';
 import '../../design_system/tokens/mv2_spacing.dart';
+import '../../features/nodes/application/open_node.dart';
 import '../../shared/models/models.dart';
 import '../primitives/mv2_avatar.dart';
 import '../primitives/mv2_chips.dart';
@@ -35,6 +36,13 @@ class TopicItem extends StatelessWidget {
     final colors = context.colors;
     final authorName = topic.author.username;
     final canOpenAuthor = authorName.isNotEmpty && authorName != '匿名';
+    final nodeKey = topic.node.key;
+    // Tapping the node label opens the node's topic stream (`/node/:key`)
+    // instead of the topic the card points at. With no slug there is nothing
+    // to open, so the label stays inert and the card keeps the tap.
+    final VoidCallback? onNodeTap = nodeKey.isEmpty
+        ? null
+        : () => openNode(context, topic.node, source: 'topic_card');
 
     return Mv2Surface(
       borderRadius: Mv2Radius.allMd,
@@ -46,7 +54,8 @@ class TopicItem extends StatelessWidget {
         children: <Widget>[
           Row(
             children: <Widget>[
-              if (showNodeBadge) Mv2NodeBadge(node: topic.node),
+              if (showNodeBadge)
+                Mv2NodeBadge(node: topic.node, onTap: onNodeTap),
               if (topic.isPinned) ...<Widget>[
                 const SizedBox(width: Mv2Spacing.x2),
                 _PinnedBadge(),
