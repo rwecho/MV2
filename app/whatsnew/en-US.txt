@@ -1,3 +1,5 @@
-• Replies now show your real device (iPhone / Android / iPad) instead of always "iPad"
-• Fixed the iOS back-swipe on the search page and topic details
-• iPad split view: divider follows light/dark theme
+• New "MV2 Pro" lifetime purchase (App Store / Google Play) with restore support
+• New Honor Wall: lifetime buyers get their name permanently engraved
+• Tap-target fixes: node badges, avatars and link previews now open the right thing
+• Disabled buttons are now visibly greyed out
+• Global analytics wiring for better diagnostics
