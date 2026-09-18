@@ -194,10 +194,10 @@ jobs:
 
       # 用 iOS 27 SDK 构建：编译产物自动获得 iPhone Fold（iPhone Duo）的
       # App Resizability 资格，展开态不再被系统 letterbox/放大。
-      # GitHub 镜像尚未带上 27.1 时这一步会明确失败，不会静默用旧版。
+      # 注意：带 Duo 模拟器的 27.1 目前只有 beta，GA 后可升到这里。
       - uses: maxim-lobanov/setup-xcode@v1
         with:
-          xcode-version: '27.1'
+          xcode-version: '27.0'
 
       - uses: subosito/flutter-action@v2
         with:
