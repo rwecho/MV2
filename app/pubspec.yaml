@@ -71,7 +71,7 @@ dependencies:
   package_info_plus: ^10.2.1
   # 内购（永久买断）：RevenueCat 跨商店 SDK。公钥通过 --dart-define 注入，
   # 见 lib/features/pro/application/revenuecat_pro_backend.dart 与 README。
-  purchases_flutter: ^9.0.0
+  purchases_flutter: ^10.0.0
 dev_dependencies:
   flutter_test:
     sdk: flutter
