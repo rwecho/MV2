@@ -129,13 +129,25 @@ class Mv2TextButton extends StatelessWidget {
               vertical: Mv2Spacing.x2,
             ),
             child: loading
-                ? SizedBox(
-                    width: 18,
-                    height: 18,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2,
-                      valueColor: AlwaysStoppedAnimation<Color>(fg),
-                    ),
+                // 加载中保留文字、在后面缀一个小 spinner：整颗按钮换成
+                // 裸 spinner 会让全宽按钮塌成一条空行（付费墙 CTA 尤其明显）。
+                ? Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: <Widget>[
+                      Text(
+                        label,
+                        style: context.text.button.copyWith(color: fg),
+                      ),
+                      const SizedBox(width: Mv2Spacing.x2),
+                      SizedBox(
+                        width: 14,
+                        height: 14,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          valueColor: AlwaysStoppedAnimation<Color>(fg),
+                        ),
+                      ),
+                    ],
                   )
                 : Text(label, style: context.text.button.copyWith(color: fg)),
           ),

@@ -57,7 +57,7 @@ class _PaywallPageState extends ConsumerState<PaywallPage> {
         _toast('支付确认中，商店批准后自动解锁');
         return;
       case ProPurchaseOutcome.error:
-        _toast('购买未完成，请稍后重试');
+        _toast('购买未完成；若已扣款，稍后点「恢复购买」即可找回权益');
         return;
     }
     if (!mounted) return;
