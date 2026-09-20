@@ -135,7 +135,12 @@ class _Mv2DeepLinkListenerState extends ConsumerState<Mv2DeepLinkListener>
 
   void _openPushPayload(Map<String, Object?> data) {
     final route = Mv2PushPayload.routeFor(data);
-    if (route == null) return;
+    if (route == null) {
+      // 点击事件确实到达了 Dart，但 worker 的 payload 拼不出路由 —— 这与
+      // "点击无反应"是两种故障，留一行痕迹才分得开（issue #2 排查）。
+      debugPrint('MV2: push tap carried no usable route: $data');
+      return;
+    }
     // 归因:推送点开 + 若落地是主题,补一条带 push 来源的 topic_open。
     final match = _topicRoute.firstMatch(route);
     if (match != null) {
