@@ -6,7 +6,7 @@ import 'package:mv2/features/pro/application/pro_controller.dart';
 import 'package:mv2/features/pro/data/honors_api.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-/// 荣誉墙登记状态机：服务端结局 → 本地标记 / 名单更新 / 遥测，各分支要闭环。
+/// 赞助榜登记状态机：服务端结局 → 本地标记 / 名单更新 / 遥测，各分支要闭环。
 class _FakeProBackend implements ProBackend {
   const _FakeProBackend();
 

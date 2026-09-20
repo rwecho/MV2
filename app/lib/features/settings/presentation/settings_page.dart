@@ -14,7 +14,6 @@ import '../../../design_system/tokens/mv2_spacing.dart';
 import '../../../ui/components/mv2_page_header.dart';
 import '../../../ui/components/mv2_page_scaffold.dart';
 import '../../../ui/components/mv2_settings_row.dart';
-import '../../pro/application/pro_controller.dart';
 import '../application/settings_controller.dart';
 import '../application/settings_providers.dart';
 
@@ -29,7 +28,6 @@ class SettingsPage extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final settings = ref.watch(settingsProvider);
     final notifier = ref.read(settingsProvider.notifier);
-    final isPro = ref.watch(isProProvider);
 
     return Mv2PageScaffold(
       header: Mv2SecondaryHeader(title: '设置', onBack: () => context.pop()),
@@ -43,25 +41,8 @@ class SettingsPage extends ConsumerWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: <Widget>[
-            // ----------------------------------------------------- 支持
-            // 付费墙入口：购买状态读全局权益，购买/恢复在 /pro 内完成。
-            Mv2SettingsGroup(
-              children: <Widget>[
-                Mv2SettingsRow(
-                  label: 'MV2 永久版',
-                  icon: Icons.workspace_premium_outlined,
-                  value: isPro ? '已解锁' : null,
-                  onTap: () => context.push('/pro?source=settings'),
-                ),
-                Mv2SettingsRow(
-                  label: '荣誉墙',
-                  icon: Icons.emoji_events_outlined,
-                  onTap: () => context.push('/honors?source=settings'),
-                  showDivider: false,
-                ),
-              ],
-            ),
-            const SizedBox(height: Mv2Spacing.x5),
+            // 付费墙入口不在设置页：永久版购买经「我的」→ 赞助榜（/pro 仍
+            // 由赞助榜的解锁按钮 `source=feature_gate` 触达）。
 
             // ----------------------------------------------------- 外观
             Mv2SettingsGroup(

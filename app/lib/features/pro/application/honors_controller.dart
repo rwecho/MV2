@@ -5,7 +5,7 @@ import '../../../core/telemetry/mv2_analytics.dart';
 import '../data/honors_api.dart';
 import 'pro_controller.dart';
 
-/// 荣誉墙状态：名录 + 我是否已铭刻。
+/// 赞助榜状态：名录 + 我是否已铭刻。
 class HonorsState {
   const HonorsState({this.entries = const <HonorEntry>[], this.joined = false});
 
@@ -102,7 +102,7 @@ class HonorsController extends AsyncNotifier<HonorsState> {
   }
 }
 
-/// 荣誉墙名字长度上限（与 Worker 端 `MAX_HONOR_NAME_LENGTH` 一致）。
+/// 赞助榜名字长度上限（与 Worker 端 `MAX_HONOR_NAME_LENGTH` 一致）。
 const int kMaxHonorNameLength = 24;
 
 final honorsControllerProvider =

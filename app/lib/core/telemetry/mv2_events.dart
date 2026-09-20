@@ -191,10 +191,10 @@ abstract final class Mv2Events {
   /// 恢复购买。`result`: success(恢复到权益)|no_entitlement|error
   static const String restoreResult = 'restore_result';
 
-  /// 打开荣誉墙。`source`: settings|paywall|feature_gate
+  /// 打开赞助榜。`source`: profile|settings|paywall|feature_gate
   static const String honorWallOpen = 'honor_wall_open';
 
-  /// 铭刻荣誉墙。`result`: joined|already|name_taken|not_entitled|error
+  /// 铭刻赞助榜。`result`: joined|already|name_taken|not_entitled|error
   static const String honorJoin = 'honor_join';
 
   // ------------------------------------------------------------------

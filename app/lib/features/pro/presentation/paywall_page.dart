@@ -61,7 +61,7 @@ class _PaywallPageState extends ConsumerState<PaywallPage> {
         return;
     }
     if (!mounted) return;
-    // 购买成功是登记荣誉墙的最佳时机（服务端会再核验权益）。
+    // 购买成功是登记赞助榜的最佳时机（服务端会再核验权益）。
     final joined = ref.read(honorsControllerProvider).value?.joined ?? false;
     if (!joined) unawaited(showHonorJoinDialog(context, ref));
   }
@@ -89,7 +89,7 @@ class _PaywallPageState extends ConsumerState<PaywallPage> {
     final pro = ref.watch(proControllerProvider);
 
     return Mv2PageScaffold(
-      header: Mv2SecondaryHeader(title: 'MV2 永久版', onBack: () => context.pop()),
+      header: Mv2SecondaryHeader(title: '赞助 MV2', onBack: () => context.pop()),
       child: pro.when(
         skipLoadingOnReload: true,
         loading: () => const Center(child: CircularProgressIndicator()),
@@ -134,12 +134,12 @@ class _Body extends StatelessWidget {
         children: <Widget>[
           const Mv2StateView(
             kind: Mv2StateKind.empty,
-            title: '已解锁永久版',
+            title: '已赞助 MV2',
             description: '一次买断，永久有效。感谢支持！',
           ),
           const SizedBox(height: Mv2Spacing.x4),
           Mv2TextButton(
-            label: '看看荣誉墙',
+            label: '看看赞助榜',
             onPressed: () => context.push('/honors?source=paywall'),
           ),
         ],
@@ -177,7 +177,7 @@ class _Body extends StatelessWidget {
           ),
           const SizedBox(height: Mv2Spacing.x4),
           Text(
-            product.title,
+            '赞助 MV2 开发',
             textAlign: TextAlign.center,
             style: context.text.topicTitleLarge.copyWith(
               color: context.colors.textPrimary,
@@ -193,7 +193,7 @@ class _Body extends StatelessWidget {
           ),
           const SizedBox(height: Mv2Spacing.x6),
           Mv2TextButton(
-            label: '永久解锁 ${product.price}',
+            label: '赞助 ${product.price}',
             loading: busy,
             onPressed: busy ? null : onBuy,
           ),

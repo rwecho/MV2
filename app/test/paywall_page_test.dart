@@ -41,8 +41,8 @@ void main() {
   ) async {
     await _pump(tester, const ProState(configured: true, entitled: true));
 
-    expect(find.text('已解锁永久版'), findsOneWidget);
-    expect(find.textContaining('永久解锁'), findsNothing);
+    expect(find.text('已赞助 MV2'), findsOneWidget);
+    expect(find.textContaining('赞助 ¥'), findsNothing);
   });
 
   testWidgets('unconfigured build explains that the store is unavailable', (
@@ -51,7 +51,7 @@ void main() {
     await _pump(tester, const ProState(configured: false));
 
     expect(find.text('商店尚未配置'), findsOneWidget);
-    expect(find.textContaining('永久解锁'), findsNothing);
+    expect(find.textContaining('赞助 ¥'), findsNothing);
   });
 
   testWidgets('ready state offers the lifetime product and restore', (
@@ -65,7 +65,7 @@ void main() {
       ),
     );
 
-    expect(find.text('永久解锁 ¥68.00'), findsOneWidget);
+    expect(find.text('赞助 ¥68.00'), findsOneWidget);
     expect(find.text('恢复购买'), findsOneWidget);
   });
 
@@ -75,6 +75,6 @@ void main() {
     await _pump(tester, const ProState(configured: true));
 
     expect(find.text('暂时拿不到商品信息'), findsOneWidget);
-    expect(find.textContaining('永久解锁'), findsNothing);
+    expect(find.textContaining('赞助 ¥'), findsNothing);
   });
 }

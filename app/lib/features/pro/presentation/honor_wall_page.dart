@@ -17,7 +17,7 @@ import '../application/honors_controller.dart';
 import '../application/pro_controller.dart';
 import '../data/honors_api.dart';
 
-/// 荣誉墙：所有买断永久版的支持者永久铭刻于此。
+/// 赞助榜：所有买断永久版的支持者永久铭刻于此。
 ///
 /// 名单来自 Worker（`/honors`），登记时由服务端用 RevenueCat 核验购买；
 /// 一经铭刻不随退款移除 —— "永久"是产品承诺。
@@ -44,13 +44,13 @@ class _HonorWallPageState extends ConsumerState<HonorWallPage> {
     final isPro = ref.watch(isProProvider);
 
     return Mv2PageScaffold(
-      header: Mv2SecondaryHeader(title: '荣誉墙', onBack: () => context.pop()),
+      header: Mv2SecondaryHeader(title: '赞助榜', onBack: () => context.pop()),
       child: honors.when(
         skipLoadingOnReload: true,
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (_, _) => Mv2StateView(
           kind: Mv2StateKind.error,
-          description: '荣誉墙加载失败',
+          description: '赞助榜加载失败',
           actionLabel: '重试',
           onAction: () => ref.invalidate(honorsControllerProvider),
         ),
@@ -86,7 +86,7 @@ class _Wall extends StatelessWidget {
         if (entries.isEmpty) ...<Widget>[
           const Mv2StateView(
             kind: Mv2StateKind.empty,
-            title: '荣誉墙还空着',
+            title: '赞助榜还空着',
             description: '第一个买断永久版的人，将被永久铭刻在这里。',
           ),
         ] else ...<Widget>[
@@ -194,7 +194,7 @@ class _ProFooter extends ConsumerWidget {
       );
     }
     return Mv2TextButton(
-      label: '把我的名字刻上荣誉墙',
+      label: '把我的名字刻上赞助榜',
       onPressed: () => showHonorJoinDialog(context, ref),
     );
   }
@@ -242,7 +242,7 @@ class _HonorJoinDialogState extends ConsumerState<_HonorJoinDialog> {
       if (!mounted) return;
       Navigator.of(context).pop();
       final message = switch (result) {
-        HonorJoinResult.joined => '已永久铭刻在荣誉墙，感谢支持！',
+        HonorJoinResult.joined => '已永久铭刻在赞助榜，感谢支持！',
         HonorJoinResult.already => '你的名字已经在这面墙上了',
         HonorJoinResult.nameTaken => '这个名字已被使用，换一个吧',
         HonorJoinResult.notEntitled => '未找到有效的永久版权益',
@@ -259,7 +259,7 @@ class _HonorJoinDialogState extends ConsumerState<_HonorJoinDialog> {
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
-      title: const Text('铭刻荣誉墙'),
+      title: const Text('铭刻赞助榜'),
       content: TextField(
         controller: _controller,
         autofocus: true,

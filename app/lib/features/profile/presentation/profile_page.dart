@@ -71,6 +71,20 @@ class ProfilePage extends ConsumerWidget {
                     : _ProfileCard(profile: data),
               ),
 
+            // ------------------------------------------------------- support
+            // 赞助榜：所有买断永久版的支持者（镜像设置页「支持」分组的样式，
+            // 不带分组徽章）。
+            Mv2SettingsGroup(
+              children: <Widget>[
+                Mv2SettingsRow(
+                  label: '赞助榜',
+                  icon: Icons.volunteer_activism_outlined,
+                  onTap: () => context.push('/honors?source=profile'),
+                  showDivider: false,
+                ),
+              ],
+            ),
+
             // ------------------------------------------------------- content
             Mv2SettingsGroup(
               badge: '内容',

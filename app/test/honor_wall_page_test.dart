@@ -9,7 +9,7 @@ import 'package:mv2/features/pro/data/honors_api.dart';
 import 'package:mv2/features/pro/presentation/honor_wall_page.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-/// 荣誉墙页面的三种形态：有名单 / 空墙 + 未购买 / 已购买未登记。
+/// 赞助榜页面的三种形态：有名单 / 空墙 + 未购买 / 已购买未登记。
 class _FixedHonors extends HonorsController {
   _FixedHonors(this._state);
 
@@ -95,7 +95,7 @@ void main() {
   ) async {
     await _pump(tester, isPro: false, honors: const HonorsState());
 
-    expect(find.text('荣誉墙还空着'), findsOneWidget);
+    expect(find.text('赞助榜还空着'), findsOneWidget);
     expect(find.text('去解锁永久版'), findsOneWidget);
     expect(find.byType(AlertDialog), findsNothing);
   });
@@ -105,6 +105,6 @@ void main() {
   ) async {
     await _pump(tester, isPro: true, honors: const HonorsState());
 
-    expect(find.text('把我的名字刻上荣誉墙'), findsOneWidget);
+    expect(find.text('把我的名字刻上赞助榜'), findsOneWidget);
   });
 }

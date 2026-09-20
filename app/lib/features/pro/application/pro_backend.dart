@@ -54,7 +54,7 @@ abstract interface class ProBackend {
   /// 当前是否已拥有永久权益(SDK 本地缓存,可离线)。
   Future<bool> checkEntitlement();
 
-  /// RevenueCat 的 app user id —— 荣誉墙登记用它标识"这一份买断"。
+  /// RevenueCat 的 app user id —— 赞助榜登记用它标识"这一份买断"。
   Future<String> appUserId();
 
   /// 拉取终身买断商品;商店未配置商品/无网时返回 null。

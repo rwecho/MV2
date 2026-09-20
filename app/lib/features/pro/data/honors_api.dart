@@ -2,7 +2,7 @@ import 'package:dio/dio.dart';
 
 import '../../../core/push/push_service.dart';
 
-/// 荣誉墙上的一条铭刻。
+/// 赞助榜上的一条铭刻。
 class HonorEntry {
   const HonorEntry({required this.name, required this.joinedAt});
 
@@ -36,7 +36,7 @@ enum HonorJoinResult {
   error,
 }
 
-/// 荣誉墙 API —— 跑在推送同一个 Cloudflare Worker 上。
+/// 赞助榜 API —— 跑在推送同一个 Cloudflare Worker 上。
 ///
 /// Worker 端用 RevenueCat secret key 核验购买后才写入，所以客户端不需要
 /// （也不应该）自证"我买过"。
