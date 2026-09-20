@@ -77,7 +77,11 @@ class _FakeApi implements V2exApi {
   Future<V2DailyMission> checkIn() async => const V2DailyMission();
 
   @override
-  Future<List<V2Topic>> feed(HomeTab tab) => throw UnimplementedError();
+  Future<List<V2Topic>> feed(HomeTab tab, {PacePriority priority = PacePriority.userRead}) => throw UnimplementedError();
+
+  
+  @override
+  Future<({List<V2Topic> topics, DateTime fetchedAt})?> feedCached(HomeTab tab, {required Duration maxAge}) => throw UnimplementedError();
 
   @override
   Future<List<V2XnaEntry>> xna() => throw UnimplementedError();

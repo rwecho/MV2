@@ -39,6 +39,7 @@ class _FakeHttpClient extends Mv2HttpClient {
     String? referer,
     String? baseUrl,
     String? userAgent,
+    PacePriority priority = PacePriority.userRead,
   }) async {
     requested.add(path);
     referers.add(referer);

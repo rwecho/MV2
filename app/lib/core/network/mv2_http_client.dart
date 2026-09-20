@@ -39,39 +39,105 @@ class HttpResult {
   }
 }
 
-/// Serialises every outbound request and enforces a minimum gap between them.
+/// Scheduling class for paced requests. Declaration order is priority order:
+/// writes go first, then reads someone is waiting on, prefetch last.
+enum PacePriority { write, userRead, backgroundRead }
+
+/// Serialises every outbound v2ex.com request and enforces a minimum gap
+/// between them — exactly one request in flight at any time.
 ///
 /// V2EX has no published rate limit for the HTML surface and reacts to bursts
 /// with anti-flood pages, so the client paces itself (`docs/12` §6, defect B5).
+/// The pending queue is priority-ordered: prefetch/idle work ([PacePriority.backgroundRead])
+/// reorders behind whatever the user is waiting for, but priorities only ever
+/// reorder the queue — they never widen it.
 class _RequestPacer {
   _RequestPacer(this.minInterval);
 
   final Duration minInterval;
-  Future<void> _tail = Future<void>.value();
+
+  final List<_PaceJob> _queue = <_PaceJob>[];
+  bool _pumping = false;
   DateTime? _lastFinishedAt;
 
-  Future<T> run<T>(Future<T> Function() action) {
-    final completer = Completer<void>();
-    final previous = _tail;
-    _tail = completer.future;
+  /// Enqueues [action]; the returned future completes once the job has run,
+  /// after every higher-priority job that arrived before it. [key] identifies
+  /// the job for [upgrade].
+  Future<T> run<T>(
+    PacePriority priority,
+    Future<T> Function() action, {
+    String? key,
+  }) {
+    final completer = Completer<T>();
+    _queue.add(
+      _PaceJob(
+        priority,
+        () async {
+          try {
+            completer.complete(await action());
+          } catch (error, stack) {
+            completer.completeError(error, stack);
+          }
+        },
+        key: key,
+      ),
+    );
+    _pump();
+    return completer.future;
+  }
 
-    return Future<T>(() async {
-      await previous;
-      try {
-        final last = _lastFinishedAt;
-        if (last != null) {
-          final elapsed = DateTime.now().difference(last);
-          if (elapsed < minInterval) {
-            await Future<void>.delayed(minInterval - elapsed);
+  /// Raises the queued job identified by [key] to at least [priority]. Lets a
+  /// user-initiated request that joins an in-flight prefetch also jump ahead
+  /// of the remaining background work instead of inheriting its slot.
+  void upgrade(String key, PacePriority priority) {
+    for (final job in _queue) {
+      if (job.key == key && job.priority.index > priority.index) {
+        job.priority = priority;
+      }
+    }
+  }
+
+  Future<void> _pump() async {
+    if (_pumping) return;
+    _pumping = true;
+    try {
+      while (_queue.isNotEmpty) {
+        // Highest priority (lowest enum index) wins; ties stay FIFO because
+        // the scan keeps the first match.
+        var best = 0;
+        for (var i = 1; i < _queue.length; i++) {
+          if (_queue[i].priority.index < _queue[best].priority.index) {
+            best = i;
           }
         }
-        return await action();
-      } finally {
-        _lastFinishedAt = DateTime.now();
-        completer.complete();
+        final job = _queue.removeAt(best);
+        try {
+          final last = _lastFinishedAt;
+          if (last != null) {
+            final elapsed = DateTime.now().difference(last);
+            if (elapsed < minInterval) {
+              await Future<void>.delayed(minInterval - elapsed);
+            }
+          }
+          await job.execute();
+        } catch (_) {
+          // The job's own future already delivered the error to its callers.
+        } finally {
+          _lastFinishedAt = DateTime.now();
+        }
       }
-    });
+    } finally {
+      _pumping = false;
+    }
   }
+}
+
+class _PaceJob {
+  _PaceJob(this.priority, this.execute, {required this.key});
+
+  PacePriority priority;
+  final Future<void> Function() execute;
+  final String? key;
 }
 
 /// The MV2 HTTP client: cookie session, per-request Referer, no auto-redirect,
@@ -141,28 +207,90 @@ class Mv2HttpClient {
   /// V2EX validates (topic detail, replies, favourites, ignore).
   /// [userAgent] overrides the session-default mobile UA (used by content
   /// writes so V2EX's `via` label matches the real device).
+  /// [priority] only reorders the pacer queue (prefetches pass
+  /// [PacePriority.backgroundRead]); it never changes the one-request-at-a-time
+  /// guarantee.
+  ///
+  /// Identical in-flight GETs (same path, query, referer and UA) share one
+  /// request — a user tap that races an idle prefetch rides its response
+  /// instead of issuing a second one. Requests to a non-default [baseUrl]
+  /// (sov2ex search) sit outside V2EX's anti-flood surface: no pacing, no
+  /// single-flight.
   Future<HttpResult> get(
     String path, {
     Map<String, dynamic>? query,
     String? referer,
     String? baseUrl,
     String? userAgent,
+    PacePriority priority = PacePriority.userRead,
   }) {
-    return _pacer.run(() async {
-      try {
-        final response = await _dio.get<String>(
-          _absolute(path, baseUrl),
-          queryParameters: query,
-          options: Options(
-            headers: _headers(referer: referer, userAgent: userAgent),
-            responseType: ResponseType.plain,
-          ),
-        );
-        return _toResult(response);
-      } catch (error, stack) {
-        throw mapError(error, stack, path: path);
-      }
-    });
+    if (baseUrl != null) {
+      return _getRaw(
+        path,
+        query: query,
+        referer: referer,
+        baseUrl: baseUrl,
+        userAgent: userAgent,
+      );
+    }
+    final key = _flightKey(path, query, referer, userAgent);
+    final existing = _inflightGets[key];
+    if (existing != null) {
+      _pacer.upgrade(key, priority);
+      return existing;
+    }
+    final future = _pacer.run(
+      priority,
+      () => _getRaw(path, query: query, referer: referer, userAgent: userAgent),
+      key: key,
+    );
+    _inflightGets[key] = future;
+    future.whenComplete(() => _inflightGets.remove(key)).ignore();
+    return future;
+  }
+
+  final Map<String, Future<HttpResult>> _inflightGets =
+      <String, Future<HttpResult>>{};
+
+  Future<HttpResult> _getRaw(
+    String path, {
+    Map<String, dynamic>? query,
+    String? referer,
+    String? baseUrl,
+    String? userAgent,
+  }) async {
+    try {
+      final response = await _dio.get<String>(
+        _absolute(path, baseUrl),
+        queryParameters: query,
+        options: Options(
+          headers: _headers(referer: referer, userAgent: userAgent),
+          responseType: ResponseType.plain,
+        ),
+      );
+      return _toResult(response);
+    } catch (error, stack) {
+      throw mapError(error, stack, path: path);
+    }
+  }
+
+  /// Single-flight pool key. Referer and UA partition the pool because they
+  /// change what V2EX serves for validated endpoints.
+  String _flightKey(
+    String path,
+    Map<String, dynamic>? query,
+    String? referer,
+    String? userAgent,
+  ) {
+    final buffer = StringBuffer('GET $path');
+    if (query != null && query.isNotEmpty) {
+      final keys = query.keys.map((key) => key.toString()).toList()..sort();
+      buffer
+        ..write('?')
+        ..write(keys.map((key) => '$key=${query[key]}').join('&'));
+    }
+    buffer.write('|referer=${referer ?? ''}|ua=${userAgent ?? ''}');
+    return buffer.toString();
   }
 
   /// GET a JSON endpoint. Returns the decoded map (or list, wrapped by the
@@ -171,12 +299,18 @@ class Mv2HttpClient {
     String path, {
     Map<String, dynamic>? query,
     String? referer,
+    PacePriority priority = PacePriority.userRead,
   }) async {
-    final result = await get(path, query: query, referer: referer);
+    final result = await get(
+      path,
+      query: query,
+      referer: referer,
+      priority: priority,
+    );
     return decodeJson(result, path: path);
   }
 
-  /// JSON endpoints on a different host (sov2ex).
+  /// JSON endpoints on a different host (sov2ex). Unpaced — see [get].
   Future<dynamic> getJsonOn(
     String baseUrl,
     String path, {
@@ -195,7 +329,7 @@ class Mv2HttpClient {
     String? referer,
     String? userAgent,
   }) {
-    return _pacer.run(() async {
+    return _pacer.run(PacePriority.write, () async {
       try {
         final response = await _dio.post<String>(
           path,
@@ -219,7 +353,7 @@ class Mv2HttpClient {
 
   /// POST/PUT with no body (V2EX thank/ignore endpoints take `once` in the URL).
   Future<HttpResult> post(String path, {String? referer, String? userAgent}) {
-    return _pacer.run(() async {
+    return _pacer.run(PacePriority.write, () async {
       try {
         final response = await _dio.post<String>(
           path,
@@ -238,7 +372,7 @@ class Mv2HttpClient {
 
   /// Fetches raw bytes (captcha image).
   Future<List<int>> getBytes(String path, {String? referer}) {
-    return _pacer.run(() async {
+    return _pacer.run(PacePriority.userRead, () async {
       try {
         final response = await _dio.get<List<int>>(
           path,

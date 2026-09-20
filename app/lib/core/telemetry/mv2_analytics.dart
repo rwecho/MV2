@@ -23,6 +23,9 @@ abstract final class Mv2Analytics {
   /// 测试注入点:非 null 时每个事件先转发到这里(已消毒的名称与参数)。
   static void Function(String event, Map<String, Object?> params)? sink;
 
+  /// 测试注入点:非 null 时 user_id 同步先转发到这里;生产代码永不设置。
+  static void Function(String? userId)? userIdSink;
+
   static bool get _enabled {
     if (!Mv2Telemetry.isReady) return false;
     return _analytics != null;
@@ -129,6 +132,21 @@ abstract final class Mv2Analytics {
 
   static void logFeedRefresh({required String tab}) =>
       _log(Mv2Events.feedRefresh, {'tab': tab});
+
+  /// SWR 首帧缓存命中。[ageSec] 用于评估新鲜窗口(TTL)设置是否合理。
+  static void logFeedCacheHit({required String tab, required int ageSec}) =>
+      _log(Mv2Events.feedCacheHit, {'tab': tab, 'age_sec': ageSec});
+
+  /// SWR 首帧后的后台刷新结果。[durationMs] 为网络耗时。
+  static void logFeedRevalidate({
+    required String tab,
+    required bool ok,
+    required int durationMs,
+  }) => _log(Mv2Events.feedRevalidate, {
+    'tab': tab,
+    'result': ok ? 'ok' : 'error',
+    'duration_ms': durationMs,
+  });
 
   static void logTopicOpen({
     required int topicId,
@@ -367,9 +385,30 @@ abstract final class Mv2Analytics {
   // 用户属性
   // ------------------------------------------------------------------
 
+  /// 绑定/解除分析用户 ID。登录态变化时由 app.dart 调用:登录传 member id
+  /// (数字型假名标识,不用用户名——GA 视可直接识别个人的字符串为 PII),
+  /// 登出传 null 解绑。绑定后所有事件都归属到该用户,Firebase 控制台的
+  /// User Explorer 与 BigQuery 导出的 `user_id` 列即可回答"每个用户点了
+  /// 哪些帖子、发了哪些评论"。与 [sink] 同理,userIdSink 绕过就绪门控。
+  static void syncUserId({int? memberId}) {
+    final userId = memberId?.toString();
+    final sink = userIdSink;
+    if (sink != null) {
+      sink(userId);
+      return;
+    }
+    if (!_enabled) return;
+    try {
+      unawaited(_analytics!.setUserId(id: userId));
+    } catch (error) {
+      debugPrint('MV2: setUserId failed: $error');
+    }
+  }
+
   /// 同步用户属性(boot + 设置变化时由 app.dart 调用)。参数用裸字符串,
   /// 避免 core → features 的反向依赖;调用方从枚举 `.name` 取值。
-  /// 不含用户名 / member id 等 PII。
+  /// 不含用户名 / member id 等 PII —— 按 user 维度归属事件走 [syncUserId]
+  /// 的 user_id,用户属性只放可分群的枚举维度。
   static void syncUserProperties({
     required String colorMode,
     required String fontSize,

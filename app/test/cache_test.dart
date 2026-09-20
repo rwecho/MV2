@@ -66,4 +66,38 @@ void main() {
 
     expect(await cache.read('/t/1'), isNull);
   });
+
+  test('readEntry serves an entry inside the freshness window', () async {
+    await cache.write('/?tab=tech', '<html>tech</html>');
+
+    final entry = await cache.readEntry(
+      '/?tab=tech',
+      maxAge: const Duration(minutes: 30),
+    );
+
+    expect(entry, isNotNull);
+    expect(entry!.body, '<html>tech</html>');
+    expect(entry.fetchedAt.isBefore(DateTime.now()), isTrue);
+  });
+
+  test('readEntry treats an entry past the window as a miss, '
+      'while the offline fallback still serves it', () async {
+    await database
+        .into(database.httpCacheEntries)
+        .insert(
+          HttpCacheEntriesCompanion.insert(
+            url: '/?tab=tech',
+            body: '<html>tech</html>',
+            fetchedAt: DateTime.now().subtract(const Duration(hours: 2)),
+          ),
+        );
+
+    // Past the SWR freshness window → not renderable.
+    expect(
+      await cache.readEntry('/?tab=tech', maxAge: const Duration(minutes: 30)),
+      isNull,
+    );
+    // Still within the 7-day offline TTL → reachable as a fallback.
+    expect(await cache.read('/?tab=tech'), '<html>tech</html>');
+  });
 }

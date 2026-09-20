@@ -32,6 +32,7 @@ class _FakeClient extends Mv2HttpClient {
     String? referer,
     String? baseUrl,
     String? userAgent,
+    PacePriority priority = PacePriority.userRead,
   }) async => HttpResult(
     statusCode: 200,
     body: body,

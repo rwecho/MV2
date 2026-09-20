@@ -163,7 +163,7 @@ class _TopicFeedBody extends ConsumerWidget {
     Future<void> refresh() {
       // Mv2Refreshable 仅手势下拉触发,无需再区分触发方式。
       Mv2Analytics.logFeedRefresh(tab: tab.slug);
-      return ref.refresh(feedProvider(tab).future);
+      return ref.read(feedProvider(tab).notifier).refresh();
     }
 
     ref.listen(feedProvider(tab), (p, n) => mv2ToastLoadError(context, p, n));

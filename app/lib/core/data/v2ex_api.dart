@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter/foundation.dart' show debugPrint;
 
 import '../../shared/models/account_info.dart';
@@ -37,7 +39,22 @@ import 'home_tab.dart';
 abstract interface class V2exApi {
   /// Topic list for one of the home tabs (`/?tab={slug}`). Only the topic
   /// tabs — `HomeTab.vxna` is an aggregator and is served by [xna].
-  Future<List<V2Topic>> feed(HomeTab tab);
+  ///
+  /// [priority] only reorders the shared request queue: idle prefetches pass
+  /// [PacePriority.backgroundRead] so they never delay a read the user is
+  /// waiting on. Successful responses land in the disk cache (JSON tab feeds
+  /// under their `/api/*` key, HTML tabs under the page path).
+  Future<List<V2Topic>> feed(HomeTab tab, {PacePriority priority});
+
+  /// Cache-only twin of [feed]: the tab's disk-cached copy when it is younger
+  /// than [maxAge], `null` otherwise (missing, expired, or unparseable).
+  /// Never touches the network — this is the stale-while-revalidate read that
+  /// the home feed renders first while [feed] revalidates in the background.
+  /// [fetchedAt] lets the caller report the cache age.
+  Future<({List<V2Topic> topics, DateTime fetchedAt})?> feedCached(
+    HomeTab tab, {
+    required Duration maxAge,
+  });
 
   /// VXNA aggregator (`/xna`): external articles, not on-site topics.
   Future<List<V2XnaEntry>> xna();
@@ -201,9 +218,10 @@ class RemoteV2exApi implements V2exApi {
     String path, {
     String? referer,
     bool rejectRedirect = false,
+    PacePriority priority = PacePriority.userRead,
   }) async {
     try {
-      final result = await _client.get(path, referer: referer);
+      final result = await _client.get(path, referer: referer, priority: priority);
       if (rejectRedirect && result.isRedirect) {
         throw _redirectFailure(result);
       }
@@ -225,7 +243,7 @@ class RemoteV2exApi implements V2exApi {
       String? cached;
       try {
         cached = await cache?.read(path);
-      } catch (error, stack) {
+      } catch (error) {
         assert(() {
           debugPrint('MV2 cache.read failed [$path]: $error');
           return true;
@@ -250,7 +268,10 @@ class RemoteV2exApi implements V2exApi {
   }
 
   @override
-  Future<List<V2Topic>> feed(HomeTab tab) async {
+  Future<List<V2Topic>> feed(
+    HomeTab tab, {
+    PacePriority priority = PacePriority.userRead,
+  }) async {
     // 官方 JSON 优先：`全部`/`最热` 有公开端点，负载轻、免 DOM 解析；
     // 其余 tab 没有官方端点。JSON 请求或解析失败时静默落回页面解析
     // （解析路径保留为兜底，见 docs/12）。
@@ -261,7 +282,17 @@ class RemoteV2exApi implements V2exApi {
     };
     if (jsonPath != null) {
       try {
-        return V1JsonParser.parseTopicList(await _client.getJson(jsonPath));
+        // Raw get + decode so the JSON body can be cached under its own key:
+        // feedCached() then serves the JSON path too, not just the HTML one.
+        final result = await _client.get(jsonPath, priority: priority);
+        final decoded = _client.decodeJson(result, path: jsonPath);
+        try {
+          await cache?.write(jsonPath, result.body);
+        } catch (error, stack) {
+          // 缓存层坏了绝不能杀死网络请求本身——降级为无缓存继续
+          Mv2Telemetry.recordNonFatal(error, stack, reason: 'cache.write $jsonPath');
+        }
+        return V1JsonParser.parseTopicList(decoded);
       } on Failure catch (error, stack) {
         Mv2Telemetry.recordNonFatal(error, stack, reason: 'feed json $jsonPath');
       }
@@ -272,6 +303,7 @@ class RemoteV2exApi implements V2exApi {
     final html = await _getHtml(
       tab.path,
       referer: '${V2exEndpoints.baseUrl}${V2exEndpoints.home}',
+      priority: priority,
     );
     try {
       return FeedParser.parseTopicList(html);
@@ -285,6 +317,56 @@ class RemoteV2exApi implements V2exApi {
         reason: 'feed ${tab.path} (${html.length}B)',
       );
       rethrow;
+    }
+  }
+
+  @override
+  Future<({List<V2Topic> topics, DateTime fetchedAt})?> feedCached(
+    HomeTab tab, {
+    required Duration maxAge,
+  }) async {
+    final cache = this.cache;
+    if (cache == null || tab.isAggregator) return null;
+    final jsonPath = switch (tab) {
+      HomeTab.all => V2exEndpoints.apiLatestTopics,
+      HomeTab.hot => V2exEndpoints.apiHotTopics,
+      _ => null,
+    };
+    // JSON first: it is what feed() prefers, so its entry is the freshest
+    // representation of this tab. A body that no longer parses (parser
+    // changed, truncated write) is treated as a miss, never surfaced as an
+    // error — a broken cache must not break the feed.
+    if (jsonPath != null) {
+      final entry = await _readCacheEntry(jsonPath, maxAge);
+      if (entry != null) {
+        try {
+          return (
+            topics: V1JsonParser.parseTopicList(jsonDecode(entry.body)),
+            fetchedAt: entry.fetchedAt,
+          );
+        } catch (_) {
+          // Fall through to the HTML copy.
+        }
+      }
+    }
+    final htmlEntry = await _readCacheEntry(tab.path, maxAge);
+    if (htmlEntry == null) return null;
+    try {
+      return (
+        topics: FeedParser.parseTopicList(htmlEntry.body),
+        fetchedAt: htmlEntry.fetchedAt,
+      );
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<CachedResponse?> _readCacheEntry(String path, Duration maxAge) async {
+    try {
+      return await cache?.readEntry(path, maxAge: maxAge);
+    } catch (error, stack) {
+      Mv2Telemetry.recordNonFatal(error, stack, reason: 'cache.read $path');
+      return null;
     }
   }
 
@@ -480,9 +562,15 @@ class RemoteV2exApi implements V2exApi {
   Future<V2AccountInfo?> currentUser() async {
     // `/` is public, so it answers 200 either way; a signed-out session simply
     // has no `#Rightbar` avatar and the parser returns null.
+    //
+    // backgroundRead: the cold-start revalidate must never delay the first
+    // feed the user is staring at; the pacer runs it once the queue drains.
+    // (Sign-in also routes through here — by then there is no competing
+    // queue, so the lower priority costs nothing.)
     final result = await _client.get(
       V2exEndpoints.home,
       referer: '${V2exEndpoints.baseUrl}/',
+      priority: PacePriority.backgroundRead,
     );
     return AccountParser.parseCurrentUser(result.body);
   }

@@ -5,6 +5,7 @@ import 'package:mv2/app/app.dart';
 import 'package:mv2/core/data/home_tab.dart';
 import 'package:mv2/core/data/v2ex_providers.dart';
 import 'package:mv2/core/errors/failures.dart';
+import 'package:mv2/core/network/mv2_http_client.dart';
 import 'package:mv2/features/feed/application/feed_providers.dart';
 import 'package:mv2/features/shell/application/shell_chrome.dart';
 import 'package:mv2/shared/models/models.dart';
@@ -20,7 +21,10 @@ class _CountingApi extends FixtureV2exApi {
   int feedCalls = 0;
 
   @override
-  Future<List<V2Topic>> feed(HomeTab tab) {
+  Future<List<V2Topic>> feed(
+    HomeTab tab, {
+    PacePriority priority = PacePriority.userRead,
+  }) {
     feedCalls++;
     return super.feed(tab);
   }
@@ -36,7 +40,10 @@ class _FailingApi extends FixtureV2exApi {
   _FailingApi() : super(latency: Duration.zero);
 
   @override
-  Future<List<V2Topic>> feed(HomeTab tab) async {
+  Future<List<V2Topic>> feed(
+    HomeTab tab, {
+    PacePriority priority = PacePriority.userRead,
+  }) async {
     throw const ParseFailure('feed fixture');
   }
 }

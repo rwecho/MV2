@@ -30,6 +30,14 @@ abstract final class Mv2Events {
   /// `tab`: HomeTab.slug
   static const String feedRefresh = 'feed_refresh';
 
+  /// feed 的 SWR 首帧缓存命中(stale-while-revalidate 秒开)。
+  /// `tab`: HomeTab.slug;`age_sec`: 缓存写入距今的整数秒
+  static const String feedCacheHit = 'feed_cache_hit';
+
+  /// feed SWR 首帧后的后台刷新结果。
+  /// `tab`: HomeTab.slug;`result`: ok|error;`duration_ms`: 网络耗时整数毫秒
+  static const String feedRevalidate = 'feed_revalidate';
+
   /// 打开主题详情。归因核心事件:`source` 记录入口
   /// (feed|search|node|member|history|read_later|my_list|notifications|
   ///  publish|push|deeplink|clipboard),`layout`: phone|tablet。
@@ -228,6 +236,8 @@ abstract final class Mv2Events {
     tabSwitch: ['tab'],
     feedTabView: ['tab'],
     feedRefresh: ['tab'],
+    feedCacheHit: ['tab', 'age_sec'],
+    feedRevalidate: ['tab', 'result', 'duration_ms'],
     topicOpen: ['topic_id', 'source', 'layout'],
     nodeOpen: ['node_key', 'source'],
     topicRead: ['topic_id', 'duration_sec', 'replies_seen'],

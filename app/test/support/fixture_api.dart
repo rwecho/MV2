@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:mv2/core/data/home_tab.dart';
 import 'package:mv2/core/data/v2ex_api.dart';
 import 'package:mv2/core/errors/failures.dart';
+import 'package:mv2/core/network/mv2_http_client.dart';
 import 'package:mv2/core/parser/feed_parser.dart';
 import 'package:mv2/core/parser/member_parser.dart';
 import 'package:mv2/core/parser/node_parser.dart';
@@ -97,7 +98,7 @@ class FixtureV2exApi implements V2exApi {
   }
 
   @override
-  Future<List<V2Topic>> feed(HomeTab tab) async {
+  Future<List<V2Topic>> feed(HomeTab tab, {PacePriority priority = PacePriority.userRead}) async {
     // The aggregator is not a topic list; `HomeFeedPage` routes it to [xna].
     if (tab.isAggregator) return const <V2Topic>[];
     final topics = FeedParser.parseTopicList(await _load(_home));
@@ -109,6 +110,15 @@ class FixtureV2exApi implements V2exApi {
       HomeTab.jobs => topics.reversed.toList(growable: false),
       _ => topics,
     };
+  }
+
+  @override
+  Future<({List<V2Topic> topics, DateTime fetchedAt})?> feedCached(
+    HomeTab tab, {
+    required Duration maxAge,
+  }) async {
+    // The fixture has no disk cache; SWR tests seed a fake api instead.
+    return null;
   }
 
   @override

@@ -2,6 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mv2/core/data/home_tab.dart';
 import 'package:mv2/core/data/v2ex_providers.dart';
+import 'package:mv2/core/network/mv2_http_client.dart';
 import 'package:mv2/features/blocked/application/blocked_users_controller.dart';
 import 'package:mv2/features/feed/application/feed_providers.dart';
 import 'package:mv2/shared/models/models.dart';
@@ -22,7 +23,10 @@ class _FeedApi extends FixtureV2exApi {
   _FeedApi() : super(latency: Duration.zero);
 
   @override
-  Future<List<V2Topic>> feed(HomeTab tab) async => <V2Topic>[
+  Future<List<V2Topic>> feed(
+    HomeTab tab, {
+    PacePriority priority = PacePriority.userRead,
+  }) async => <V2Topic>[
     _topic('livid'),
     _topic('kernel'),
   ];

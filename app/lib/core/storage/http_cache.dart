@@ -1,5 +1,7 @@
 import 'cache_database.dart';
 
+export 'cache_database.dart' show CachedResponse;
+
 /// Disk cache for anonymous V2EX pages, so the read path keeps working offline
 /// and the UI can show the legacy `fromCache` indicator honestly.
 class HttpCache {
@@ -31,6 +33,15 @@ class HttpCache {
     if (!isCacheable(path)) return null;
     final cached = await _database.read(path, maxAge: maxAge);
     return cached?.body;
+  }
+
+  /// Like [read], but the caller picks the freshness window and gets the
+  /// entry's age. This is the stale-while-revalidate entry point: callers
+  /// serve the body only when `fetchedAt` is inside their freshness window,
+  /// then revalidate against the network.
+  Future<CachedResponse?> readEntry(String path, {required Duration maxAge}) async {
+    if (!isCacheable(path)) return null;
+    return _database.read(path, maxAge: maxAge);
   }
 
   Future<void> write(String path, String body) async {
