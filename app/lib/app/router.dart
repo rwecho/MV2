@@ -49,6 +49,19 @@ Page<dynamic> _sheet(BuildContext context, GoRouterState state, Widget child) =>
 /// (Home Screen quick actions, deep links arriving at the listener) reach it.
 final rootNavigatorKey = GlobalKey<NavigatorState>();
 
+/// Locations served by the shell's four branches (`/feed` incl. its `search`
+/// child, `/nodes`, `/notifications`, `/profile`). Navigating to one must
+/// `go` — that is a branch switch — because `push` would stack a duplicate
+/// full-screen page above the shell. Everything else in the table (topic
+/// detail, the sheet cards) has to `push`: `go` would *become* the whole
+/// stack, leaving the page nothing beneath to pop back to.
+bool mv2IsShellBranchLocation(String location) =>
+    location == '/nodes' ||
+    location == '/notifications' ||
+    location == '/profile' ||
+    location == '/feed' ||
+    location.startsWith('/feed/');
+
 final routerProvider = Provider<GoRouter>((ref) {
   final router = GoRouter(
     navigatorKey: rootNavigatorKey,

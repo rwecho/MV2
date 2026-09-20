@@ -21,6 +21,7 @@ import '../../../shared/models/models.dart';
 import '../../../shared/models/topic_detail.dart';
 import '../../../ui/components/floating_reply_bar.dart';
 import '../../../ui/components/mv2_collapsible_body.dart';
+import '../../../ui/components/mv2_error_feedback.dart';
 import '../../../ui/components/mv2_page_scaffold.dart';
 import '../../../ui/components/mv2_rich_text.dart';
 import '../../../ui/components/mv2_scroll_collapse.dart';
@@ -171,49 +172,62 @@ class _TopicDetailPageState extends ConsumerState<TopicDetailPage> {
     final args = TopicDetailArgs(widget.topicId);
     final detail = ref.watch(topicDetailProvider(args));
 
-    return Mv2PageScaffold(
-      header: _TopicDetailTopBar(
-        topicId: widget.topicId,
-        collapsed: _collapsed,
-        inPane: widget.inPane,
-      ),
-      bottomBar: AnimatedSlide(
-        // 1.2× the reply bar height clears its own safe-area padding.
-        offset: _collapsed ? const Offset(0, 1.2) : Offset.zero,
-        duration: Mv2Motion.sheet,
-        curve: Mv2Motion.standard,
-        child: FloatingReplyBar(
-          placeholder: '写下你的回复...',
-          onTap: () {
-            Mv2Analytics.logReplyOpen(topicId: widget.topicId, source: 'bar');
-            showReplyComposer(context, topicId: widget.topicId);
-          },
+    // A cold-started notification or `mv2://` link makes this page the stack
+    // root: nothing beneath to pop, so the Android system back goes up to the
+    // feed instead of dead-ending (or leaving the app). Read through
+    // `ModalRoute` rather than the GoRouter helper so the page also builds
+    // bare of a router (tests).
+    final canPop = ModalRoute.of(context)?.canPop ?? false;
+
+    return PopScope(
+      canPop: canPop,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop) context.go('/feed');
+      },
+      child: Mv2PageScaffold(
+        header: _TopicDetailTopBar(
+          topicId: widget.topicId,
+          collapsed: _collapsed,
+          inPane: widget.inPane,
         ),
-      ),
-      child: NotificationListener<ScrollNotification>(
-        onNotification: _onScrollNotification,
-        child: detail.when(
-          loading: () => const _TopicArticleSkeleton(),
-          error: (error, stackTrace) => error is AuthFailure
-              // Restricted / login-only topic: V2EX answers `302 → /restricted
-              // → /signin?next=/restricted`. A 重试 button can never succeed
-              // while signed out, so offer the sign-in route instead.
-              ? Mv2StateView(
-                  kind: Mv2StateKind.error,
-                  title: '该主题需要登录后查看',
-                  description: '登录 V2EX 账号后即可查看该主题的正文与回复。',
-                  actionLabel: '去登录',
-                  onAction: () => context.push('/login'),
-                )
-              : Mv2StateView(
-                  kind: Mv2StateKind.error,
-                  actionLabel: '重试',
-                  onAction: () => ref.invalidate(topicDetailProvider(args)),
-                ),
-          data: (data) => _TopicDetailBody(
-            topicId: widget.topicId,
-            detail: data,
-            initialFloor: widget.initialFloor,
+        bottomBar: AnimatedSlide(
+          // 1.2× the reply bar height clears its own safe-area padding.
+          offset: _collapsed ? const Offset(0, 1.2) : Offset.zero,
+          duration: Mv2Motion.sheet,
+          curve: Mv2Motion.standard,
+          child: FloatingReplyBar(
+            placeholder: '写下你的回复...',
+            onTap: () {
+              Mv2Analytics.logReplyOpen(topicId: widget.topicId, source: 'bar');
+              showReplyComposer(context, topicId: widget.topicId);
+            },
+          ),
+        ),
+        child: NotificationListener<ScrollNotification>(
+          onNotification: _onScrollNotification,
+          child: detail.when(
+            loading: () => const _TopicArticleSkeleton(),
+            error: (error, stackTrace) => error is AuthFailure
+                // Restricted / login-only topic: V2EX answers `302 → /restricted
+                // → /signin?next=/restricted`. A 重试 button can never succeed
+                // while signed out, so offer the sign-in route instead.
+                ? Mv2StateView(
+                    kind: Mv2StateKind.error,
+                    title: '该主题需要登录后查看',
+                    description: '登录 V2EX 账号后即可查看该主题的正文与回复。',
+                    actionLabel: '去登录',
+                    onAction: () => context.push('/login'),
+                  )
+                : Mv2StateView(
+                    kind: Mv2StateKind.error,
+                    actionLabel: '重试',
+                    onAction: () => ref.invalidate(topicDetailProvider(args)),
+                  ),
+            data: (data) => _TopicDetailBody(
+              topicId: widget.topicId,
+              detail: data,
+              initialFloor: widget.initialFloor,
+            ),
           ),
         ),
       ),
@@ -263,7 +277,11 @@ class _TopicDetailTopBar extends ConsumerWidget {
                 ? () => ProviderScope.containerOf(context, listen: false)
                     .read(tabletTopicPaneProvider.notifier)
                     .close()
-                : () => context.pop(),
+                // As the stack root (cold-started notification / deep link)
+                // there is nothing to pop — go up to the feed instead.
+                : () => (ModalRoute.of(context)?.canPop ?? false)
+                    ? context.pop()
+                    : context.go('/feed'),
           ),
           Expanded(
             child: AnimatedOpacity(
@@ -316,9 +334,23 @@ class _TopicDetailTopBar extends ConsumerWidget {
             context.push('/login');
             return;
           }
-          unawaited(
-            ref.read(topicActionsProvider(topicId).notifier).toggleIgnore(),
-          );
+          final target = !ignored;
+          unawaited(() async {
+            // Same feedback ladder as the body's writes ([_TopicDetailBody]
+            // `_runWriteAction`); the ladder lives inline here because the
+            // sheet's callbacks sit on the top bar, not the body state.
+            final haptics = ref.read(settingsProvider).hapticsEnabled;
+            Mv2Haptics.tap(haptics);
+            final failure = await ref
+                .read(topicActionsProvider(topicId).notifier)
+                .toggleIgnore();
+            if (!context.mounted || failure != null) return;
+            Mv2Haptics.success(haptics);
+            mv2ShowSuccess(
+              ScaffoldMessenger.of(context),
+              target ? '已忽略' : '已取消忽略',
+            );
+          }());
         },
         onReport: () {
           Navigator.of(sheetContext).pop();
@@ -749,8 +781,16 @@ class _TopicDetailBodyState extends ConsumerState<_TopicDetailBody> {
       context.push('/login');
       return;
     }
-    _runWithHaptics(
-      () => ref.read(topicActionsProvider(widget.topicId).notifier).toggleFavorite(),
+    final actions = ref.read(topicActionsProvider(widget.topicId));
+    // Mirror the controller's double-tap guard so the toast never announces a
+    // request that was refused.
+    if (actions.isInFlight(TopicActionsController.favoriteKey)) return;
+    final target = !actions.favoritedOf(widget.detail.favorited);
+    _runWriteAction(
+      () => ref
+          .read(topicActionsProvider(widget.topicId).notifier)
+          .toggleFavorite(),
+      message: target ? '已收藏' : '已取消收藏',
     );
   }
 
@@ -759,19 +799,29 @@ class _TopicDetailBodyState extends ConsumerState<_TopicDetailBody> {
       context.push('/login');
       return;
     }
-    _runWithHaptics(
+    _runWriteAction(
       () => ref.read(topicActionsProvider(widget.topicId).notifier).thankTopic(),
+      message: '已感谢',
     );
   }
 
-  /// Runs a write and taps the haptics engine only when it actually succeeded —
-  /// a rejection (rate limit, expired session) should not feel like a success.
-  /// 设置 → 触觉反馈 gates it.
-  void _runWithHaptics(Future<Failure?> Function() action) {
+  /// Full feedback ladder for one write: a selection click *at tap time* (the
+  /// request can take seconds, and a confirmation that only arrives with the
+  /// response feels disconnected), then on success a stronger haptic plus a
+  /// short toast. Failures stay silent here — the `failure` listener in
+  /// [build] owns them (its SnackBar, or the /login redirect).
+  void _runWriteAction(
+    Future<Failure?> Function() action, {
+    required String message,
+    ValueChanged<Failure?>? onSettled,
+  }) {
+    Mv2Haptics.tap(ref.read(settingsProvider).hapticsEnabled);
     unawaited(() async {
       final failure = await action();
+      onSettled?.call(failure);
       if (!mounted || failure != null) return;
       Mv2Haptics.success(ref.read(settingsProvider).hapticsEnabled);
+      mv2ShowSuccess(ScaffoldMessenger.of(context), message);
     }());
   }
 
@@ -825,7 +875,7 @@ class _TopicDetailBodyState extends ConsumerState<_TopicDetailBody> {
   );
 
   /// 感谢回复。楼层号只有 UI 拿得到,所以 `reply_thank` 在这里记而不是在
-  /// controller;haptics 语义与 [_runWithHaptics] 一致(失败不震动)。
+  /// controller;haptics 语义与 [_runWriteAction] 一致(失败不震动)。
   void _onThankReply(V2Reply reply) {
     final replyId = reply.id;
     if (!_signedIn) {
@@ -838,20 +888,19 @@ class _TopicDetailBodyState extends ConsumerState<_TopicDetailBody> {
       return;
     }
     if (replyId == null) return;
-    unawaited(() async {
-      final failure = await ref
+    _runWriteAction(
+      () => ref
           .read(topicActionsProvider(widget.topicId).notifier)
-          .thankReply(replyId);
-      Mv2Analytics.logReplyThank(
+          .thankReply(replyId),
+      message: '已感谢',
+      onSettled: (failure) => Mv2Analytics.logReplyThank(
         topicId: widget.topicId,
         floor: reply.floor,
         result: failure == null
             ? 'success'
             : (failure is AuthFailure ? 'auth_required' : 'failed'),
-      );
-      if (!mounted || failure != null) return;
-      Mv2Haptics.success(ref.read(settingsProvider).hapticsEnabled);
-    }());
+      ),
+    );
   }
 
   /// Long-press sheet for one reply: 回复 / 复制 / 举报.

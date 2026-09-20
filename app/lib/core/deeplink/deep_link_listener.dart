@@ -10,7 +10,6 @@ import '../../features/auth/application/auth_controller.dart';
 import '../../features/auth/domain/auth_session.dart';
 import '../../features/composer/presentation/composer_sheets.dart';
 import '../../ui/utils/mv2_breakpoints.dart';
-import '../../ui/utils/mv2_sheet_page.dart';
 import '../native/mv2_native_bridge.dart';
 import '../push/push_payload.dart';
 import '../push/push_providers.dart';
@@ -146,13 +145,8 @@ class _Mv2DeepLinkListenerState extends ConsumerState<Mv2DeepLinkListener>
     if (match != null) {
       final topicId = int.parse(match.group(1)!);
       Mv2Analytics.logPushOpen(topicId: topicId);
-      Mv2Analytics.logTopicOpen(
-        topicId: topicId,
-        source: 'push',
-        layout: _layout,
-      );
     }
-    ref.read(routerProvider).go(route);
+    _navigate(route, source: 'push');
   }
 
   @override
@@ -177,9 +171,12 @@ class _Mv2DeepLinkListenerState extends ConsumerState<Mv2DeepLinkListener>
     _navigate(route, source: 'deeplink');
   }
 
-  /// Sheet cards (用户主页, 节点, 设置, …) must ride above the shell: `go`
-  /// would make the card the whole stack — a dimmed void with nothing to pop
-  /// back to. Everything else (topic detail) keeps replacing the stack.
+  /// Sheet cards (用户主页, 节点, 设置, …) and topic detail ride above whatever
+  /// is on screen: `go` to one of those would *become* the whole stack — a
+  /// topic page opened from a notification had nothing beneath it, so its
+  /// back button (and Android's system back) had nothing to pop. Only the
+  /// shell branch locations keep `go`: there it is the ordinary tab switch,
+  /// and `push` would stack a duplicate page above the shell.
   ///
   /// [source] only feeds the `topic_open` attribution when the route lands on
   /// a topic; quick actions (which never target `/topic/…`) pass nothing and
@@ -194,10 +191,10 @@ class _Mv2DeepLinkListenerState extends ConsumerState<Mv2DeepLinkListener>
       );
     }
     final router = ref.read(routerProvider);
-    if (mv2IsSheetLocation(route)) {
-      router.push(route);
-    } else {
+    if (mv2IsShellBranchLocation(route)) {
       router.go(route);
+    } else {
+      router.push(route);
     }
   }
 
