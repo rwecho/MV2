@@ -57,10 +57,18 @@ class _Mv2CollapsibleBodyState extends State<Mv2CollapsibleBody> {
         GestureDetector(
           behavior: HitTestBehavior.opaque,
           onTap: () => setState(() => _expanded = !_expanded),
-          child: Text(
-            _expanded ? widget.collapseLabel : widget.expandLabel,
-            style: context.text.metadata.copyWith(
-              color: context.colors.accent,
+          // 整行都是热区：文字本身很小（metadata 字号），只给文字做点击
+          // 目标太难点（用户反馈）。加纵向 padding 让热区高度接近 44px。
+          child: SizedBox(
+            width: double.infinity,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: Mv2Spacing.x2),
+              child: Text(
+                _expanded ? widget.collapseLabel : widget.expandLabel,
+                style: context.text.metadata.copyWith(
+                  color: context.colors.accent,
+                ),
+              ),
             ),
           ),
         ),

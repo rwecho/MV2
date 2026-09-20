@@ -169,7 +169,7 @@ void main() {
     late _FakeAdapter adapter;
     late RemoteV2exApi api;
 
-    ResponseBody _json(Object? payload, {int status = 200}) =>
+    ResponseBody jsonBody(Object? payload, {int status = 200}) =>
         ResponseBody.fromString(
           jsonEncode(payload),
           status,
@@ -179,7 +179,7 @@ void main() {
         );
 
     test('hot tab serves hot.json and never touches the page', () async {
-      adapter = _FakeAdapter((options) async => _json(<Object?>[_topicJson()]));
+      adapter = _FakeAdapter((options) async => jsonBody(<Object?>[_topicJson()]));
       api = RemoteV2exApi(_clientWith(adapter));
 
       final topics = await api.feed(HomeTab.hot);

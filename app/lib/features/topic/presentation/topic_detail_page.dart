@@ -1480,6 +1480,8 @@ class _ReplyRow extends StatelessWidget {
                     const SizedBox(height: Mv2Spacing.x2),
                     Row(
                       children: <Widget>[
+                        // 操作靠右：单手握持时右手拇指更容易够到（用户反馈）。
+                        const Spacer(),
                         // V2EX has **no reply like**: the reply's 👍/❤️ number is
                         // just its 感谢数 and there is no endpoint to toggle it,
                         // so it is not rendered as an action. 感谢 is the only
