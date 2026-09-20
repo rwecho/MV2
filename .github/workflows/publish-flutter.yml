@@ -184,9 +184,10 @@ jobs:
     if: inputs.platforms == '' || inputs.platforms == 'all' || contains(inputs.platforms, 'ios')
     name: iOS → TestFlight
     # 钉死镜像不用 macos-latest，避免镜像漂移悄悄换 Xcode 大版本。
-    # macos-26 通用镜像 2026-09-20 起只剩 Xcode 26.x，27.0 被移除；
-    # xcode-27-arm64 是 GitHub 的 Xcode 27 预览镜像（iPhone Fold 资格依赖 iOS 27 SDK）。
-    runs-on: xcode-27-arm64
+    # 2026-09-20：macos-26 通用镜像移除了 Xcode 27.0；xcode-27-arm64 预览池
+    # 容量太小（任务排队 45min+ 不分配 runner），暂时退回 26.6.0 发布。
+    # TODO: 27.x 回到稳定镜像后换回并恢复 iPhone Fold 资格（见 b3923e0/d806771）。
+    runs-on: macos-26
     needs: version
     defaults:
       run:
@@ -194,12 +195,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # 用 iOS 27 SDK 构建：编译产物自动获得 iPhone Fold（iPhone Duo）的
-      # App Resizability 资格，展开态不再被系统 letterbox/放大。
-      # 注意：带 Duo 模拟器的 27.1 目前只有 beta，GA 后可升到这里。
+      # Xcode 27 SDK 带来 iPhone Fold（iPhone Duo）App Resizability 资格；
+      # 27.x 现只在 xcode-27-arm64 预览镜像上（排队过久不可用），暂用 26.6.0，
+      # 恢复条件见 job 顶部注释。
       - uses: maxim-lobanov/setup-xcode@v1
         with:
-          xcode-version: '27.0'
+          xcode-version: '26.6.0'
 
       - uses: subosito/flutter-action@v2
         with:
