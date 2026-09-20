@@ -12,9 +12,11 @@ abstract final class Mv2Haptics {
     HapticFeedback.selectionClick();
   }
 
-  /// Slightly stronger confirmation: a write succeeded.
+  /// Stronger confirmation: a write succeeded. Deliberately a step above
+  /// [tap] — `lightImpact` is near-imperceptible on many Android devices, and
+  /// the whole point is that the user *felt* the 感谢 land.
   static void success(bool enabled) {
     if (!enabled) return;
-    HapticFeedback.lightImpact();
+    HapticFeedback.mediumImpact();
   }
 }

@@ -3,7 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/errors/failures.dart';
 
-/// Standard MV2 failure feedback.
+/// Standard MV2 write-action feedback.
 ///
 /// `Failure` already carries a user-facing Chinese message; anything else falls
 /// back to a generic line. Kept in one place so every page toasts identically.
@@ -22,6 +22,20 @@ void mv2ShowError(BuildContext context, Object error) {
   messenger
     ..hideCurrentSnackBar()
     ..showSnackBar(SnackBar(content: Text(mv2DescribeError(error))));
+}
+
+/// Shows the short success confirmation for a completed write (已收藏, 已感谢,
+/// …), replacing any current one so rapid actions never queue up.
+///
+/// Takes the [ScaffoldMessengerState] rather than a context so callers that pop
+/// first (the composers) can capture it beforehand and still confirm after
+/// their route is gone — the same reason `publish_topic_page` does.
+void mv2ShowSuccess(ScaffoldMessengerState messenger, String message) {
+  messenger
+    ..hideCurrentSnackBar()
+    ..showSnackBar(
+      SnackBar(content: Text(message), duration: const Duration(seconds: 2)),
+    );
 }
 
 /// Toasts a **first load** failure.

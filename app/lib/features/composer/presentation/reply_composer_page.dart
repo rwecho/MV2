@@ -18,10 +18,12 @@ import '../../../ui/components/mv2_error_feedback.dart';
 import '../../../ui/components/mv2_page_header.dart';
 import '../../../ui/components/mv2_page_scaffold.dart';
 import '../../../ui/components/states/mv2_state_view.dart';
+import '../../../ui/mv2_haptics.dart';
 import '../../../ui/primitives/mv2_avatar.dart';
 import '../../../ui/primitives/mv2_buttons.dart';
 import '../../../ui/primitives/mv2_chips.dart';
 import '../../auth/application/auth_controller.dart';
+import '../../settings/application/settings_controller.dart';
 import '../../topic/application/topic_providers.dart';
 import '../application/draft_store.dart';
 import 'composer_emoji_panel.dart';
@@ -211,8 +213,14 @@ class _ReplyComposerPageState extends ConsumerState<ReplyComposerPage> {
         if (!mounted) return;
         // Force the detail provider to refetch so the new reply is visible.
         ref.invalidate(topicDetailProvider(TopicDetailArgs(widget.topicId)));
-        // Closes the modal sheet (this page is no longer a routed page).
+        // Confirm the write like 发布主题 does: capture the root messenger
+        // before the pop, close the sheet, then toast — a SnackBar shown on a
+        // scaffold being disposed in the same frame crashed before (`docs/13`
+        // Phase 3), the root messenger outlives the route.
+        Mv2Haptics.success(ref.read(settingsProvider).hapticsEnabled);
+        final messenger = ScaffoldMessenger.of(context);
         Navigator.of(context).pop();
+        mv2ShowSuccess(messenger, '回复已发布');
         return;
       }
       setState(() {

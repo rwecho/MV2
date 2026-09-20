@@ -137,19 +137,19 @@ class _PublishTopicPageState extends ConsumerState<PublishTopicPage> {
     final value = _content.value;
     final text = value.text;
     final selection = value.selection;
-    if (!selection.isValid) {
-      _content.text = '$text$before$after';
-    } else {
-      final selected = selection.textInside(text);
-      final replacement = '$before$selected$after';
-      _content.value = value.copyWith(
-        text: text.replaceRange(selection.start, selection.end, replacement),
-        selection: TextSelection.collapsed(
-          offset: selection.start + replacement.length,
-        ),
-        composing: TextRange.empty,
-      );
-    }
+    final start = selection.isValid ? selection.start : text.length;
+    final end = selection.isValid ? selection.end : text.length;
+    final selected = text.substring(start, end);
+    // Empty caret: land between the markers (`**|**`) so typing fills the
+    // wrap; with a real selection the caret goes after the closing marker.
+    final caret = selected.isEmpty
+        ? start + before.length
+        : start + before.length + selected.length + after.length;
+    _content.value = value.copyWith(
+      text: text.replaceRange(start, end, '$before$selected$after'),
+      selection: TextSelection.collapsed(offset: caret),
+      composing: TextRange.empty,
+    );
     ref.read(publishProvider.notifier).setContent(_content.text);
   }
 
