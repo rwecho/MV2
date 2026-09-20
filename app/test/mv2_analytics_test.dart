@@ -19,6 +19,7 @@ void main() {
   tearDown(() {
     // 泄漏的 sink 会捕获同一 VM 里后续测试文件的事件。
     Mv2Analytics.sink = null;
+    Mv2Analytics.userIdSink = null;
   });
 
   test('未就绪时埋点是安静 no-op(不抛异常)', () {
@@ -91,5 +92,19 @@ void main() {
     expect(captured.map((c) => c.event),
         [Mv2Events.pushOpen, Mv2Events.topicOpen]);
     expect(captured[1].params['source'], 'push');
+  });
+
+  test('user_id 同步:member id 转字符串,登出传 null 解绑', () {
+    final ids = <String?>[];
+    Mv2Analytics.userIdSink = ids.add;
+
+    Mv2Analytics.syncUserId(memberId: 9527);
+    Mv2Analytics.syncUserId(memberId: null);
+
+    expect(ids, ['9527', null]);
+  });
+
+  test('未设置 userIdSink 且 Firebase 未就绪时,user_id 同步是安静 no-op', () {
+    expect(() => Mv2Analytics.syncUserId(memberId: 1), returnsNormally);
   });
 }

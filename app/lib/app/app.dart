@@ -29,7 +29,9 @@ class Mv2App extends ConsumerWidget {
     // diagnosable against what the app actually applied.
     Mv2Telemetry.setThemeContext(colorMode: settings.colorMode.name);
     // 用户属性(boot + 每次设置/登录态变化): 群体交叉分析的分析维度。
-    // watch isSignedInProvider 让登录/登出自动重新同步 signed_in。
+    // watch authControllerProvider 让登录/登出自动重新同步 user_id 与 signed_in。
+    final auth = ref.watch(authControllerProvider);
+    Mv2Analytics.syncUserId(memberId: auth.value?.memberId);
     Mv2Analytics.syncUserProperties(
       colorMode: settings.colorMode.name,
       fontSize: settings.fontSize.name,
@@ -37,7 +39,7 @@ class Mv2App extends ConsumerWidget {
       linkOpenMode: settings.openLinkMode.name,
       pushEnabled: '${settings.pushEnabled}',
       replySort: settings.replySort.name,
-      signedIn: '${ref.watch(isSignedInProvider)}',
+      signedIn: '${auth.value?.isSignedIn ?? false}',
       layout: mv2IsTwoPane(context) ? 'tablet' : 'phone',
     );
     // Firebase 就绪后重建一次,boot 阶段被丢弃的用户属性借此补齐。
