@@ -6,11 +6,14 @@ import 'package:go_router/go_router.dart';
 
 import '../../../core/telemetry/mv2_analytics.dart';
 import '../../../design_system/theme/mv2_theme.dart';
+import '../../../shared/models/models.dart';
 import '../../../design_system/tokens/mv2_spacing.dart';
 import '../../../ui/components/mv2_page_header.dart';
 import '../../../ui/components/mv2_page_scaffold.dart';
 import '../../../ui/components/states/mv2_state_view.dart';
+import '../../../ui/primitives/mv2_avatar.dart';
 import '../../../ui/primitives/mv2_buttons.dart';
+import '../../auth/application/auth_controller.dart';
 import '../application/honors_controller.dart';
 import '../application/pro_backend.dart';
 import '../application/pro_controller.dart';
@@ -101,6 +104,7 @@ class _PaywallPageState extends ConsumerState<PaywallPage> {
         ),
         data: (state) => _Body(
           state: state,
+          user: ref.watch(authControllerProvider).value?.user,
           busy: _busy,
           onBuy: _purchase,
           onRestore: _restore,
@@ -114,6 +118,7 @@ class _PaywallPageState extends ConsumerState<PaywallPage> {
 class _Body extends StatelessWidget {
   const _Body({
     required this.state,
+    required this.user,
     required this.busy,
     required this.onBuy,
     required this.onRestore,
@@ -121,6 +126,7 @@ class _Body extends StatelessWidget {
   });
 
   final ProState state;
+  final V2User? user;
   final bool busy;
   final Future<void> Function() onBuy;
   final Future<void> Function() onRestore;
@@ -128,6 +134,7 @@ class _Body extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final user = this.user;
     if (state.entitled) {
       return Column(
         mainAxisAlignment: MainAxisAlignment.center,
@@ -170,11 +177,15 @@ class _Body extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: <Widget>[
-          Icon(
-            Icons.workspace_premium_rounded,
-            size: 72,
-            color: context.colors.accent,
-          ),
+          // 登录用户直接看到自己的头像 —— 这就是将来上赞助榜的那张脸；
+          // 未登录回退到奖章图标。
+          user != null
+              ? Mv2Avatar(user: user, size: 72, showBorder: true)
+              : Icon(
+                  Icons.workspace_premium_rounded,
+                  size: 72,
+                  color: context.colors.accent,
+                ),
           const SizedBox(height: Mv2Spacing.x4),
           Text(
             '赞助 MV2 开发',
@@ -192,7 +203,7 @@ class _Body extends StatelessWidget {
             ),
           ),
           const SizedBox(height: Mv2Spacing.x6),
-          Mv2TextButton(
+          Mv2FilledButton(
             label: '赞助 ${product.price}',
             loading: busy,
             onPressed: busy ? null : onBuy,

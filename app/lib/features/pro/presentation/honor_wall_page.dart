@@ -87,7 +87,7 @@ class _Wall extends StatelessWidget {
           const Mv2StateView(
             kind: Mv2StateKind.empty,
             title: '赞助榜还空着',
-            description: '第一个买断永久版的人，将被永久铭刻在这里。',
+            description: '所有购买永久版的支持者，都会按顺序铭刻在这里。',
           ),
         ] else ...<Widget>[
           for (var i = 0; i < entries.length; i++) ...<Widget>[

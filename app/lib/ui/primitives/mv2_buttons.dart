@@ -157,6 +157,82 @@ class Mv2TextButton extends StatelessWidget {
   }
 }
 
+/// Filled accent CTA (e.g. paywall `赞助` / primary confirmations).
+///
+/// Full-width pill in the current theme's accent colour; loading keeps the
+/// label and appends a small spinner so the button never collapses.
+class Mv2FilledButton extends StatelessWidget {
+  const Mv2FilledButton({
+    super.key,
+    required this.label,
+    this.onPressed,
+    this.enabled = true,
+    this.loading = false,
+  });
+
+  final String label;
+  final VoidCallback? onPressed;
+  final bool enabled;
+  final bool loading;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+    final active = enabled && !loading && onPressed != null;
+
+    return Semantics(
+      button: true,
+      enabled: active,
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: active ? onPressed : null,
+        child: AnimatedOpacity(
+          duration: Mv2Motion.tap,
+          opacity: active ? 1 : 0.6,
+          child: Container(
+            height: 52,
+            decoration: BoxDecoration(
+              color: colors.accent,
+              borderRadius: Mv2Radius.pill,
+            ),
+            child: Center(
+              child: loading
+                  ? Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: <Widget>[
+                        Text(
+                          label,
+                          style: context.text.button.copyWith(
+                            color: colors.accentContrast,
+                          ),
+                        ),
+                        const SizedBox(width: Mv2Spacing.x2),
+                        SizedBox(
+                          width: 14,
+                          height: 14,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            valueColor: AlwaysStoppedAnimation<Color>(
+                              colors.accentContrast,
+                            ),
+                          ),
+                        ),
+                      ],
+                    )
+                  : Text(
+                      label,
+                      style: context.text.button.copyWith(
+                        color: colors.accentContrast,
+                      ),
+                    ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 /// Small action button used inside the composer toolbar
 /// (`引用 / 预览 / 表情 / Markdown`).
 class Mv2ToolbarButton extends StatelessWidget {
