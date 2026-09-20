@@ -184,7 +184,9 @@ jobs:
     if: inputs.platforms == '' || inputs.platforms == 'all' || contains(inputs.platforms, 'ios')
     name: iOS → TestFlight
     # 钉死镜像不用 macos-latest，避免镜像漂移悄悄换 Xcode 大版本。
-    runs-on: macos-26
+    # macos-26 通用镜像 2026-09-20 起只剩 Xcode 26.x，27.0 被移除；
+    # xcode-27-arm64 是 GitHub 的 Xcode 27 预览镜像（iPhone Fold 资格依赖 iOS 27 SDK）。
+    runs-on: xcode-27-arm64
     needs: version
     defaults:
       run:
