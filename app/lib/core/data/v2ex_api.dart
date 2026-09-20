@@ -9,6 +9,7 @@ import '../../shared/models/publish_form.dart';
 import '../../shared/models/topic_detail.dart';
 import '../../shared/models/write_result.dart';
 import '../errors/failures.dart';
+import '../parser/v1_json_parser.dart';
 import '../network/mv2_http_client.dart';
 import '../network/v2ex_endpoints.dart';
 import '../network/write_user_agent.dart';
@@ -250,6 +251,21 @@ class RemoteV2exApi implements V2exApi {
 
   @override
   Future<List<V2Topic>> feed(HomeTab tab) async {
+    // 官方 JSON 优先：`全部`/`最热` 有公开端点，负载轻、免 DOM 解析；
+    // 其余 tab 没有官方端点。JSON 请求或解析失败时静默落回页面解析
+    // （解析路径保留为兜底，见 docs/12）。
+    final jsonPath = switch (tab) {
+      HomeTab.all => V2exEndpoints.apiLatestTopics,
+      HomeTab.hot => V2exEndpoints.apiHotTopics,
+      _ => null,
+    };
+    if (jsonPath != null) {
+      try {
+        return V1JsonParser.parseTopicList(await _client.getJson(jsonPath));
+      } on Failure catch (error, stack) {
+        Mv2Telemetry.recordNonFatal(error, stack, reason: 'feed json $jsonPath');
+      }
+    }
     // Every topic tab is the same page with a different `?tab=` value; the
     // page renders the tab's rows inside the usual `div.cell.item` list, so a
     // single parser covers them all (verified live on `hot`/`all`/`r2`).
@@ -343,6 +359,16 @@ class RemoteV2exApi implements V2exApi {
 
   @override
   Future<V2Profile?> member(String username) async {
+    // 官方 JSON 优先（v1 payload 没有发帖/回复计数，UI 会隐藏统计条）；
+    // JSON 不可用或未知成员时落回成员页解析（那里的信息更全）。
+    try {
+      final profile = V1JsonParser.parseProfile(
+        await _client.getJson(V2exEndpoints.apiMemberInfo(username)),
+      );
+      if (profile != null) return profile;
+    } on Failure {
+      // fall through to the page scrape
+    }
     try {
       final body = await _getHtml(
         V2exEndpoints.member(username),

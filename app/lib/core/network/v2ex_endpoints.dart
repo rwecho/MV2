@@ -88,6 +88,7 @@ abstract final class V2exEndpoints {
   // -------------------------------------------------------------- JSON API
 
   static const String apiHotTopics = '/api/topics/hot.json';
+  static const String apiLatestTopics = '/api/topics/latest.json';
 
   /// `/api/nodes/list.json` now answers 400; `s2.json` is the live source and
   /// returns `{text, id, topics, aliases}` for ~1400 nodes (~150 KB).
