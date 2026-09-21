@@ -148,6 +148,10 @@ abstract final class Mv2Analytics {
     'duration_ms': durationMs,
   });
 
+  /// 正文/回复中的视频链接打开应用内播放页。
+  static void logVideoOpen({required String provider}) =>
+      _log(Mv2Events.videoOpen, {'provider': provider});
+
   static void logTopicOpen({
     required int topicId,
     String source = Mv2Events.unspecified,

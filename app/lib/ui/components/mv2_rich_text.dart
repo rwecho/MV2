@@ -15,6 +15,8 @@ import '../../design_system/tokens/mv2_radius.dart';
 import '../../design_system/tokens/mv2_spacing.dart';
 import '../../features/reader/application/open_external_url.dart';
 import 'mv2_image_viewer.dart';
+import 'video_embed/mv2_video_embed.dart';
+import 'video_embed/mv2_video_embed_card.dart';
 
 /// Renders V2EX topic/reply HTML with MV2 typography.
 ///
@@ -208,7 +210,11 @@ class _Mv2RichTextState extends State<Mv2RichText> {
       // `<a><img></a>` is a block picture, not running text: keeping the anchor
       // inline would route it through `_spans`, which renders the anchor's
       // (empty) text and drops the image entirely.
-      if (node.localName == 'a' && _linkedImage(node) != null) return false;
+      if (node.localName == 'a') {
+        if (_linkedImage(node) != null) return false;
+        // Same for recognized video links — they become block cards.
+        if (matchVideoEmbed(node.attributes['href']) != null) return false;
+      }
       return _inlineTags.contains(node.localName);
     }
     return false;
@@ -280,9 +286,14 @@ class _Mv2RichTextState extends State<Mv2RichText> {
       case 'img':
         return _image(context, node);
       case 'a':
-        // Only a linked image reaches this block path (`_isInline`).
+        // Only a linked image or a recognized video link reaches this block
+        // path (`_isInline`); everything else stays running text.
         final image = _linkedImage(node);
         if (image != null) return _image(context, image);
+        final embed = matchVideoEmbed(node.attributes['href']);
+        if (embed != null) {
+          return Mv2VideoEmbedCard(embed: embed, anchorText: node.text);
+        }
         return _inlineText(context, node.nodes, style);
       default:
         return _inlineText(context, node.nodes, style);

@@ -32,7 +32,7 @@ void main() {
   });
 
   test('catalog 没有重复事件名(Map 字面量本身保证,此处防重构回退)', () {
-    expect(Mv2Events.catalog.length, 53);
+    expect(Mv2Events.catalog.length, 54);
   });
 
   group('lengthBucket', () {

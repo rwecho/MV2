@@ -38,6 +38,10 @@ abstract final class Mv2Events {
   /// `tab`: HomeTab.slug;`result`: ok|error;`duration_ms`: 网络耗时整数毫秒
   static const String feedRevalidate = 'feed_revalidate';
 
+  /// 正文/回复中的视频链接打开应用内播放页(exe-hub/Bilibili/YouTube)。
+  /// `provider`: hub|bilibili|youtube
+  static const String videoOpen = 'video_open';
+
   /// 打开主题详情。归因核心事件:`source` 记录入口
   /// (feed|search|node|member|history|read_later|my_list|notifications|
   ///  publish|push|deeplink|clipboard),`layout`: phone|tablet。
@@ -238,6 +242,7 @@ abstract final class Mv2Events {
     feedRefresh: ['tab'],
     feedCacheHit: ['tab', 'age_sec'],
     feedRevalidate: ['tab', 'result', 'duration_ms'],
+    videoOpen: ['provider'],
     topicOpen: ['topic_id', 'source', 'layout'],
     nodeOpen: ['node_key', 'source'],
     topicRead: ['topic_id', 'duration_sec', 'replies_seen'],
