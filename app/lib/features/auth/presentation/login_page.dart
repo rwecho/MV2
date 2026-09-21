@@ -27,9 +27,8 @@ import 'solana_login_sheet.dart';
 ///
 /// A WebView was tried first for the **password form** and rejected: V2EX
 /// serves a desktop layout inside a phone-sized WebView, which cannot match
-/// the MV2 design system. The other sign-in methods go through a WebView on
-/// purpose — Google OAuth must run inside the site's browser session
-/// (`GoogleLoginPage`), and Solana signs locally (`SolanaLoginSheet`).
+/// the MV2 design system. Google sign-in goes through a WebView on purpose —
+/// OAuth must run inside the site's browser session (`GoogleLoginPage`).
 ///
 /// No mockup exists for this screen; it follows the Reply Composer's visual
 /// language (`docs/06` → 额外必备页面 / Login).
@@ -39,6 +38,13 @@ class LoginPage extends ConsumerStatefulWidget {
   @override
   ConsumerState<LoginPage> createState() => _LoginPageState();
 }
+
+/// Solana 钱包登录入口暂时隐藏。
+///
+/// 实现完整保留（`solana_login_sheet.dart` + `loginWithSolana`），放开时把
+/// 这里改回 `true` 即可。隐藏原因：钱包绑定/注册只能在网页端完成（未绑定
+/// 时 app 只能引导去浏览器），且私钥粘贴登录的接受度有待验证。
+final bool kShowSolanaLogin = false;
 
 class _LoginPageState extends ConsumerState<LoginPage> {
   final TextEditingController _username = TextEditingController();
@@ -386,8 +392,8 @@ class _LoginPageState extends ConsumerState<LoginPage> {
     );
   }
 
-  /// 官网 `/signin` 同款的两个额外入口：Google（OAuth，应用内 WebView）
-  /// 与 Solana（钱包本地签名）。与密码登录互不影响。
+  /// 官网 `/signin` 同款的额外入口：Google（OAuth，应用内 WebView）。
+  /// 与密码登录互不影响。
   Widget _otherSignInMethods(BuildContext context) {
     final colors = context.colors;
     return Column(
@@ -418,16 +424,18 @@ class _LoginPageState extends ConsumerState<LoginPage> {
             context.push('/login/google');
           },
         ),
-        const SizedBox(height: Mv2Spacing.x3),
-        _externalMethodButton(
-          context,
-          icon: 'assets/auth/solana.png',
-          label: 'Sign in with Solana',
-          onTap: () {
-            Mv2Analytics.logLoginMethodSelect(method: 'solana');
-            showMv2Sheet(context, child: const SolanaLoginSheet());
-          },
-        ),
+        if (kShowSolanaLogin) ...<Widget>[
+          const SizedBox(height: Mv2Spacing.x3),
+          _externalMethodButton(
+            context,
+            icon: 'assets/auth/solana.png',
+            label: 'Sign in with Solana',
+            onTap: () {
+              Mv2Analytics.logLoginMethodSelect(method: 'solana');
+              showMv2Sheet(context, child: const SolanaLoginSheet());
+            },
+          ),
+        ],
       ],
     );
   }

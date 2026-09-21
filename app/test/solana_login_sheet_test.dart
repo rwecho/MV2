@@ -13,9 +13,11 @@ import 'package:mv2/features/auth/data/auth_store.dart';
 import 'package:mv2/features/auth/domain/auth_session.dart';
 import 'package:mv2/features/auth/data/solana_wallet_store.dart';
 import 'package:mv2/features/auth/presentation/login_page.dart';
+import 'package:mv2/features/auth/presentation/solana_login_sheet.dart';
 import 'package:mv2/shared/models/account_info.dart';
 import 'package:mv2/shared/models/login_form.dart';
 import 'package:mv2/shared/models/models.dart';
+import 'package:mv2/ui/components/mv2_modal_sheet.dart';
 import 'support/fixture_api.dart';
 
 /// A 1x1 transparent PNG so `Image.memory` can decode in the test.
@@ -117,29 +119,46 @@ class _MemoryWalletStore extends SolanaWalletStore {
 
 final Key _homeShellKey = UniqueKey();
 
-Widget _homeShell() => Scaffold(
-  key: _homeShellKey,
-  body: const Text('HOME-SHELL'),
+Widget _homeShell() =>
+    Scaffold(key: _homeShellKey, body: const Text('HOME-SHELL'));
+
+/// 与真实登录页等价的桩：登录页上的 Solana 入口暂时隐藏（见
+/// `login_page.dart` 的 `kShowSolanaLogin`），弹层行为改由这个桩驱动，
+/// 但打开方式（`showMv2Sheet` + 弹层关闭后 `context.pop()` 关掉登录页）
+/// 与真实入口完全一致。
+Widget _loginStub() => Scaffold(
+  body: Center(
+    child: Builder(
+      builder: (context) => TextButton(
+        onPressed: () => showMv2Sheet(context, child: const SolanaLoginSheet()),
+        child: const Text('Sign in with Solana'),
+      ),
+    ),
+  ),
 );
 
-GoRouter _router() => GoRouter(
+GoRouter _router({required bool stubLogin}) => GoRouter(
   initialLocation: '/',
   routes: <RouteBase>[
     GoRoute(path: '/', builder: (_, _) => _homeShell()),
-    GoRoute(path: '/login', builder: (_, _) => const LoginPage()),
+    GoRoute(
+      path: '/login',
+      builder: (_, _) => stubLogin ? _loginStub() : const LoginPage(),
+    ),
   ],
 );
 
-Future<(_SignedInApi, _MemoryWalletStore, GoRouter)> _pumpLogin(
-  WidgetTester tester,
-) async {
+Future<(_SignedInApi, _MemoryWalletStore, GoRouter)> _pumpRouter(
+  WidgetTester tester, {
+  required bool stubLogin,
+}) async {
   tester.view.physicalSize = const Size(800, 1200);
   tester.view.devicePixelRatio = 1;
   addTearDown(tester.view.resetPhysicalSize);
   addTearDown(tester.view.resetDevicePixelRatio);
   final api = _SignedInApi();
   final walletStore = _MemoryWalletStore();
-  final router = _router();
+  final router = _router(stubLogin: stubLogin);
   final container = ProviderContainer(
     overrides: [
       v2exApiProvider.overrideWithValue(api),
@@ -151,7 +170,10 @@ Future<(_SignedInApi, _MemoryWalletStore, GoRouter)> _pumpLogin(
   await tester.pumpWidget(
     UncontrolledProviderScope(
       container: container,
-      child: MaterialApp.router(theme: Mv2ThemeData.light(), routerConfig: router),
+      child: MaterialApp.router(
+        theme: Mv2ThemeData.light(),
+        routerConfig: router,
+      ),
     ),
   );
   await tester.pumpAndSettle();
@@ -160,11 +182,6 @@ Future<(_SignedInApi, _MemoryWalletStore, GoRouter)> _pumpLogin(
   router.push('/login');
   await tester.pumpAndSettle();
   return (api, walletStore, router);
-}
-
-Future<void> _openSolanaSheet(WidgetTester tester) async {
-  await tester.tap(find.text('Sign in with Solana'));
-  await tester.pumpAndSettle();
 }
 
 Future<void> _enterKeyAndSubmit(WidgetTester tester, String key) async {
@@ -177,21 +194,22 @@ Future<void> _enterKeyAndSubmit(WidgetTester tester, String key) async {
 }
 
 void main() {
-  testWidgets('login page offers Google and Solana next to the password form', (
+  testWidgets('login page currently offers Google only — Solana 入口暂时隐藏', (
     tester,
   ) async {
-    await _pumpLogin(tester);
+    await _pumpRouter(tester, stubLogin: false);
 
     expect(find.text('其他登录方式'), findsOneWidget);
     expect(find.text('Sign in with Google'), findsOneWidget);
-    expect(find.text('Sign in with Solana'), findsOneWidget);
+    expect(find.text('Sign in with Solana'), findsNothing);
   });
 
   testWidgets('an unparsable key is rejected before any network call', (
     tester,
   ) async {
-    final (api, _, _) = await _pumpLogin(tester);
-    await _openSolanaSheet(tester);
+    final (api, _, _) = await _pumpRouter(tester, stubLogin: true);
+    await tester.tap(find.text('Sign in with Solana'));
+    await tester.pumpAndSettle();
 
     await _enterKeyAndSubmit(tester, 'not base58!');
 
@@ -204,8 +222,9 @@ void main() {
   testWidgets('a valid but unbound wallet lands on the binding guidance', (
     tester,
   ) async {
-    final (api, _, _) = await _pumpLogin(tester);
-    await _openSolanaSheet(tester);
+    final (api, _, _) = await _pumpRouter(tester, stubLogin: true);
+    await tester.tap(find.text('Sign in with Solana'));
+    await tester.pumpAndSettle();
 
     // The default fixture answer is "not linked".
     await _enterKeyAndSubmit(tester, _validSeedBase58);
@@ -219,14 +238,15 @@ void main() {
   testWidgets('a linked wallet signs in and closes both surfaces', (
     tester,
   ) async {
-    final (api, _, _) = await _pumpLogin(tester);
+    final (api, _, _) = await _pumpRouter(tester, stubLogin: true);
     api.solanaResult = const V2SolanaLoginResult(success: true);
     api.solanaSignedIn = true;
-    await _openSolanaSheet(tester);
+    await tester.tap(find.text('Sign in with Solana'));
+    await tester.pumpAndSettle();
 
     await _enterKeyAndSubmit(tester, _validSeedBase58);
 
-    // Sheet + login page are both gone.
+    // Sheet + the page beneath it are both gone.
     expect(find.text('Sign in with Solana'), findsNothing);
     expect(find.byKey(_homeShellKey), findsOneWidget);
   });
@@ -234,10 +254,14 @@ void main() {
   testWidgets('记住钱包 persists the key; the next visit signs in directly', (
     tester,
   ) async {
-    final (api, walletStore, router) = await _pumpLogin(tester);
+    final (api, walletStore, router) = await _pumpRouter(
+      tester,
+      stubLogin: true,
+    );
     api.solanaResult = const V2SolanaLoginResult(success: true);
     api.solanaSignedIn = true;
-    await _openSolanaSheet(tester);
+    await tester.tap(find.text('Sign in with Solana'));
+    await tester.pumpAndSettle();
 
     await tester.enterText(
       find.widgetWithText(TextField, 'Solana 私钥（base58）').first,
@@ -254,7 +278,8 @@ void main() {
     // Re-opening shows the saved-wallet view that signs in without retyping.
     router.push('/login');
     await tester.pumpAndSettle();
-    await _openSolanaSheet(tester);
+    await tester.tap(find.text('Sign in with Solana'));
+    await tester.pumpAndSettle();
     expect(find.text('已保存的钱包'), findsOneWidget);
     expect(find.text('忘记此钱包'), findsOneWidget);
 
