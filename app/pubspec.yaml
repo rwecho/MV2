@@ -26,7 +26,7 @@ publish_to: 'none' # Remove this line if you wish to publish to pub.dev
 # fails the build on a mismatch instead of shipping a mislabelled binary.
 # Verify against the live versionCode in Play Console / App Store Connect before
 # uploading and raise the `+N` if the old run number was 4 digits or more.
-version: 2.2.7+2002007000
+version: 2.2.8+2002008000
 
 environment:
   sdk: ^3.13.3
