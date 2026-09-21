@@ -3,7 +3,7 @@
 /// Two sources feed this:
 ///
 /// * the custom scheme the app registers — `mv2://topic/123`,
-///   `mv2://node/python`, `mv2://member/livid`;
+///   `mv2://node/python`, `mv2://member/livid`, `mv2://login`;
 /// * V2EX web URLs people paste or share — `https://www.v2ex.com/t/123#reply4`.
 ///
 /// A `https://www.v2ex.com/...` link **cannot launch the app**: iOS Universal
@@ -69,6 +69,8 @@ abstract final class Mv2DeepLink {
       case 'member':
       case 'u':
         return id == null ? null : '/member/${Uri.encodeComponent(id)}';
+      case 'login':
+        return '/login';
       default:
         return null;
     }

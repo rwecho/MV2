@@ -17,6 +17,11 @@ void main() {
       expect(Mv2DeepLink.routeFor('mv2://member/livid'), '/member/livid');
     });
 
+    test('login (app-internal destination)', () {
+      expect(Mv2DeepLink.routeFor('mv2://login'), '/login');
+      expect(Mv2DeepLink.routeFor('mv2:///login'), '/login');
+    });
+
     test('rejects unknown or incomplete targets', () {
       expect(Mv2DeepLink.routeFor('mv2://nope/1'), isNull);
       expect(Mv2DeepLink.routeFor('mv2://topic'), isNull);

@@ -84,8 +84,22 @@ final routerProvider = Provider<GoRouter>((ref) {
     // would otherwise hit go_router as `mv2://topic/123` — "no routes for
     // location". Normalise any recognisable link into its app route.
     redirect: (BuildContext context, GoRouterState state) {
-      final route = Mv2DeepLink.routeFor(state.uri.toString());
-      return route == state.uri.toString() ? null : route;
+      final uri = state.uri;
+      final route = Mv2DeepLink.routeFor(uri.toString());
+      if (route != null) {
+        return route == uri.toString() ? null : route;
+      }
+      // A link the app cannot map (mv2://garbage, a foreign https URL that
+      // reached the router) must not fall through to go_router's "no routes"
+      // error page — land on the home feed instead. Bare app paths carry no
+      // scheme and are left to normal matching. The same goes for `/` itself:
+      // the shell lives at /feed, and `/` has never been a route.
+      final scheme = uri.scheme.toLowerCase();
+      if (scheme == 'mv2' || scheme == 'https' || scheme == 'http') {
+        return '/feed';
+      }
+      if (uri.path == '/') return '/feed';
+      return null;
     },
     routes: <RouteBase>[
       StatefulShellRoute.indexedStack(
