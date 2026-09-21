@@ -64,6 +64,13 @@ class _FakeApi implements V2exApi {
   }) async => const V2LoginResult(success: false);
 
   @override
+  Future<V2SolanaLoginResult> loginWithSolana({
+    required String publicKey,
+    required String signature,
+    required String message,
+  }) async => const V2SolanaLoginResult(success: false);
+
+  @override
   Future<V2AccountInfo?> currentUser() async {
     final failure = error;
     if (failure != null) throw failure;

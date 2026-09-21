@@ -4,12 +4,32 @@ import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.os.Build
 import android.os.Bundle
+import android.webkit.CookieManager
 import io.flutter.embedding.android.FlutterActivity
+import io.flutter.embedding.engine.FlutterEngine
+import io.flutter.plugin.common.MethodChannel
 
 class MainActivity : FlutterActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         createNotificationChannel()
+    }
+
+    override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
+        super.configureFlutterEngine(flutterEngine)
+        // Google OAuth 在应用内 WebView 完成后会话 cookie（PB3_SESSION，
+        // HttpOnly）只存在于系统 WebView 的 CookieManager，JS 读不到。
+        // Dart 侧 `WebCookieBridge` 在登录结束时来这里取原始 Cookie 头。
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "mv2/web_cookies")
+            .setMethodCallHandler { call, result ->
+                when (call.method) {
+                    "getCookies" -> {
+                        val url = call.argument<String>("url")
+                        result.success(CookieManager.getInstance().getCookie(url))
+                    }
+                    else -> result.notImplemented()
+                }
+            }
     }
 
     /**

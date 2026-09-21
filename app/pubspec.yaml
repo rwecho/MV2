@@ -54,6 +54,10 @@ dependencies:
   dio_cookie_manager: ^3.5.0
   cookie_jar: ^4.0.9
   html: ^0.15.7
+  # Solana 钱包登录：本地 ed25519 签名（`Sign in to V2EX: <ts>`，见
+  # features/auth/data/solana_keypair.dart）。纯 Dart 实现，签名一次的开销
+  # 可以忽略，不需要 platform 加速版。
+  cryptography: ^2.7.0
   drift: ^2.35.0
   drift_flutter: ^0.3.1
   path_provider: ^2.1.6
@@ -97,6 +101,8 @@ flutter:
     # Mozilla @mozilla/readability@0.6.0 — injected into the WebView by the
     # in-app reader (`lib/features/reader`).
     - assets/vendor/readability.js
+    # 登录方式品牌图标（Google / Solana），与官网 `/signin` 同源。
+    - assets/auth/
 
   # The following line ensures that the Material Icons font is
   # included with your application, so that you can use the icons in

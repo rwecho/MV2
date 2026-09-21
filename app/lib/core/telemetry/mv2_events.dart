@@ -126,6 +126,16 @@ abstract final class Mv2Events {
   /// 提交登录表单。`result`: success|failed|needs_2fa|rate_limited
   static const String loginSubmit = 'login_submit';
 
+  /// 选择其他登录方式(与 login_open 一样单点在登录页按钮)。
+  /// `method`: google|solana
+  static const String loginMethodSelect = 'login_method_select';
+
+  /// Google OAuth 流程结束。`result`: success|failed|cancelled
+  static const String loginGoogleSubmit = 'login_google_submit';
+
+  /// Solana 钱包登录提交。`result`: success|failed|not_linked|invalid_key
+  static const String loginSolanaSubmit = 'login_solana_submit';
+
   /// 提交两步验证码。`result`: success|failed
   static const String twoFactorSubmit = 'two_factor_submit';
 
@@ -264,6 +274,9 @@ abstract final class Mv2Events {
     publishSubmit: ['node_key', 'has_image', 'title_length_bucket', 'result'],
     loginOpen: [],
     loginSubmit: ['result'],
+    loginMethodSelect: ['method'],
+    loginGoogleSubmit: ['result'],
+    loginSolanaSubmit: ['result'],
     twoFactorSubmit: ['result'],
     logout: ['reason'],
     dailyCheckin: ['result'],

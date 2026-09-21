@@ -170,6 +170,25 @@ class FixtureV2exApi implements V2exApi {
     return const V2LoginResult(success: false, errors: <String>['测试数据源。']);
   }
 
+  /// Solana sign-in is recorded and answered from [solanaResult] so login
+  /// flows can drive the sheet end to end.
+  V2SolanaLoginResult solanaResult = const V2SolanaLoginResult(
+    success: false,
+    walletLinked: false,
+  );
+  final List<String> solanaMessages = <String>[];
+
+  @override
+  Future<V2SolanaLoginResult> loginWithSolana({
+    required String publicKey,
+    required String signature,
+    required String message,
+  }) async {
+    if (latency > Duration.zero) await Future<void>.delayed(latency);
+    solanaMessages.add(message);
+    return solanaResult;
+  }
+
   /// Offline fixture for `/new`: a syntactically valid form so the publish
   /// page can be driven without a session.
   @override

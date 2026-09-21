@@ -115,6 +115,15 @@ abstract final class V2exEndpoints {
   static const String twoFactor = '/2fa?next=/mission/daily';
   static const String checkInPath = '/mission/daily/redeem';
 
+  /// Sign in with Solana：`POST {signature, message, public_key}`，消息为
+  /// `Sign in to V2EX: <unix 秒>`，签名 hex，公钥 base58（Solana 地址）。
+  /// 拒绝时按状态码回 JSON `{"error": …}`（400 时间戳过期 / 401 签名无效 /
+  /// 404 地址未绑定会员，verified live 2026-09-21）。
+  static const String authSolana = '/auth/solana';
+
+  /// Solana 登录帮助页 —— 钱包未绑定时引导用户去网页端绑定/注册。
+  static const String solanaHelp = '/solana';
+
   /// Appends the session CSRF token as the `once` query parameter used by the
   /// GET/POST action endpoints (`/favorite/topic/{id}?once=…`, `…/thank/reply/
   /// {replyId}?once=…`). The token is URL-encoded because it is opaque to us.

@@ -12,10 +12,12 @@ import '../../../design_system/theme/mv2_theme.dart';
 import '../../../design_system/tokens/mv2_radius.dart';
 import '../../../design_system/tokens/mv2_spacing.dart';
 import '../../../shared/models/login_form.dart';
+import '../../../ui/components/mv2_modal_sheet.dart';
 import '../../../ui/components/mv2_page_header.dart';
 import '../../../ui/components/mv2_page_scaffold.dart';
 import '../../../ui/components/states/mv2_state_view.dart';
 import '../../auth/application/auth_controller.dart';
+import 'solana_login_sheet.dart';
 
 /// Native V2EX sign-in.
 ///
@@ -23,8 +25,11 @@ import '../../auth/application/auth_controller.dart';
 /// is scraped first ([V2exApi.loginForm]) and this page renders its own
 /// MV2-styled fields before posting those exact names back.
 ///
-/// A WebView was tried first and rejected: V2EX serves a desktop layout inside a
-/// phone-sized WebView, which cannot match the MV2 design system.
+/// A WebView was tried first for the **password form** and rejected: V2EX
+/// serves a desktop layout inside a phone-sized WebView, which cannot match
+/// the MV2 design system. The other sign-in methods go through a WebView on
+/// purpose — Google OAuth must run inside the site's browser session
+/// (`GoogleLoginPage`), and Solana signs locally (`SolanaLoginSheet`).
 ///
 /// No mockup exists for this screen; it follows the Reply Composer's visual
 /// language (`docs/06` → 额外必备页面 / Login).
@@ -374,7 +379,107 @@ class _LoginPageState extends ConsumerState<LoginPage> {
 
         const SizedBox(height: Mv2Spacing.x5),
         _submitButton(context),
+
+        const SizedBox(height: Mv2Spacing.x6),
+        _otherSignInMethods(context),
       ],
+    );
+  }
+
+  /// 官网 `/signin` 同款的两个额外入口：Google（OAuth，应用内 WebView）
+  /// 与 Solana（钱包本地签名）。与密码登录互不影响。
+  Widget _otherSignInMethods(BuildContext context) {
+    final colors = context.colors;
+    return Column(
+      children: <Widget>[
+        Row(
+          children: <Widget>[
+            Expanded(child: Divider(color: colors.border, height: 1)),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: Mv2Spacing.x3),
+              child: Text(
+                '其他登录方式',
+                style: context.text.metadata.copyWith(
+                  color: colors.textTertiary,
+                ),
+              ),
+            ),
+            Expanded(child: Divider(color: colors.border, height: 1)),
+          ],
+        ),
+        const SizedBox(height: Mv2Spacing.x4),
+        _externalMethodButton(
+          context,
+          icon: 'assets/auth/google.png',
+          label: 'Sign in with Google',
+          onTap: () {
+            // 与 login_open 一样单点记录：两个入口都从这一处进入。
+            Mv2Analytics.logLoginMethodSelect(method: 'google');
+            context.push('/login/google');
+          },
+        ),
+        const SizedBox(height: Mv2Spacing.x3),
+        _externalMethodButton(
+          context,
+          icon: 'assets/auth/solana.png',
+          label: 'Sign in with Solana',
+          onTap: () {
+            Mv2Analytics.logLoginMethodSelect(method: 'solana');
+            showMv2Sheet(context, child: const SolanaLoginSheet());
+          },
+        ),
+      ],
+    );
+  }
+
+  Widget _externalMethodButton(
+    BuildContext context, {
+    required String icon,
+    required String label,
+    required VoidCallback onTap,
+  }) {
+    final colors = context.colors;
+    return SizedBox(
+      height: 48,
+      child: Material(
+        color: colors.divider,
+        borderRadius: Mv2Radius.allSm,
+        child: InkWell(
+          borderRadius: Mv2Radius.allSm,
+          onTap: onTap,
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: Mv2Spacing.x4),
+            decoration: BoxDecoration(
+              borderRadius: Mv2Radius.allSm,
+              border: Border.all(color: colors.border),
+            ),
+            child: Row(
+              children: <Widget>[
+                Image.asset(
+                  icon,
+                  width: 22,
+                  height: 22,
+                  errorBuilder: (_, _, _) => const SizedBox.shrink(),
+                ),
+                const SizedBox(width: Mv2Spacing.x3),
+                Expanded(
+                  child: Text(
+                    label,
+                    style: context.text.button.copyWith(
+                      color: colors.textPrimary,
+                    ),
+                  ),
+                ),
+                Icon(
+                  Icons.chevron_right_rounded,
+                  size: 18,
+                  color: colors.textTertiary,
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
     );
   }
 

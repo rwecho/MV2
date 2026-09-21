@@ -109,6 +109,18 @@ abstract interface class V2exApi {
     required String code,
   });
 
+  /// Solana wallet sign-in (`POST /auth/solana`).
+  ///
+  /// [message] is `Sign in to V2EX: <unix 秒>` and [signature] the lowercase
+  /// hex ed25519 signature over it; [publicKey] is the base58 Solana address.
+  /// The Set-Cookie for a successful answer lands in the shared cookie jar,
+  /// so the caller only needs to re-validate with `currentUser()`.
+  Future<V2SolanaLoginResult> loginWithSolana({
+    required String publicKey,
+    required String signature,
+    required String message,
+  });
+
   /// Scrapes `/new` (or `/new/{node}`) for the topic form's `once`.
   ///
   /// Throws [AuthFailure] when the session is gone — V2EX answers an anonymous
@@ -683,6 +695,73 @@ class RemoteV2exApi implements V2exApi {
       success: false,
       errors: LoginFormParser.parseErrors(result.body),
     );
+  }
+
+  @override
+  Future<V2SolanaLoginResult> loginWithSolana({
+    required String publicKey,
+    required String signature,
+    required String message,
+  }) async {
+    // Mirror the browser's `credentials: "same-origin"` fetch: it carries the
+    // anonymous `PB3_SESSION` picked up from /signin, so visit it first when
+    // the jar has no session yet. Failure here does not block the POST —
+    // the server rejects an expired timestamp on its own.
+    try {
+      await _client.get(
+        V2exEndpoints.signInWithNext,
+        referer: '${V2exEndpoints.baseUrl}/',
+      );
+    } catch (_) {}
+
+    // 4xx bodies are the answer, not an exception: {"error": …} names the
+    // reason (timestamp/signature/binding), see [V2exEndpoints.authSolana].
+    final result = await _client.postJson(
+      V2exEndpoints.authSolana,
+      referer: '${V2exEndpoints.baseUrl}${V2exEndpoints.signIn}',
+      toleratesHttpErrors: true,
+      data: <String, dynamic>{
+        'signature': signature,
+        'message': message,
+        'public_key': publicKey,
+      },
+    );
+    if (result.isSuccess) return const V2SolanaLoginResult(success: true);
+
+    // 404 "Address is not linked to any member" — the web flow redirects to
+    // /solana/signup for binding/sign-up; the app surfaces it as structured
+    // state instead of an error string.
+    if (result.statusCode == 404) {
+      return const V2SolanaLoginResult(success: false, walletLinked: false);
+    }
+    return V2SolanaLoginResult(
+      success: false,
+      serverError: _describeSolanaError(result),
+    );
+  }
+
+  /// Maps the JSON `{"error": …}` rejection to a Chinese message the user can
+  /// act on; unknown bodies fall back to the raw server text.
+  String _describeSolanaError(HttpResult result) {
+    final raw = _solanaErrorText(result.body);
+    if (raw == null) return '登录失败（HTTP ${result.statusCode}），请稍后重试。';
+    if (raw.contains('timestamp')) return '签名已过期，请重新提交（服务端校验时间戳）。';
+    if (raw.contains('signature')) return '签名校验失败，请检查私钥是否正确。';
+    return '登录失败：$raw';
+  }
+
+  static String? _solanaErrorText(String body) {
+    if (body.isEmpty) return null;
+    try {
+      final decoded = jsonDecode(body);
+      if (decoded is Map) {
+        final error = decoded['error'];
+        if (error is String) return error;
+      }
+    } catch (_) {
+      // Not JSON — fall through to the generic message.
+    }
+    return null;
   }
 
   @override

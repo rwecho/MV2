@@ -49,3 +49,24 @@ class V2LoginResult {
   /// The server asked for the 2FA code.
   final bool twoFactor;
 }
+
+/// Outcome of a Solana wallet sign-in (`POST /auth/solana`).
+@immutable
+class V2SolanaLoginResult {
+  const V2SolanaLoginResult({
+    required this.success,
+    this.walletLinked = true,
+    this.serverError,
+  });
+
+  final bool success;
+
+  /// `false` when the signature verified but the address is not bound to any
+  /// V2EX member — the web flow answers this by sending the browser to
+  /// `/solana/signup` (binding or sign-up happens there).
+  final bool walletLinked;
+
+  /// A user-facing Chinese message for any other rejection (stale timestamp,
+  /// invalid signature, …); `null` on success.
+  final String? serverError;
+}

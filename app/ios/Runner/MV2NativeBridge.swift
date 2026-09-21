@@ -1,5 +1,6 @@
 import Flutter
 import UIKit
+import WebKit
 import WidgetKit
 
 /// Native half of the MV2 ↔ iOS integration.
@@ -90,6 +91,65 @@ final class MV2NativeBridge {
   private func reloadWidgets() {
     if #available(iOS 14.0, *) {
       WidgetCenter.shared.reloadAllTimelines()
+    }
+  }
+}
+
+/// Native half of the `mv2/web_cookies` channel (Dart:
+/// `lib/core/network/web_cookie_bridge.dart`).
+///
+/// Lives in this file rather than its own because the Runner target uses a
+/// classic pbxproj file list — a new .swift file would need project surgery.
+///
+/// Google OAuth finishes inside the in-app WKWebView, where the session cookie
+/// (`PB3_SESSION`) is HttpOnly and therefore invisible to JavaScript. Dart
+/// asks this bridge for the raw Cookie header straight from the shared
+/// `WKWebsiteDataStore` — the same store `webview_flutter` writes to — and
+/// seeds it into the Dio cookie jar.
+final class WebCookieBridge {
+  static let shared = WebCookieBridge()
+  private static let channelName = "mv2/web_cookies"
+
+  private init() {}
+
+  func configure(messenger: FlutterBinaryMessenger) {
+    let channel = FlutterMethodChannel(
+      name: Self.channelName,
+      binaryMessenger: messenger
+    )
+    channel.setMethodCallHandler { call, result in
+      switch call.method {
+      case "getCookies":
+        guard
+          let arguments = call.arguments as? [String: Any],
+          let target = arguments["url"] as? String,
+          let url = URL(string: target),
+          let host = url.host
+        else {
+          result(
+            FlutterError(
+              code: "bad-arguments",
+              message: "getCookies expects {url}",
+              details: nil
+            )
+          )
+          return
+        }
+        WKWebsiteDataStore.default().httpCookieStore.getAllCookies { cookies in
+          // Same filter Android's CookieManager.getCookie applies: only the
+          // cookies the target host would send (v2ex.com, incl. subdomains).
+          let header = cookies
+            .filter { cookie in
+              cookie.domain.hasSuffix(host) || host.hasSuffix(cookie.domain)
+            }
+            .map { "\($0.name)=\($0.value)" }
+            .joined(separator: "; ")
+          result(header)
+        }
+
+      default:
+        result(FlutterMethodNotImplemented)
+      }
     }
   }
 }

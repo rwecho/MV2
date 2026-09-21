@@ -351,6 +351,48 @@ class Mv2HttpClient {
     });
   }
 
+  /// JSON POST. `followRedirects` stays off like [postForm].
+  ///
+  /// [toleratesHttpErrors] keeps 4xx/5xx responses in the returned [HttpResult]
+  /// instead of throwing: the Solana login endpoint answers every rejection as
+  /// a status code + JSON `{"error": …}`, and the body is the actionable part.
+  Future<HttpResult> postJson(
+    String path, {
+    required Map<String, dynamic> data,
+    String? referer,
+    bool toleratesHttpErrors = false,
+  }) {
+    return _pacer.run(PacePriority.write, () async {
+      try {
+        final response = await _dio.post<String>(
+          path,
+          data: data,
+          options: Options(
+            headers: _headers(
+              referer: referer,
+              contentType: Headers.jsonContentType,
+            ),
+            responseType: ResponseType.plain,
+            followRedirects: false,
+          ),
+        );
+        final status = response.statusCode ?? 0;
+        if (status >= 400 && !toleratesHttpErrors) {
+          throw _mapStatus(status);
+        }
+        return HttpResult(
+          statusCode: status,
+          body: response.data ?? '',
+          headers: response.headers.map.map(
+            (key, value) => MapEntry(key.toLowerCase(), value),
+          ),
+        );
+      } catch (error, stack) {
+        throw mapError(error, stack, path: path);
+      }
+    });
+  }
+
   /// POST/PUT with no body (V2EX thank/ignore endpoints take `once` in the URL).
   Future<HttpResult> post(String path, {String? referer, String? userAgent}) {
     return _pacer.run(PacePriority.write, () async {

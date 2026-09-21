@@ -168,6 +168,13 @@ class _FakeWriteApi implements V2exApi {
   }) => throw UnimplementedError();
 
   @override
+  Future<V2SolanaLoginResult> loginWithSolana({
+    required String publicKey,
+    required String signature,
+    required String message,
+  }) => throw UnimplementedError();
+
+  @override
   Future<V2TopicForm> topicForm({String? node}) => throw UnimplementedError();
 
   @override

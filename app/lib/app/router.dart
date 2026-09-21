@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../core/deeplink/deep_link.dart';
 import '../core/telemetry/mv2_analytics.dart';
+import '../features/auth/presentation/google_login_page.dart';
 import '../features/auth/presentation/login_page.dart';
 import '../features/blocked/presentation/blocked_users_page.dart';
 import '../features/feed/presentation/home_feed_page.dart';
@@ -191,6 +192,11 @@ final routerProvider = Provider<GoRouter>((ref) {
         path: '/login',
         pageBuilder: (context, state) =>
             _sheet(context, state, const LoginPage()),
+      ),
+      GoRoute(
+        path: '/login/google',
+        pageBuilder: (context, state) =>
+            _sheet(context, state, const GoogleLoginPage()),
       ),
       GoRoute(
         path: '/node/:key',

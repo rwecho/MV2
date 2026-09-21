@@ -284,6 +284,15 @@ abstract final class Mv2Analytics {
   static void logLoginSubmit({required String result}) =>
       _log(Mv2Events.loginSubmit, {'result': result});
 
+  static void logLoginMethodSelect({required String method}) =>
+      _log(Mv2Events.loginMethodSelect, {'method': method});
+
+  static void logLoginGoogleSubmit({required String result}) =>
+      _log(Mv2Events.loginGoogleSubmit, {'result': result});
+
+  static void logLoginSolanaSubmit({required String result}) =>
+      _log(Mv2Events.loginSolanaSubmit, {'result': result});
+
   static void logTwoFactorSubmit({required String result}) =>
       _log(Mv2Events.twoFactorSubmit, {'result': result});
 
