@@ -162,29 +162,51 @@ class _GoogleLoginPageState extends ConsumerState<GoogleLoginPage> {
     if (_harvesting) return;
     _harvesting = true;
     try {
-      final header = await ref
-          .read(webCookieBridgeProvider)
-          .cookieHeader('${V2exEndpoints.baseUrl}/');
-      final cookies = header == null ? null : WebCookieBridge.parseHeader(header);
-      if (cookies == null || cookies.isEmpty) {
+      // OAuth 回跳后，会话 cookie 写入 WKHTTPCookieStore 比页面渲染慢一拍：
+      // DOM 已是已登录、cookie store 里可能还是旧值（xinghelee/v2ex 记录过
+      // 同样现象：「Cookie 写入稍有延迟时会短暂重试」）。所以第一次拿不到
+      // 有效会话不报错，短暂重试，耗尽才提示。
+      for (var attempt = 1; attempt <= 3; attempt++) {
+        final header = await ref
+            .read(webCookieBridgeProvider)
+            .cookieHeader('${V2exEndpoints.baseUrl}/');
+        final cookies = header == null
+            ? null
+            : WebCookieBridge.parseHeader(header);
+        if (mounted) {
+          debugPrint('MV2 Google: harvest attempt $attempt, '
+              'cookies=${cookies?.length ?? 0}');
+        }
+        if (cookies == null || cookies.isEmpty) {
+          if (attempt < 3) {
+            await Future<void>.delayed(const Duration(milliseconds: 800));
+            continue;
+          }
+          if (!mounted) return;
+          setState(() => _error = '未能读取登录会话，请重试。');
+          _harvesting = false;
+          return;
+        }
+        await ref
+            .read(authControllerProvider.notifier)
+            .signInWithCookies(cookies);
         if (!mounted) return;
-        setState(() => _error = '未能读取登录会话，请重试。');
-        _harvesting = false;
-        return;
-      }
-      await ref.read(authControllerProvider.notifier).signInWithCookies(cookies);
-      if (!mounted) return;
-      final signedIn =
-          ref.read(authControllerProvider).value?.isSignedIn ?? false;
-      if (!signedIn) {
+        final signedIn =
+            ref.read(authControllerProvider).value?.isSignedIn ?? false;
+        if (signedIn) {
+          Mv2Analytics.logLoginGoogleSubmit(result: 'success');
+          // 先关 OAuth 页，再关底下的登录页。
+          context.pop();
+          if (mounted) context.pop();
+          return;
+        }
+        if (attempt < 3) {
+          await Future<void>.delayed(const Duration(milliseconds: 800));
+          continue;
+        }
         setState(() => _error = '登录未完成，请在页面中重试。');
         _harvesting = false;
-        return;
       }
-      Mv2Analytics.logLoginGoogleSubmit(result: 'success');
-      // 先关 OAuth 页，再关底下的登录页。
-      context.pop();
-      if (mounted) context.pop();
     } catch (error) {
       if (!mounted) return;
       setState(() => _error = '登录失败：$error');
