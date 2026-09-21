@@ -20,5 +20,9 @@ import UIKit
     WebCookieBridge.shared.configure(
       messenger: engineBridge.applicationRegistrar.messenger()
     )
+    // Prompt-free clipboard probing for the V2EX-link detection.
+    ClipboardProbeBridge.shared.configure(
+      messenger: engineBridge.applicationRegistrar.messenger()
+    )
   }
 }

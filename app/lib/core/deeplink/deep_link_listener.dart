@@ -4,6 +4,7 @@ import 'package:app_links/app_links.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show Clipboard, ClipboardData;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../app/router.dart';
 import '../../features/auth/application/auth_controller.dart';
@@ -15,6 +16,7 @@ import '../push/push_payload.dart';
 import '../push/push_providers.dart';
 import '../telemetry/mv2_analytics.dart';
 import '../telemetry/mv2_events.dart';
+import 'clipboard_probe.dart';
 import 'deep_link.dart';
 
 /// Receives `mv2://` links while the app is running and offers to open V2EX
@@ -52,6 +54,13 @@ class _Mv2DeepLinkListenerState extends ConsumerState<Mv2DeepLinkListener>
   /// Last link we opened or prompted for; stops the resume loop from nagging.
   String? _lastSeen;
 
+  /// 上次已处理过的系统剪贴板计数（iOS `changeCount`），持久化到
+  /// SharedPreferences：同一段剪贴板内容跨冷启动只处理一次，否则每次
+  /// 打开 app 都会对着同一段 Mac 上的内容再弹一次「允许粘贴」。
+  static const String _pasteboardCountKey = 'mv2.clipboard.handledChangeCount';
+  int? _handledPasteboardCount;
+  bool _pasteboardCountReady = false;
+
   String get _layout => mv2IsTwoPane(context) ? 'tablet' : 'phone';
 
   @override
@@ -66,8 +75,16 @@ class _Mv2DeepLinkListenerState extends ConsumerState<Mv2DeepLinkListener>
     _startPush();
     _startQuickActions();
     // On a cold start the `resumed` callback has already fired before this
-    // widget mounts, so check the pasteboard once here as well.
-    WidgetsBinding.instance.addPostFrameCallback((_) {
+    // widget mounts, so check the pasteboard once here as well — after the
+    // persisted change counter loaded, or the first launch would re-read a
+    // clipboard it has already offered on.
+    SharedPreferences.getInstance().then((prefs) {
+      _handledPasteboardCount = prefs.getInt(_pasteboardCountKey);
+      _pasteboardCountReady = true;
+      unawaited(_offerClipboardLink());
+    }).catchError((Object _) {
+      // 测试/无插件环境：没有持久化计数也照样工作（退化为每次会话检测）。
+      _pasteboardCountReady = true;
       unawaited(_offerClipboardLink());
     });
   }
@@ -198,10 +215,27 @@ class _Mv2DeepLinkListenerState extends ConsumerState<Mv2DeepLinkListener>
     }
   }
 
-  /// Reading the pasteboard makes iOS show its "允许粘贴" prompt, so this only
-  /// runs when the app comes back to the foreground, and only offers the link
-  /// once.
+  /// Reading the pasteboard makes iOS show its "允许粘贴" prompt, so the raw
+  /// read is the LAST step, behind two prompt-free gates from
+  /// [ClipboardProbe]: the pasteboard must have changed since the last
+  /// handled check (`changeCount`, persisted — the same Mac-side clipboard
+  /// must not re-prompt on every launch), and it must look like a web URL
+  /// (`detectPatterns`). Only a genuinely new link pays the prompt, with the
+  /// offer appearing right after it.
   Future<void> _offerClipboardLink() async {
+    if (!_pasteboardCountReady) return;
+    final probe = ref.read(clipboardProbeProvider);
+    final count = await probe.changeCount();
+    final counted = count != null;
+    if (counted && count == _handledPasteboardCount) return;
+
+    final probable = await probe.hasProbableWebURL();
+    if (probable == false) {
+      // 不是链接：记住这个计数，同一段内容不再反复探测。
+      if (counted) await _rememberPasteboardCount(count);
+      return;
+    }
+
     final ClipboardData? data;
     try {
       data = await Clipboard.getData(Clipboard.kTextPlain);
@@ -209,13 +243,15 @@ class _Mv2DeepLinkListenerState extends ConsumerState<Mv2DeepLinkListener>
       return;
     }
     if (!mounted) return;
+    final messenger = ScaffoldMessenger.of(context);
+    if (counted) await _rememberPasteboardCount(count);
+
     final text = data?.text;
     final route = Mv2DeepLink.routeFor(text);
     final url = Mv2DeepLink.urlIn(text);
     if (route == null || url == null || url == _lastSeen) return;
     _lastSeen = url;
 
-    final messenger = ScaffoldMessenger.of(context);
     messenger.hideCurrentSnackBar();
     Mv2Analytics.logClipboardOffer(action: 'shown');
     messenger.showSnackBar(
@@ -231,6 +267,16 @@ class _Mv2DeepLinkListenerState extends ConsumerState<Mv2DeepLinkListener>
         ),
       ),
     );
+  }
+
+  Future<void> _rememberPasteboardCount(int count) async {
+    _handledPasteboardCount = count;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setInt(_pasteboardCountKey, count);
+    } catch (_) {
+      // 持久化失败只影响跨启动去重，本会话内的闸门仍然有效。
+    }
   }
 
   @override

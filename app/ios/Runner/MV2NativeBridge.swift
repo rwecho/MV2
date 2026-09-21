@@ -173,3 +173,51 @@ final class WebCookieBridge {
     }
   }
 }
+
+/// Native half of the `mv2/clipboard` channel (Dart:
+/// `lib/core/deeplink/clipboard_probe.dart`).
+///
+/// iOS 16+ 会给每次代码读取剪贴板弹「允许粘贴」确认。这个探针暴露两个
+/// Apple 提供的**无提示**检测接口：`changeCount` 与 `detectPatterns` ——
+/// 读它们不会触发确认，Dart 只有在「剪贴板变化过且疑似网页链接」时才
+/// 真正读内容，让系统确认只在真的有新链接可打开时出现一次。
+final class ClipboardProbeBridge {
+  static let shared = ClipboardProbeBridge()
+  private static let channelName = "mv2/clipboard"
+
+  private init() {}
+
+  func configure(messenger: FlutterBinaryMessenger) {
+    let channel = FlutterMethodChannel(
+      name: Self.channelName,
+      binaryMessenger: messenger
+    )
+    channel.setMethodCallHandler { call, result in
+      switch call.method {
+      case "changeCount":
+        // 读计数不触发粘贴确认。
+        result(Int(UIPasteboard.general.changeCount))
+
+      case "hasProbableWebURL":
+        if #available(iOS 16.0, *) {
+          UIPasteboard.general.detectPatterns(
+            for: [.probableWebURL]
+          ) { outcome in
+            switch outcome {
+            case .success(let patterns):
+              result(patterns.contains(.probableWebURL))
+            case .failure:
+              // 检测失败按「可能是链接」处理：回退到真正读取的旧行为。
+              result(true)
+            }
+          }
+        } else {
+          result(true)
+        }
+
+      default:
+        result(FlutterMethodNotImplemented)
+      }
+    }
+  }
+}

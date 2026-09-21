@@ -37,6 +37,17 @@ class MainActivity : FlutterActivity() {
                     else -> result.notImplemented()
                 }
             }
+        // Android 没有 iOS 那种粘贴确认弹窗，剪贴板检测保持原有每次读取行为：
+        // changeCount 无对应 API 返回 -1（Dart 归一为 null → 跳过计数闸门），
+        // hasProbableWebURL 恒 true（直接读取）。
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "mv2/clipboard")
+            .setMethodCallHandler { call, result ->
+                when (call.method) {
+                    "changeCount" -> result.success(-1)
+                    "hasProbableWebURL" -> result.success(true)
+                    else -> result.notImplemented()
+                }
+            }
     }
 
     /**
