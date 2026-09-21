@@ -37,6 +37,26 @@ class WebCookieBridge {
     }
   }
 
+  /// Clears cookies before starting a fresh OAuth flow in the WebView, so the
+  /// `once`/state 绑定到一个干净的匿名会话，且不会把上一次登录留下的旧会话
+  /// 误判成「已登录」。
+  ///
+  /// Android 的 `android.webkit.CookieManager` 没有按域删除的 API，只能清空
+  /// 整个 app 内 WebView 的 cookie jar（本 app 的 WebView 只用于登录与视频
+  /// 播放，代价可忽略）；iOS 按 [url] 的 host 过滤删除。
+  Future<void> clearCookies(String url) async {
+    try {
+      await channel.invokeMethod<void>(
+        'clearCookies',
+        <String, String>{'url': url},
+      );
+    } on MissingPluginException {
+      // No native side (tests, unsupported platforms) — nothing to clear.
+    } on PlatformException {
+      // Best-effort: a failed clear must not block the login page.
+    }
+  }
+
   /// Parses `k=v; k2=v2` into cookies bound to the v2ex domain.
   static List<Cookie> parseHeader(String header) {
     final cookies = <Cookie>[];

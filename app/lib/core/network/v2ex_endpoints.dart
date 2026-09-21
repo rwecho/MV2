@@ -1,3 +1,5 @@
+import 'dart:io' show Platform;
+
 /// V2EX endpoints, header values and the Chinese literals the HTML pages use as
 /// state signals (`docs/12-v2ex-api-inventory.md`).
 ///
@@ -46,6 +48,24 @@ abstract final class V2exEndpoints {
   static const String desktopWriteUserAgent =
       'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 '
       '(KHTML, like Gecko) Chrome/139.0.0.0 Safari/537.36';
+
+  /// iPhone 上的真实 Chrome（CriOS）—— Google OAuth WebView 专用。
+  ///
+  /// Google 拒绝在嵌入式 WebView 里登录（"This browser or app may not be
+  /// secure"），判定不止看 UA，但 UA 是第一道门：iPhone 设备上出现桌面
+  /// macOS UA 本身就是不一致信号；与本机平台自洽的真实浏览器 UA 通过率
+  /// 更高。Android 同理用真实 Android Chrome。
+  static const String iPhoneChromeOAuthUserAgent =
+      'Mozilla/5.0 (iPhone; CPU iPhone OS 18_5 like Mac OS X) '
+      'AppleWebKit/605.1.15 (KHTML, like Gecko) CriOS/139.0.0.0 '
+      'Mobile/15E148 Safari/604.1';
+
+  /// The OAuth WebView UA for the current platform.
+  static String oauthUserAgent() {
+    if (Platform.isIOS) return iPhoneChromeOAuthUserAgent;
+    if (Platform.isAndroid) return androidWriteUserAgent();
+    return desktopWriteUserAgent;
+  }
 
   // ----------------------------------------------------------------- reads
 

@@ -147,6 +147,26 @@ final class WebCookieBridge {
           result(header)
         }
 
+      case "clearCookies":
+        // 登录前清掉 v2ex.com 的旧会话，保证 OAuth 起点干净（Android 侧因
+        // CookieManager 没有按域 API 是整 jar 清空；iOS 可以精确过滤）。
+        let store = WKWebsiteDataStore.default().httpCookieStore
+        store.getAllCookies { cookies in
+          let stale = cookies.filter { $0.domain.contains("v2ex.com") }
+          guard !stale.isEmpty else {
+            result(nil)
+            return
+          }
+          let group = DispatchGroup()
+          DispatchQueue.main.async {
+            for cookie in stale {
+              group.enter()
+              store.delete(cookie) { group.leave() }
+            }
+            group.notify(queue: .main) { result(nil) }
+          }
+        }
+
       default:
         result(FlutterMethodNotImplemented)
       }

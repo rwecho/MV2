@@ -55,4 +55,35 @@ void main() {
       expect(header, isNull);
     });
   });
+
+  group('WebCookieBridge.clearCookies', () {
+    test('forwards the origin url to the native side', () async {
+      const channel = MethodChannel('mv2/web_cookies/clear-test');
+      final binding = TestDefaultBinaryMessengerBinding.instance;
+      Object? received;
+      binding.defaultBinaryMessenger.setMockMethodCallHandler(channel, (call) async {
+        expect(call.method, 'clearCookies');
+        received = call.arguments;
+        return null;
+      });
+      addTearDown(
+        () => binding.defaultBinaryMessenger.setMockMethodCallHandler(
+          channel,
+          null,
+        ),
+      );
+
+      await WebCookieBridge(
+        channel: channel,
+      ).clearCookies('https://www.v2ex.com/');
+      expect(received, <String, String>{'url': 'https://www.v2ex.com/'});
+    });
+
+    test('a missing platform side is a no-op, not a crash', () async {
+      const channel = MethodChannel('mv2/web_cookies/clear-missing');
+      await WebCookieBridge(
+        channel: channel,
+      ).clearCookies('https://www.v2ex.com/');
+    });
+  });
 }

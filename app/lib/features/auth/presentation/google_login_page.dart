@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -22,8 +24,15 @@ import '../../auth/application/auth_controller.dart';
 ///
 /// 为什么这里是 WebView 而登录表单不是：OAuth 必须在 v2ex.com 的浏览器会话
 /// 里走完（state/cookie 校验 + Google 对嵌入式 UA 的风控），无法用原生表单
-/// 复刻。桌面 Chrome UA 一是为了绕开 Google "此浏览器可能不安全" 的拦截，
-/// 二是 V2EX 对 UA 无 DOM 差异（见 `V2exEndpoints.userAgent` 注释）。
+/// 复刻。UA 用与本机平台自洽的真实浏览器（iPhone → CriOS）：桌面 UA 出现在
+/// iPhone 上是不一致信号，Google 风控会直接拦（"This browser or app may
+/// not be secure"）。加载前先清掉 WebView 里 v2ex.com 的残留 cookie，保证
+/// `once`/state 绑定干净的匿名会话。
+///
+/// V2EX 的 `/signin`（桌面布局）只是取 `once` 的中间步骤，不等它渲染完成
+/// 就被隐藏：WebView 加载后立即注入 JS 跳转 Google，用户看到的是加载态 →
+/// Google 页面。超过 [_revealTimeout] 仍未跳转则放行显示，用户可手动点
+/// 页面里的按钮。
 class GoogleLoginPage extends ConsumerStatefulWidget {
   const GoogleLoginPage({super.key});
 
@@ -32,12 +41,12 @@ class GoogleLoginPage extends ConsumerStatefulWidget {
 }
 
 class _GoogleLoginPageState extends ConsumerState<GoogleLoginPage> {
-  /// Desktop Chrome on macOS —— Google 接受它发起 OAuth。
-  static const String _userAgent = V2exEndpoints.desktopWriteUserAgent;
+  /// 隐藏 V2EX 取令牌页的最长时间；超时放行（跳转失败时用户仍可手动操作）。
+  static const Duration _revealTimeout = Duration(seconds: 6);
 
   late final WebViewController _web = WebViewController()
     ..setJavaScriptMode(JavaScriptMode.unrestricted)
-    ..setUserAgent(_userAgent)
+    ..setUserAgent(V2exEndpoints.oauthUserAgent())
     ..setNavigationDelegate(
       NavigationDelegate(
         onProgress: (progress) {
@@ -45,8 +54,7 @@ class _GoogleLoginPageState extends ConsumerState<GoogleLoginPage> {
         },
         onPageFinished: (_) => _onPageSettled(),
       ),
-    )
-    ..loadRequest(Uri.parse('${V2exEndpoints.baseUrl}${V2exEndpoints.signIn}'));
+    );
 
   int _progress = 0;
 
@@ -57,20 +65,65 @@ class _GoogleLoginPageState extends ConsumerState<GoogleLoginPage> {
   /// Cookie 收割是一次性动作：签名检查可能触发多次导航事件。
   bool _harvesting = false;
 
+  /// V2EX 取令牌页是否已放行显示。
+  bool _revealed = false;
+  Timer? _revealTimer;
+
   String? _error;
 
-  /// Runs after every page load. Two concerns, both keyed on the URL:
-  /// starting the OAuth from a fresh `/signin`, and detecting the signed-in
-  /// landing page the callback eventually reaches.
+  @override
+  void initState() {
+    super.initState();
+    _revealTimer = Timer(_revealTimeout, _reveal);
+    _prepareAndLoad();
+  }
+
+  @override
+  void dispose() {
+    _revealTimer?.cancel();
+    super.dispose();
+  }
+
+  /// 残留 cookie 必须在第一次页面加载前清掉，否则 V2EX 可能直接 302 走
+  /// `/signin`（旧会话还在），OAuth 的 `once` 就绑不到干净会话上。
+  Future<void> _prepareAndLoad() async {
+    await ref
+        .read(webCookieBridgeProvider)
+        .clearCookies('${V2exEndpoints.baseUrl}/');
+    await _web.loadRequest(Uri.parse('${V2exEndpoints.baseUrl}${V2exEndpoints.signIn}'));
+  }
+
+  void _reveal() {
+    _revealTimer?.cancel();
+    if (!mounted || _revealed) return;
+    setState(() => _revealed = true);
+  }
+
+  /// Runs after every page load. Three concerns, all keyed on the URL:
+  /// revealing the page once we leave the token-grab `/signin`, starting the
+  /// OAuth from that page, and detecting the signed-in landing page the
+  /// callback eventually reaches.
   Future<void> _onPageSettled() async {
     if (_harvesting) return;
     final url = Uri.tryParse(await _web.currentUrl() ?? '');
-    if (url == null || url.host != V2exEndpoints.host) return;
+    if (url == null) return;
+
+    final onV2exSignin =
+        url.host == V2exEndpoints.host && url.path == V2exEndpoints.signIn;
+    if (!onV2exSignin) _reveal();
+
+    if (url.host != V2exEndpoints.host) return;
 
     if (url.path == V2exEndpoints.signIn) {
       if (!_authStarted) {
         _authStarted = true;
         await _startGoogleAuth();
+      } else if (_error == null) {
+        // 取消或失败后 V2EX 退回 /signin；放行页面让用户直接重试。
+        setState(() {
+          _revealed = true;
+          _error = 'Google 登录未完成，可在页面中重试或关闭后重来。';
+        });
       }
       return;
     }
@@ -85,7 +138,6 @@ class _GoogleLoginPageState extends ConsumerState<GoogleLoginPage> {
       return;
     }
     if (mounted && _authStarted && _error == null && url.path != '/auth/google') {
-      // 取消或失败后 V2EX 退回 /signin；提示但不关页面，用户可以直接重试。
       setState(() => _error = 'Google 登录未完成，可在页面中重试或关闭后重来。');
     }
   }
@@ -196,7 +248,26 @@ class _GoogleLoginPageState extends ConsumerState<GoogleLoginPage> {
                 ),
               ),
             ),
-          Expanded(child: WebViewWidget(controller: _web)),
+          Expanded(
+            // IndexedStack 而不是条件渲染：WebView 必须保持挂载，取令牌页
+            // 上的 JS 跳转才不会被打断。
+            child: IndexedStack(
+              index: _revealed ? 0 : 1,
+              children: <Widget>[
+                WebViewWidget(controller: _web),
+                Center(
+                  child: SizedBox(
+                    width: 24,
+                    height: 24,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2.5,
+                      valueColor: AlwaysStoppedAnimation<Color>(colors.accent),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
         ],
       ),
     );
