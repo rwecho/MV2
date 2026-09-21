@@ -1,4 +1,3 @@
-• Instant home feed: recently viewed tabs open instantly, then refresh silently in the background
-• Fixed topic pages opened from push or links having no back stack; system back no longer exits the app
-• Clearer success feedback (toast + haptic) when posting or replying
+• New: sign in with Google — tap "Sign in with Google" on the sign-in page and the app returns automatically after authorization
+• Fixed a "page not found" error when opening unrecognized links; mv2://login now jumps straight to the sign-in page
 • Stability and performance improvements
