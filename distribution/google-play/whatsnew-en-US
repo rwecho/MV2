@@ -1,3 +1,3 @@
-• Fixed comment references: replying to a comment now seeds "@user #floor", so the author gets notified and the reference jumps to that floor
-• Emoticon images now render inline like emoji instead of taking a whole row or opening the image viewer
+• New: the profile page now offers "Rate MV2", "Redeem code" and "Share with friends" shortcuts
+• "Redeem code" opens the store's built-in redemption screen — just enter your promo code there
 • Stability and performance improvements
