@@ -98,6 +98,38 @@ class Mv2RichText extends StatefulWidget {
       ? href.substring('https://www.v2ex.com'.length)
       : href;
 
+  /// Upper display size for an emoticon, in logical pixels.
+  static const double _maxEmoticonSize = 28;
+
+  /// V2EX serves emoticons from its own static tree; user content images come
+  /// from external hosts (imgur, …).
+  static final RegExp _emoticonUrlPattern = RegExp(
+    r'/static/img/|smiles?/|emoticon',
+    caseSensitive: false,
+  );
+
+  /// A small decoration image rendered mid-line between words (V2EX 表情),
+  /// not a content picture: the heart in a topic title is
+  /// `<img src="/static/img/heart….png" width="14" align="absmiddle" alt="❤️">`.
+  ///
+  /// `align="absmiddle"`, a tiny explicit size, or a known emoticon URL marks
+  /// one. An explicit size larger than [_maxEmoticonSize] always wins — that is
+  /// a real picture that happens to sit on a V2EX URL.
+  @visibleForTesting
+  static bool isEmoticon(dom.Element node) {
+    if (node.localName != 'img') return false;
+    final width = int.tryParse(node.attributes['width'] ?? '');
+    final height = int.tryParse(node.attributes['height'] ?? '');
+    if ((width ?? 0) > _maxEmoticonSize || (height ?? 0) > _maxEmoticonSize) {
+      return false;
+    }
+    if ((node.attributes['align'] ?? '').toLowerCase() == 'absmiddle') {
+      return true;
+    }
+    if (width != null || height != null) return true;
+    return _emoticonUrlPattern.hasMatch(node.attributes['src'] ?? '');
+  }
+
   @override
   State<Mv2RichText> createState() => _Mv2RichTextState();
 }
@@ -163,8 +195,15 @@ class _Mv2RichTextState extends State<Mv2RichText> {
       final run = List<dom.Node>.of(pending);
       pending.clear();
       // Whitespace-only runs (the newline between `</p>` and `<p>`) must not
-      // become blank blocks.
-      if (run.map((node) => node.text).join().trim().isEmpty) return;
+      // become blank blocks. A run holding an element is content — an emoticon
+      // `<img>` alone in a paragraph has no text at all, yet must survive.
+      // A lone `<br>` between blocks stays droppable, as before.
+      final hasContent = run.any(
+        (node) =>
+            (node is dom.Element && node.localName != 'br') ||
+            (node is dom.Text && node.text.trim().isNotEmpty),
+      );
+      if (!hasContent) return;
       blocks.add(_inlineText(context, run, style));
     }
 
@@ -207,10 +246,17 @@ class _Mv2RichTextState extends State<Mv2RichText> {
   static bool _isInline(dom.Node node) {
     if (node is dom.Text) return true;
     if (node is dom.Element) {
+      // An emoticon `<img>` rides the text line like a glyph (`_spans` renders
+      // it as a `WidgetSpan`); only content images take the block path.
+      if (node.localName == 'img') return Mv2RichText.isEmoticon(node);
       // `<a><img></a>` is a block picture, not running text: keeping the anchor
       // inline would route it through `_spans`, which renders the anchor's
-      // (empty) text and drops the image entirely.
-      if (node.localName == 'a' && _linkedImage(node) != null) return false;
+      // (empty) text and drops the image entirely. An emoticon is the
+      // exception — it flows with the text after all.
+      if (node.localName == 'a') {
+        final image = _linkedImage(node);
+        if (image != null) return Mv2RichText.isEmoticon(image);
+      }
       return _inlineTags.contains(node.localName);
     }
     return false;
@@ -525,11 +571,14 @@ class _Mv2RichTextState extends State<Mv2RichText> {
   }
 
   /// Depth-first `img` sources, matching what [_image] renders so the tapped
-  /// image's position in the gallery is correct.
+  /// image's position in the gallery is correct. Emoticons never open the
+  /// viewer, so they stay out of the gallery.
   static List<String> _collectImages(dom.Node root) {
     final images = <String>[];
     void visit(dom.Node node) {
-      if (node is dom.Element && node.localName == 'img') {
+      if (node is dom.Element &&
+          node.localName == 'img' &&
+          !Mv2RichText.isEmoticon(node)) {
         final src = absoluteV2exUrl(node.attributes['src']);
         if (src != null) images.add(src);
       }
@@ -569,8 +618,9 @@ class _Mv2RichTextState extends State<Mv2RichText> {
   List<InlineSpan> _spans(
     BuildContext context,
     List<dom.Node> nodes,
-    TextStyle style,
-  ) {
+    TextStyle style, {
+    String? linkHref,
+  }) {
     final colors = context.colors;
     final spans = <InlineSpan>[];
 
@@ -617,6 +667,8 @@ class _Mv2RichTextState extends State<Mv2RichText> {
       switch (node.localName) {
         case 'br':
           spans.add(const TextSpan(text: '\n'));
+        case 'img':
+          spans.add(_emoticonSpan(context, node, style, linkHref: linkHref));
         case 'strong':
         case 'b':
           spans.addAll(
@@ -624,6 +676,7 @@ class _Mv2RichTextState extends State<Mv2RichText> {
               context,
               node.nodes,
               style.copyWith(fontWeight: FontWeight.w600),
+              linkHref: linkHref,
             ),
           );
         case 'em':
@@ -633,6 +686,7 @@ class _Mv2RichTextState extends State<Mv2RichText> {
               context,
               node.nodes,
               style.copyWith(fontStyle: FontStyle.italic),
+              linkHref: linkHref,
             ),
           );
         case 'code':
@@ -650,6 +704,22 @@ class _Mv2RichTextState extends State<Mv2RichText> {
           );
         case 'a':
           final href = node.attributes['href'];
+          // An emoticon `<img>` wrapped in a link stays on the text line; the
+          // image span itself carries the link tap (`TextSpan.recognizer`
+          // would only cover the anchor's — here empty — text).
+          if (node.nodes.any(
+            (child) => child is dom.Element && Mv2RichText.isEmoticon(child),
+          )) {
+            spans.addAll(
+              _spans(
+                context,
+                node.nodes,
+                style.copyWith(color: colors.accent),
+                linkHref: href,
+              ),
+            );
+            continue;
+          }
           // `@user #5`: the name itself is part of the floor reference, so it
           // jumps too — the user asked for "click → go to floor 5", and the
           // name is the big tap target. A plain `@user` still falls through to
@@ -687,10 +757,79 @@ class _Mv2RichTextState extends State<Mv2RichText> {
             }
           }
         default:
-          spans.addAll(_spans(context, node.nodes, style));
+          spans.addAll(_spans(context, node.nodes, style, linkHref: linkHref));
       }
     }
     return spans;
+  }
+
+  /// Inline rendering for an emoticon `<img>` (`isEmoticon` classified it).
+  ///
+  /// A Unicode `alt` (the heart carries `alt="❤️"`) becomes plain text — no
+  /// fetch, impossible to break the line. Anything else becomes a `WidgetSpan`
+  /// image sized to its markup dimension or one line height, falling back to
+  /// the `alt` glyph when the fetch fails. A wrapping link's [linkHref] moves
+  /// onto the image itself.
+  InlineSpan _emoticonSpan(
+    BuildContext context,
+    dom.Element node,
+    TextStyle style, {
+    String? linkHref,
+  }) {
+    final alt = node.attributes['alt']?.trim() ?? '';
+    TapGestureRecognizer? recognizer;
+    if (linkHref != null) {
+      recognizer = TapGestureRecognizer()
+        ..onTap = () => _openLink(context, linkHref);
+      _recognizers.add(recognizer);
+    }
+    if (alt.isNotEmpty && _unicodeGlyph(alt)) {
+      return TextSpan(text: alt, style: style, recognizer: recognizer);
+    }
+    final src = absoluteV2exUrl(node.attributes['src']);
+    if (src == null) return TextSpan(text: alt);
+
+    final size = _emoticonSize(node, style);
+    return WidgetSpan(
+      alignment: PlaceholderAlignment.middle,
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: linkHref == null ? null : () => _openLink(context, linkHref),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 1),
+          child: SizedBox(
+            width: size,
+            height: size,
+            child: CachedNetworkImage(
+              imageUrl: src,
+              fit: BoxFit.contain,
+              placeholder: (context, _) => const SizedBox.shrink(),
+              errorWidget: (context, _, _) =>
+                  alt.isEmpty ? const SizedBox.shrink() : Text(alt, style: style),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// Short all-non-ASCII strings — `❤️`, `😂` — that V2EX puts in an emoticon's
+  /// `alt`: render them as the emoji itself. ASCII fallbacks (`:)`) are kept
+  /// for the image-failure path only.
+  static bool _unicodeGlyph(String value) {
+    final runes = value.runes.toList(growable: false);
+    if (runes.isEmpty || runes.length > 8) return false;
+    return runes.every((rune) => rune >= 0x2000);
+  }
+
+  /// Display size for an inline emoticon: the markup's own dimension when
+  /// given (the heart is `width="14"`), otherwise one line height so it reads
+  /// like a glyph.
+  static double _emoticonSize(dom.Element node, TextStyle style) {
+    final width = double.tryParse(node.attributes['width'] ?? '');
+    final height = double.tryParse(node.attributes['height'] ?? '');
+    final size = width ?? height ?? (style.fontSize ?? 15) * 1.3;
+    return size.clamp(8.0, Mv2RichText._maxEmoticonSize).toDouble();
   }
 
   /// Splits [text] on `#N` floor references, rendering each as a jump chip.
