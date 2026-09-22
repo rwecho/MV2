@@ -65,6 +65,9 @@ dependencies:
   json_annotation: ^4.12.0
   url_launcher: ^6.3.2
   share_plus: ^13.3.0
+  # 「我的」页给个好评：Play 系统内评分弹窗（iOS 按钮直达商店写评价页，
+  # 不走它，见 features/profile/application/app_promotion.dart）。
+  in_app_review: ^2.0.10
   image_picker: ^1.2.3
   webview_flutter: ^4.14.1
   app_links: ^7.2.1

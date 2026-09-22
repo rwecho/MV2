@@ -18,6 +18,7 @@ import '../../../ui/primitives/mv2_avatar.dart';
 import '../../../ui/primitives/mv2_buttons.dart';
 import '../../auth/application/auth_controller.dart';
 import '../../auth/application/daily_mission_providers.dart';
+import '../application/app_promotion.dart';
 import '../application/profile_providers.dart';
 
 /// `我的` tab — `designs/07-profile-my.png`.
@@ -72,14 +73,32 @@ class ProfilePage extends ConsumerWidget {
               ),
 
             // ------------------------------------------------------- support
-            // 赞助榜：所有买断永久版的支持者（镜像设置页「支持」分组的样式，
-            // 不带分组徽章）。
+            // 赞助榜 + 推广入口（给个好评/兑换码/分享给朋友）：支持这个 App
+            // 的方式收进同一组（镜像设置页设置分组的样式，不带分组徽章）。
+            // 商店专属的两项在桌面/Web/鸿蒙没有意义，只在 iOS/Android 显示。
             Mv2SettingsGroup(
               children: <Widget>[
                 Mv2SettingsRow(
                   label: '赞助榜',
                   icon: Icons.volunteer_activism_outlined,
                   onTap: () => context.push('/honors?source=profile'),
+                ),
+                if (AppPromotion.onStorePlatform) ...<Widget>[
+                  Mv2SettingsRow(
+                    label: '给个好评',
+                    icon: Icons.thumb_up_outlined,
+                    onTap: () => AppPromotion.requestReview(context),
+                  ),
+                  Mv2SettingsRow(
+                    label: '兑换码',
+                    icon: Icons.redeem_outlined,
+                    onTap: () => AppPromotion.openRedeem(context),
+                  ),
+                ],
+                Mv2SettingsRow(
+                  label: '分享给朋友',
+                  icon: Icons.share_outlined,
+                  onTap: () => AppPromotion.shareApp(context),
                   showDivider: false,
                 ),
               ],

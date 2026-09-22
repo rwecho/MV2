@@ -394,6 +394,13 @@ abstract final class Mv2Analytics {
   static void logHonorJoin({required String result}) =>
       _log(Mv2Events.honorJoin, {'result': result});
 
+  static void logAppReview({required String method}) =>
+      _log(Mv2Events.appReview, {'method': method});
+
+  static void logAppRedeem() => _log(Mv2Events.appRedeem, const {});
+
+  static void logAppShare() => _log(Mv2Events.appShare, const {});
+
   // ------------------------------------------------------------------
   // 用户属性
   // ------------------------------------------------------------------

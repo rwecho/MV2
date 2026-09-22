@@ -220,6 +220,20 @@ abstract final class Mv2Events {
   static const String honorJoin = 'honor_join';
 
   // ------------------------------------------------------------------
+  // App 推广
+  // ------------------------------------------------------------------
+
+  /// 给个好评。`method`: write_review_page(商店写评价页)|native_dialog(系统
+  /// 评分弹窗)|store_page(弹窗不可用退商店详情页)|github(无商店平台)
+  static const String appReview = 'app_review';
+
+  /// 打开应用商店的兑换码界面（应用内不做自己的输入框）。
+  static const String appRedeem = 'app_redeem';
+
+  /// 分享应用(share_plus 不回调用户选的渠道,故无 channel 参数)。
+  static const String appShare = 'app_share';
+
+  // ------------------------------------------------------------------
   // 设置与数据
   // ------------------------------------------------------------------
 
@@ -303,6 +317,9 @@ abstract final class Mv2Events {
     restoreResult: ['result'],
     honorWallOpen: ['source'],
     honorJoin: ['result'],
+    appReview: ['method'],
+    appRedeem: [],
+    appShare: [],
   };
 
   /// 文本长度分桶(回复/标题/搜索词),避免记录原文。
