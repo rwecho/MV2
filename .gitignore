@@ -38,3 +38,6 @@ preferences.json
 **/Raw/wwwroot/manifest.json
 **/Raw/wwwroot/vite.svg
 *.lscache
+
+# ZCode local session data
+.zcode/
