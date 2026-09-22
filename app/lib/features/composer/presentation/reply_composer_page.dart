@@ -126,8 +126,8 @@ class _ReplyComposerPageState extends ConsumerState<ReplyComposerPage> {
       Mv2Analytics.logDraftAction(composer: 'reply', action: 'restored');
       return;
     }
-    // Fresh composer: seed the floor marker only when there is no draft to
-    // avoid splicing it into text the user already wrote.
+    // Fresh composer: seed the `@user #floor` reference only when there is no
+    // draft, to avoid splicing it into text the user already wrote.
     final initial = widget.initialText;
     if (initial != null && initial.isNotEmpty && _controller.text.isEmpty) {
       _controller.text = initial;

@@ -388,50 +388,16 @@ void main() {
   });
 
   group('mv2ReplyFloorPrefill', () {
-    V2Reply reply(int floor, String author) => V2Reply(
-      floor: floor,
-      author: V2User(username: author),
-      content: '内容',
-      createdAtLabel: '1 小时前',
-    );
+    test('always seeds the @user #floor reference', () {
+      // The mention is what fires V2EX's notification, so every reply opened
+      // from a comment carries it — not just the ambiguous-author case.
+      expect(mv2ReplyFloorPrefill(author: 'alice', floor: 1), '@alice #1 ');
+      expect(mv2ReplyFloorPrefill(author: 'bob', floor: 33), '@bob #33 ');
+    });
 
-    test('seeds #floor only when the author is ambiguous', () {
-      final replies = <V2Reply>[reply(1, 'alice'), reply(2, 'bob')];
-      // Single reply by alice and nothing more to load: no marker.
-      expect(
-        mv2ReplyFloorPrefill(
-          author: 'alice',
-          floor: 1,
-          replies: replies,
-          hasMore: false,
-        ),
-        isNull,
-      );
-      // bob has two replies → disambiguate.
-      final twoBobs = <V2Reply>[
-        reply(1, 'bob'),
-        reply(2, 'alice'),
-        reply(3, 'bob'),
-      ];
-      expect(
-        mv2ReplyFloorPrefill(
-          author: 'bob',
-          floor: 3,
-          replies: twoBobs,
-          hasMore: false,
-        ),
-        '#3 ',
-      );
-      // Unloaded later pages could hold another reply → disambiguate.
-      expect(
-        mv2ReplyFloorPrefill(
-          author: 'alice',
-          floor: 1,
-          replies: replies,
-          hasMore: true,
-        ),
-        '#1 ',
-      );
+    test('anonymous replies seed the bare floor marker', () {
+      expect(mv2ReplyFloorPrefill(author: '匿名', floor: 3), '#3 ');
+      expect(mv2ReplyFloorPrefill(author: '', floor: 3), '#3 ');
     });
   });
 

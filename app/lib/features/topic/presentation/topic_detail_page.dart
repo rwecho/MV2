@@ -850,8 +850,8 @@ class _TopicDetailBodyState extends ConsumerState<_TopicDetailBody> {
 
   /// Opens the composer quoting [reply] as a modal sheet, carrying the tapped
   /// reply so a quote from an infinite-scrolled page still renders (the provider
-  /// cache only holds page 1) plus a `#floor` disambiguator when a bare `@user`
-  /// would be ambiguous. [source]: quote(引用按钮)|long_press(长按菜单).
+  /// cache only holds page 1), seeded with `@user #floor` so the posted comment
+  /// references it. [source]: quote(引用按钮)|long_press(长按菜单).
   void _openComposerFor(V2Reply reply, {required String source}) {
     Mv2Analytics.logReplyOpen(topicId: widget.topicId, source: source);
     showReplyComposer(
@@ -863,15 +863,12 @@ class _TopicDetailBodyState extends ConsumerState<_TopicDetailBody> {
     );
   }
 
-  /// `#5 ` when the referenced author has several replies, or when later pages
-  /// are still unloaded and could hold more. V2EX does not record the reply
-  /// target, so V2EX Polish seeds the same marker on the client (its
-  /// `processActions`); with it, `@user #5` is unambiguous.
+  /// `@user #5 ` seeded so the posted comment actually references the tapped
+  /// one — without the mention, V2EX never notifies the author and the reply
+  /// points at nothing.
   String? _replyPrefill(V2Reply reply) => mv2ReplyFloorPrefill(
     author: reply.author.username,
     floor: reply.floor,
-    replies: _replies,
-    hasMore: _hasMore,
   );
 
   /// 感谢回复。楼层号只有 UI 拿得到,所以 `reply_thank` 在这里记而不是在
@@ -1345,21 +1342,18 @@ class _LinkPreviewCard extends StatelessWidget {
   }
 }
 
-/// `#5 ` when [author] has several replies in [replies], or when [hasMore]
-/// pages could still hold another.
+/// `@author #floor ` seeded when the composer opens for a specific comment.
 ///
-/// With one author reply and everything loaded, a bare `@user` is already
-/// unambiguous, so nothing is seeded. Exposed for tests.
+/// V2EX has no structured reply target: the `@username` is what fires the
+/// site's notification (and drives the in-app `@user #N` tap-to-jump), and the
+/// `#floor` disambiguates when the member wrote several comments. Anonymous
+/// replies have no member to mention, so they seed the bare floor marker.
+/// Exposed for tests.
 @visibleForTesting
-String? mv2ReplyFloorPrefill({
-  required String author,
-  required int floor,
-  required Iterable<V2Reply> replies,
-  required bool hasMore,
-}) {
-  final sameAuthor = replies.where((r) => r.author.username == author).length;
-  if (sameAuthor <= 1 && !hasMore) return null;
-  return '#$floor ';
+String mv2ReplyFloorPrefill({required String author, required int floor}) {
+  final name = author.trim();
+  final mentionable = name.isNotEmpty && name != '匿名';
+  return mentionable ? '@$name #$floor ' : '#$floor ';
 }
 
 /// The reply a bare `@username` points at: the member's most recent reply
