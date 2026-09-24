@@ -71,8 +71,8 @@ enum Mv2ReplySort {
 /// the 拖拽分隔条 writes back. Bounds keep the list scannable without ever
 /// squeezing the detail pane unreadable; enforced again at layout time.
 const double defaultSplitRatio = 5 / 12;
-const double minSplitRatio = 0.25;
-const double maxSplitRatio = 0.55;
+const double minSplitRatio = 0.2;
+const double maxSplitRatio = 0.8;
 
 @immutable
 class AppSettings {

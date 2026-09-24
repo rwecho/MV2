@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:multi_split_view/multi_split_view.dart';
 
 import '../../../design_system/theme/mv2_theme.dart';
 import '../../../design_system/tokens/mv2_motion.dart';
@@ -37,6 +38,34 @@ class _AppShellState extends ConsumerState<AppShell> {
 
   /// One startup revalidation per app run (refreshes the unread badge).
   bool _revalidatedSession = false;
+
+  /// Owns the two-pane split sizes while the shell lives. Flex areas keep the
+  /// "ratio" semantics (rotation re-derives widths), and the divider drag
+  /// mutates these flexes directly — no provider writes per frame.
+  MultiSplitViewController? _splitController;
+
+  /// The settings ratio the controller flexes currently reflect, so an
+  /// externally changed setting (initial load) syncs in exactly once.
+  double? _syncedSplitRatio;
+
+  /// True between divider drag start and end; while set, the build must not
+  /// stomp the controller with the (stale) settings ratio.
+  bool _draggingSplit = false;
+
+  /// Reparents the left pane across the Row ↔ MultiSplitView structure change
+  /// at the two-pane breakpoint: rotation across 900pt keeps the four branch
+  /// navigators alive.
+  final GlobalKey _leftPaneKey = GlobalKey(debugLabel: 'left_pane');
+
+  /// Arbitrary flex scale; ratios map onto it so pixel floors can be
+  /// expressed as flex mins for the current window width.
+  static const double _splitFlexTotal = 1000.0;
+
+  @override
+  void dispose() {
+    _splitController?.dispose();
+    super.dispose();
+  }
 
   Mv2Tab get _current => switch (widget.navigationShell.currentIndex) {
     0 => Mv2Tab.feed,
@@ -108,150 +137,177 @@ class _AppShellState extends ConsumerState<AppShell> {
     final splitRatio = ref.watch(
       settingsProvider.select((AppSettings s) => s.splitRatio),
     );
-    // The user's ratio, laid out against the *current* window so rotation
-    // re-derives a sane width; clamps keep both panes usable.
-    final leftWidth = twoPane
-        ? (windowWidth * splitRatio).clamp(
-            minPaneWidth,
-            windowWidth - paneDividerWidth - minDetailWidth,
-          )
-        : windowWidth;
 
     // The left pane is always a fixed-width `SizedBox` — never swapped for an
     // `Expanded` on phones. A type change at this slot would reparent the
     // navigationShell and discard all four branches' navigator state when the
     // window crosses the two-pane breakpoint. On phones the width is the whole
     // window, pixel-identical to the previous Stack layout.
-    // The canvas fill covers the two-pane divider strip: the Row is the route
-    // root, `scaffoldBackgroundColor` lives inside each pane's `Scaffold`, so
-    // an unpainted strip would show the raw window backing (black) between
-    // the panes.
-    return ColoredBox(
-      color: context.colors.background,
-      child: Row(
+    // The canvas fill covers the two-pane divider strip: the scaffold
+    // background lives inside each pane's `Scaffold`, so an unpainted strip
+    // would show the raw window backing (black) between the panes.
+    final Widget leftPane = KeyedSubtree(
+      // The GlobalKey lets the pane subtree survive the Row ↔ MultiSplitView
+      // structure change at the breakpoint: rotation across 900pt keeps the
+      // four branch navigators alive.
+      key: _leftPaneKey,
+      child: Stack(
         children: <Widget>[
-          SizedBox(
-            width: leftWidth,
-            child: Stack(
-              children: <Widget>[
-                widget.navigationShell,
-                Positioned(
-                  left: 0,
-                  right: 0,
-                  bottom: 0,
-                  child: AnimatedSlide(
-                    // Slide the whole padded bar (bar + safe area) below the
-                    // viewport.
-                    offset: barCollapsed ? const Offset(0, 1.2) : Offset.zero,
-                    duration: Mv2Motion.sheet,
-                    curve: Mv2Motion.standard,
-                    child: Mv2FloatingTabBar(
-                      current: _current,
-                      onSelect: (tab) => _onSelect(context, tab),
-                      notificationUnread: ref.watch(notificationUnreadProvider),
-                    ),
-                  ),
-                ),
-              ],
+          widget.navigationShell,
+          Positioned(
+            left: 0,
+            right: 0,
+            bottom: 0,
+            child: AnimatedSlide(
+              // Slide the whole padded bar (bar + safe area) below the
+              // viewport.
+              offset: barCollapsed ? const Offset(0, 1.2) : Offset.zero,
+              duration: Mv2Motion.sheet,
+              curve: Mv2Motion.standard,
+              child: Mv2FloatingTabBar(
+                current: _current,
+                onSelect: (tab) => _onSelect(context, tab),
+                notificationUnread: ref.watch(notificationUnreadProvider),
+              ),
             ),
           ),
-          // Two-pane: opened topics render beside the lists instead of pushing
-          // a full-screen route (see `openTopic`). The divider doubles as the
-          // drag handle for the pane split.
-          if (twoPane) ...<Widget>[
-            _PaneDivider(
-              key: const Key('pane_divider'),
-              leftWidth: leftWidth,
-              windowWidth: windowWidth,
-              onDrag: (leftWidth) => ref
-                  .read(settingsProvider.notifier)
-                  .setSplitRatio(leftWidth / windowWidth),
-            ),
-            const Expanded(child: _TabletDetailPane()),
-          ],
         ],
       ),
     );
+
+    // Two-pane: opened topics render beside the lists instead of pushing a
+    // full-screen route (see `openTopic`). The split divider doubles as the
+    // drag handle for the pane split; sizes live in the controller, and the
+    // settings ratio is written once per gesture (on drag end).
+    return ColoredBox(
+      color: context.colors.background,
+      child: twoPane
+          ? MultiSplitViewTheme(
+              data: MultiSplitViewThemeData(
+                dividerThickness: paneDividerThickness,
+              ),
+              child: _buildTwoPaneSplit(
+                context,
+                splitRatio: splitRatio,
+                windowWidth: windowWidth,
+                leftPane: leftPane,
+              ),
+            )
+          : Row(
+              children: <Widget>[
+                SizedBox(width: windowWidth, child: leftPane),
+              ],
+            ),
+    );
+  }
+
+  /// Builds the two-pane split. The controller is the single live source of
+  /// pane sizes during a session; the settings ratio seeds it once, and every
+  /// later reconciliation (external setting change, window resize floors) is
+  /// deferred past the frame — mutating areas notifies the split view, which
+  /// must not happen while the tree is building.
+  Widget _buildTwoPaneSplit(
+    BuildContext context, {
+    required double splitRatio,
+    required double windowWidth,
+    required Widget leftPane,
+  }) {
+    final controller = _splitController;
+    if (controller == null) {
+      final created = MultiSplitViewController(
+        areas: <Area>[
+          Area(flex: splitRatio * _splitFlexTotal),
+          Area(flex: (1 - splitRatio) * _splitFlexTotal),
+        ],
+      );
+      _applySplitConstraints(created, windowWidth);
+      _splitController = created;
+      _syncedSplitRatio = splitRatio;
+    } else if (!_draggingSplit && splitRatio != _syncedSplitRatio) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted || _splitController == null || _draggingSplit) return;
+        _splitController!.getArea(0).flex = splitRatio * _splitFlexTotal;
+        _splitController!.getArea(1).flex = (1 - splitRatio) * _splitFlexTotal;
+        _applySplitConstraints(_splitController!, windowWidth);
+        _syncedSplitRatio = splitRatio;
+        setState(() {});
+      });
+    } else {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted || _splitController == null) return;
+        _applySplitConstraints(_splitController!, windowWidth);
+      });
+    }
+    return MultiSplitView(
+      controller: controller,
+      onDividerDragStart: (_) => _draggingSplit = true,
+      onDividerDragEnd: (_) => _persistSplitRatio(windowWidth),
+      dividerBuilder: (axis, index, resizable, dragging, highlighted,
+              themeData) =>
+          KeyedSubtree(
+        key: const Key('pane_divider'),
+        child: VerticalDivider(
+          width: paneDividerThickness,
+          thickness: dragging || highlighted ? 3.0 : 1.0,
+          indent: Mv2Spacing.x6,
+          endIndent: Mv2Spacing.x6,
+          // Canvas-level hairline: `Mv2Colors.border`, the same token as every
+          // card outline on the page canvas; accent while interacted with.
+          color: dragging || highlighted
+              ? context.colors.accent
+              : context.colors.border,
+        ),
+      ),
+      // v3 API: content is built per Area, identified by controller index.
+      builder: (context, area) => _splitController != null && identical(area, _splitController!.getArea(0))
+          ? leftPane
+          : const _TabletDetailPane(),
+    );
+  }
+
+  /// Pixel floors translated into flex units for the current window width:
+  /// the list pane never gets narrower than a readable card column, and the
+  /// detail pane always keeps room for its centred reading column. Flexes are
+  /// fractions of the width *after* the divider strip, so the floors are too.
+  void _applySplitConstraints(
+    MultiSplitViewController controller,
+    double windowWidth,
+  ) {
+    final flexAreaWidth = windowWidth - paneDividerThickness;
+    final leftMinFlex = minPaneWidth / flexAreaWidth * _splitFlexTotal;
+    final rightMinFlex = minDetailWidth / flexAreaWidth * _splitFlexTotal;
+    if (controller.getArea(0).min != leftMinFlex) {
+      controller.getArea(0).min = leftMinFlex;
+    }
+    if (controller.getArea(1).min != rightMinFlex) {
+      controller.getArea(1).min = rightMinFlex;
+    }
+  }
+
+  /// Writes the post-drag split back into settings once — the drag itself only
+  /// mutates the controller, so no disk write or shell rebuild happens per
+  /// frame.
+  void _persistSplitRatio(double windowWidth) {
+    _draggingSplit = false;
+    final controller = _splitController;
+    if (controller == null) return;
+    final leftFlex = controller.getArea(0).flex;
+    final rightFlex = controller.getArea(1).flex;
+    if (leftFlex == null || rightFlex == null || leftFlex + rightFlex <= 0) {
+      return;
+    }
+    final ratio = leftFlex / (leftFlex + rightFlex);
+    _syncedSplitRatio = ratio.clamp(minSplitRatio, maxSplitRatio);
+    unawaited(ref.read(settingsProvider.notifier).setSplitRatio(_syncedSplitRatio!));
   }
 }
 
 /// Widths for the two-pane split: the list pane never gets narrower than a
 /// readable card column, and the detail pane always keeps room for its
 /// centred reading column.
-const double paneDividerWidth = 24.0;
+const double paneDividerThickness = 24.0;
 const double minPaneWidth = 320.0;
 const double minDetailWidth = 420.0;
-
-/// The draggable handle between the two panes: a hairline that widens into an
-/// accent bar while dragging, with a finger-sized (24pt) hit strip. The strip
-/// is its own gesture area, so it never competes with the list's horizontal
-/// page swipes. The painted line is the stock `VerticalDivider`, so its idle
-/// color comes from `DividerTheme` (wired to `Mv2Colors.divider`) and follows
-/// light/dark automatically instead of a hand-painted `Container`.
-class _PaneDivider extends StatefulWidget {
-  const _PaneDivider({
-    super.key,
-    required this.leftWidth,
-    required this.windowWidth,
-    required this.onDrag,
-  });
-
-  final double leftWidth;
-  final double windowWidth;
-  final ValueChanged<double> onDrag;
-
-  @override
-  State<_PaneDivider> createState() => _PaneDividerState();
-}
-
-class _PaneDividerState extends State<_PaneDivider> {
-  bool _dragging = false;
-  double? _dragStartLeft;
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = context.colors;
-    return MouseRegion(
-      cursor: SystemMouseCursors.resizeLeftRight,
-      child: GestureDetector(
-        behavior: HitTestBehavior.opaque,
-        onHorizontalDragStart: (details) {
-          setState(() {
-            _dragging = true;
-            _dragStartLeft = widget.leftWidth;
-          });
-        },
-        onHorizontalDragUpdate: (details) {
-          widget.onDrag(
-            (_dragStartLeft! + details.delta.dx).clamp(
-              minPaneWidth,
-              widget.windowWidth - paneDividerWidth - minDetailWidth,
-            ),
-          );
-        },
-        onHorizontalDragEnd: (details) {
-          setState(() {
-            _dragging = false;
-            _dragStartLeft = null;
-          });
-        },
-        child: SizedBox(
-          width: paneDividerWidth,
-          child: VerticalDivider(
-            width: _dragging ? 3.0 : 1.0,
-            thickness: _dragging ? 3.0 : 1.0,
-            indent: Mv2Spacing.x6,
-            endIndent: Mv2Spacing.x6,
-            // Canvas-level hairline: `Mv2Colors.border`, the same token as
-            // every card outline on the page canvas. (DividerTheme's
-            // in-surface `divider` token vanishes against the canvas fill.)
-            color: _dragging ? colors.accent : colors.border,
-          ),
-        ),
-      ),
-    );
-  }
-}
 
 /// The tablet layout's right-hand pane: the currently opened topic, or an
 /// empty state before the first selection.

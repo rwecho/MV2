@@ -35,7 +35,10 @@ void main() {
       UncontrolledProviderScope(container: container, child: const Mv2App()),
     );
     // Fixture providers resolve after ~250ms and the skeleton shimmer runs
-    // indefinitely, so pumps — never pumpAndSettle.
+    // indefinitely, so pumps — never pumpAndSettle. The split view adds a
+    // couple of extra post-frame syncs, so give boot one more pump than a
+    // bare Row layout needs.
+    await tester.pump(const Duration(milliseconds: 400));
     await tester.pump(const Duration(milliseconds: 400));
     await tester.pump(const Duration(milliseconds: 400));
     return container;
@@ -133,34 +136,47 @@ void main() {
     );
 
     // Drag right: the left pane grows. (Exact deltas depend on the gesture
-    // recognizer's touch slop, so assert direction, not arithmetic.)
-    await tester.drag(divider, const Offset(120, 0));
-    await tester.pump();
+    // recognizer's touch slop, so assert direction, not arithmetic. The
+    // package defers its drag callbacks by a zero timer, so pump 1ms.)
+    Future<void> dragDivider(Offset delta) async {
+      await tester.drag(divider, delta);
+      await tester.pump(const Duration(milliseconds: 1));
+    }
+
+    await dragDivider(const Offset(120, 0));
     expect(
       container.read(settingsProvider).splitRatio,
       greaterThan(defaultSplitRatio),
     );
 
     // Drag far past the clamp: the detail pane keeps its minimum, and the
-    // stored ratio saturates at the settings bound.
-    await tester.drag(divider, const Offset(2000, 0));
-    await tester.pump();
-    expect(container.read(settingsProvider).splitRatio, maxSplitRatio);
-
-    // …and far the other way: the divider's own width floor (320pt) bites
-    // before the settings ratio floor at this window width.
-    await tester.drag(divider, const Offset(-4000, 0));
-    await tester.pump();
+    // stored ratio saturates at the pixel bound (window − divider − detail
+    // minimum), still inside the loose settings bounds.
+    await dragDivider(const Offset(2000, 0));
     expect(
       container.read(settingsProvider).splitRatio,
-      closeTo(minPaneWidth / 1200, 0.001),
+      closeTo(
+        (1200 - minDetailWidth - paneDividerThickness) /
+            (1200 - paneDividerThickness),
+        0.001,
+      ),
+    );
+
+    // …and far the other way: the divider's own width floor (320pt) bites
+    // before the settings ratio floor at this window width. Flexes are
+    // fractions of the available width *after* the divider, so the stored
+    // ratio is expressed against that too.
+    await dragDivider(const Offset(-4000, 0));
+    expect(
+      container.read(settingsProvider).splitRatio,
+      closeTo(minPaneWidth / (1200 - paneDividerThickness), 0.001),
     );
 
     // The choice persists.
     final prefs = await SharedPreferences.getInstance();
     expect(
       prefs.getDouble('mv2.splitRatio'),
-      closeTo(minPaneWidth / 1200, 0.001),
+      closeTo(minPaneWidth / (1200 - paneDividerThickness), 0.001),
     );
   });
 
