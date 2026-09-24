@@ -81,6 +81,11 @@ class _ReplyComposerPageState extends ConsumerState<ReplyComposerPage> {
   /// Parsed `div.problem li` messages from the last rejected submit.
   List<String> _errors = const <String>[];
 
+  /// Whether the quoted topic card shows its full body. The composer
+  /// auto-collapses it once the reply grows past a few lines, handing the
+  /// vertical space back to the editor (Polish/Reddit composer behavior).
+  bool _quoteExpanded = true;
+
   String get _draftKey => DraftStore.topicKey(widget.topicId);
 
   @override
@@ -137,6 +142,11 @@ class _ReplyComposerPageState extends ConsumerState<ReplyComposerPage> {
   void _onTextChanged() {
     // Rebuilds the 发送 enabled state and restarts the debounce.
     setState(() {});
+    // Long replies reclaim the quote card's vertical space: collapse it once,
+    // on the transition past three lines, so the editor keeps the room.
+    if (_quoteExpanded && _controller.text.split('\n').length > 3) {
+      _quoteExpanded = false;
+    }
     _draftTimer?.cancel();
     _draftTimer = Timer(const Duration(milliseconds: 500), () {
       final text = _controller.text;
@@ -321,6 +331,15 @@ class _ReplyComposerPageState extends ConsumerState<ReplyComposerPage> {
         !_sending &&
         _controller.text.trim().isNotEmpty;
     final bottomInset = MediaQuery.viewPaddingOf(context).bottom;
+    // The editor must never grow unbounded: with `maxLines: null` a newline
+    // makes the field taller instead of scrolling internally, and Flutter then
+    // never scrolls the outer ListView to follow the caret (the new text ends
+    // up under the keyboard). Capping the height keeps the framework's native
+    // caret bring-into-view working — the field scrolls inside itself.
+    final maxEditorHeight = MediaQuery.sizeOf(context).height * 0.45;
+    // Once the reply is more than a few lines, the pinned quote is reference
+    // material, not writing space — it collapses to a one-line summary (see
+    // `_onTextChanged`; a manual re-expand is respected until the next growth).
 
     return Mv2PageScaffold(
       header: Mv2SecondaryHeader(
@@ -360,7 +379,13 @@ class _ReplyComposerPageState extends ConsumerState<ReplyComposerPage> {
           // 引用卡：loaded → real card; loading → placeholder; failure →
           // the standard error state with retry, never a stand-in topic.
           if (topic != null)
-            _QuotedTopicCard(topic: topic)
+            _quoteExpanded
+                ? _QuotedTopicCard(topic: topic)
+                : _QuotedTopicSummary(
+                    topic: topic,
+                    onToggle: () =>
+                        setState(() => _quoteExpanded = !_quoteExpanded),
+                  )
           else if (detail.hasError)
             Mv2StateView(
               kind: Mv2StateKind.error,
@@ -388,27 +413,33 @@ class _ReplyComposerPageState extends ConsumerState<ReplyComposerPage> {
                   _ComposerErrorBanner(errors: _errors),
                   const SizedBox(height: Mv2Spacing.x3),
                 ],
-                TextField(
-                  controller: _controller,
-                  focusNode: _focusNode,
-                  // The keyboard is the point of the sheet: open it immediately.
-                  autofocus: true,
-                  maxLines: null,
-                  minLines: 10,
-                  keyboardType: TextInputType.multiline,
-                  textAlignVertical: TextAlignVertical.top,
-                  cursorColor: colors.accent,
-                  style: context.text.body.copyWith(color: colors.textPrimary),
-                  decoration: InputDecoration(
-                    isDense: true,
-                    filled: false,
-                    border: InputBorder.none,
-                    enabledBorder: InputBorder.none,
-                    focusedBorder: InputBorder.none,
-                    contentPadding: EdgeInsets.zero,
-                    hintText: '写下你的回复...',
-                    hintStyle: context.text.body.copyWith(
-                      color: colors.textTertiary,
+                ConstrainedBox(
+                  constraints: BoxConstraints(maxHeight: maxEditorHeight),
+                  child: TextField(
+                    controller: _controller,
+                    focusNode: _focusNode,
+                    // The keyboard is the point of the sheet: open it
+                    // immediately.
+                    autofocus: true,
+                    maxLines: null,
+                    minLines: 10,
+                    keyboardType: TextInputType.multiline,
+                    textAlignVertical: TextAlignVertical.top,
+                    cursorColor: colors.accent,
+                    style: context.text.body.copyWith(
+                      color: colors.textPrimary,
+                    ),
+                    decoration: InputDecoration(
+                      isDense: true,
+                      filled: false,
+                      border: InputBorder.none,
+                      enabledBorder: InputBorder.none,
+                      focusedBorder: InputBorder.none,
+                      contentPadding: EdgeInsets.zero,
+                      hintText: '写下你的回复...',
+                      hintStyle: context.text.body.copyWith(
+                        color: colors.textTertiary,
+                      ),
                     ),
                   ),
                 ),
@@ -501,6 +532,53 @@ class _QuotedTopicSkeleton extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// One-line collapsed form of the quoted topic. Tap to expand the full card
+/// again; the composer auto-collapses it while the reply is long.
+class _QuotedTopicSummary extends StatelessWidget {
+  const _QuotedTopicSummary({required this.topic, required this.onToggle});
+
+  final V2Topic topic;
+  final VoidCallback onToggle;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: onToggle,
+      child: Mv2Surface(
+        padding: const EdgeInsets.symmetric(
+          horizontal: Mv2Spacing.x3,
+          vertical: Mv2Spacing.x2,
+        ),
+        shadowed: false,
+        child: Row(
+          children: <Widget>[
+            Mv2NodeBadge(node: topic.node),
+            const SizedBox(width: Mv2Spacing.x2),
+            Expanded(
+              child: Text(
+                topic.title,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: context.text.bodySmall.copyWith(
+                  color: colors.textSecondary,
+                ),
+              ),
+            ),
+            Icon(
+              Icons.keyboard_arrow_down_rounded,
+              size: 18,
+              color: colors.textTertiary,
+            ),
+          ],
+        ),
       ),
     );
   }

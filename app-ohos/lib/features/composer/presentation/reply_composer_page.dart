@@ -6,20 +6,24 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/data/session_once.dart';
 import '../../../core/data/v2ex_providers.dart';
 import '../../../core/errors/failures.dart';
+import '../../../core/telemetry/mv2_analytics.dart';
 import '../../../design_system/effects/mv2_glass.dart';
 import '../../../design_system/theme/mv2_theme.dart';
 import '../../../design_system/tokens/mv2_radius.dart';
 import '../../../design_system/tokens/mv2_spacing.dart';
 import '../../../shared/emoji/mv2_emoji_library.dart';
-import '../../../shared/mock/mock_data.dart';
 import '../../../shared/models/models.dart';
 import '../../../shared/models/topic_detail.dart';
+import '../../../ui/components/mv2_error_feedback.dart';
 import '../../../ui/components/mv2_page_header.dart';
 import '../../../ui/components/mv2_page_scaffold.dart';
+import '../../../ui/components/states/mv2_state_view.dart';
+import '../../../ui/mv2_haptics.dart';
 import '../../../ui/primitives/mv2_avatar.dart';
 import '../../../ui/primitives/mv2_buttons.dart';
 import '../../../ui/primitives/mv2_chips.dart';
 import '../../auth/application/auth_controller.dart';
+import '../../settings/application/settings_controller.dart';
 import '../../topic/application/topic_providers.dart';
 import '../application/draft_store.dart';
 import 'composer_emoji_panel.dart';
@@ -77,6 +81,11 @@ class _ReplyComposerPageState extends ConsumerState<ReplyComposerPage> {
   /// Parsed `div.problem li` messages from the last rejected submit.
   List<String> _errors = const <String>[];
 
+  /// Whether the quoted topic card shows its full body. The composer
+  /// auto-collapses it once the reply grows past a few lines, handing the
+  /// vertical space back to the editor (Polish/Reddit composer behavior).
+  bool _quoteExpanded = true;
+
   String get _draftKey => DraftStore.topicKey(widget.topicId);
 
   @override
@@ -119,10 +128,11 @@ class _ReplyComposerPageState extends ConsumerState<ReplyComposerPage> {
     if (!mounted) return;
     if (saved != null && saved.isNotEmpty) {
       if (_controller.text.isEmpty) _controller.text = saved;
+      Mv2Analytics.logDraftAction(composer: 'reply', action: 'restored');
       return;
     }
-    // Fresh composer: seed the floor marker only when there is no draft to
-    // avoid splicing it into text the user already wrote.
+    // Fresh composer: seed the `@user #floor` reference only when there is no
+    // draft, to avoid splicing it into text the user already wrote.
     final initial = widget.initialText;
     if (initial != null && initial.isNotEmpty && _controller.text.isEmpty) {
       _controller.text = initial;
@@ -132,9 +142,17 @@ class _ReplyComposerPageState extends ConsumerState<ReplyComposerPage> {
   void _onTextChanged() {
     // Rebuilds the 发送 enabled state and restarts the debounce.
     setState(() {});
+    // Long replies reclaim the quote card's vertical space: collapse it once,
+    // on the transition past three lines, so the editor keeps the room.
+    if (_quoteExpanded && _controller.text.split('\n').length > 3) {
+      _quoteExpanded = false;
+    }
     _draftTimer?.cancel();
     _draftTimer = Timer(const Duration(milliseconds: 500), () {
-      unawaited(_draftStore.write(_draftKey, _controller.text));
+      final text = _controller.text;
+      if (text.trim().isEmpty) return;
+      unawaited(_draftStore.write(_draftKey, text));
+      Mv2Analytics.logDraftAction(composer: 'reply', action: 'saved');
     });
   }
 
@@ -195,11 +213,24 @@ class _ReplyComposerPageState extends ConsumerState<ReplyComposerPage> {
         _submitted = true;
         _draftTimer?.cancel();
         await _draftStore.clear(_draftKey);
+        Mv2Analytics.logDraftAction(composer: 'reply', action: 'cleared');
+        Mv2Analytics.logReplySubmit(
+          topicId: widget.topicId,
+          hasQuote: widget.quotedReply != null || widget.floor != null,
+          contentLength: content.length,
+          result: 'success',
+        );
         if (!mounted) return;
         // Force the detail provider to refetch so the new reply is visible.
         ref.invalidate(topicDetailProvider(TopicDetailArgs(widget.topicId)));
-        // Closes the modal sheet (this page is no longer a routed page).
+        // Confirm the write like 发布主题 does: capture the root messenger
+        // before the pop, close the sheet, then toast — a SnackBar shown on a
+        // scaffold being disposed in the same frame crashed before (`docs/13`
+        // Phase 3), the root messenger outlives the route.
+        Mv2Haptics.success(ref.read(settingsProvider).hapticsEnabled);
+        final messenger = ScaffoldMessenger.of(context);
         Navigator.of(context).pop();
+        mv2ShowSuccess(messenger, '回复已发布');
         return;
       }
       setState(() {
@@ -208,6 +239,12 @@ class _ReplyComposerPageState extends ConsumerState<ReplyComposerPage> {
             ? const <String>['发送失败，请稍后重试。']
             : result.errors;
       });
+      Mv2Analytics.logReplySubmit(
+        topicId: widget.topicId,
+        hasQuote: widget.quotedReply != null || widget.floor != null,
+        contentLength: content.length,
+        result: 'failed',
+      );
     } on AuthFailure catch (failure) {
       // 401/403 mid-session: sign the stale session out before surfacing.
       await ref.read(authControllerProvider.notifier).handleAuthFailure();
@@ -216,6 +253,12 @@ class _ReplyComposerPageState extends ConsumerState<ReplyComposerPage> {
         _sending = false;
         _errors = <String>[failure.message];
       });
+      Mv2Analytics.logReplySubmit(
+        topicId: widget.topicId,
+        hasQuote: widget.quotedReply != null || widget.floor != null,
+        contentLength: content.length,
+        result: 'auth_required',
+      );
     } on Failure catch (failure) {
       // Includes RateLimitFailure, whose message must be shown verbatim.
       if (!mounted) return;
@@ -223,6 +266,12 @@ class _ReplyComposerPageState extends ConsumerState<ReplyComposerPage> {
         _sending = false;
         _errors = <String>[failure.message];
       });
+      Mv2Analytics.logReplySubmit(
+        topicId: widget.topicId,
+        hasQuote: widget.quotedReply != null || widget.floor != null,
+        contentLength: content.length,
+        result: failure is RateLimitFailure ? 'rate_limited' : 'failed',
+      );
     }
   }
 
@@ -263,7 +312,7 @@ class _ReplyComposerPageState extends ConsumerState<ReplyComposerPage> {
     final detail = ref.watch(
       topicDetailProvider(TopicDetailArgs(widget.topicId)),
     );
-    final topic = detail.value?.topic ?? MockData.composerTopic();
+    final topic = detail.value?.topic;
     final quotedReply = _quotedReply(detail.value);
     // Prefer the session's newest token: a 感谢 on the topic page rotates it,
     // and the composer must not post with the stale scraped value.
@@ -282,6 +331,15 @@ class _ReplyComposerPageState extends ConsumerState<ReplyComposerPage> {
         !_sending &&
         _controller.text.trim().isNotEmpty;
     final bottomInset = MediaQuery.viewPaddingOf(context).bottom;
+    // The editor must never grow unbounded: with `maxLines: null` a newline
+    // makes the field taller instead of scrolling internally, and Flutter then
+    // never scrolls the outer ListView to follow the caret (the new text ends
+    // up under the keyboard). Capping the height keeps the framework's native
+    // caret bring-into-view working — the field scrolls inside itself.
+    final maxEditorHeight = MediaQuery.sizeOf(context).height * 0.45;
+    // Once the reply is more than a few lines, the pinned quote is reference
+    // material, not writing space — it collapses to a one-line summary (see
+    // `_onTextChanged`; a manual re-expand is respected until the next growth).
 
     return Mv2PageScaffold(
       header: Mv2SecondaryHeader(
@@ -318,7 +376,28 @@ class _ReplyComposerPageState extends ConsumerState<ReplyComposerPage> {
           Mv2Spacing.x8 + 96 + bottomInset,
         ),
         children: <Widget>[
-          _QuotedTopicCard(topic: topic),
+          // 引用卡：loaded → real card; loading → placeholder; failure →
+          // the standard error state with retry, never a stand-in topic.
+          if (topic != null)
+            _quoteExpanded
+                ? _QuotedTopicCard(topic: topic)
+                : _QuotedTopicSummary(
+                    topic: topic,
+                    onToggle: () =>
+                        setState(() => _quoteExpanded = !_quoteExpanded),
+                  )
+          else if (detail.hasError)
+            Mv2StateView(
+              kind: Mv2StateKind.error,
+              compact: true,
+              description: mv2DescribeError(detail.error!),
+              actionLabel: '重试',
+              onAction: () => ref.invalidate(
+                topicDetailProvider(TopicDetailArgs(widget.topicId)),
+              ),
+            )
+          else
+            const _QuotedTopicSkeleton(),
           if (quotedReply != null) ...<Widget>[
             const SizedBox(height: Mv2Spacing.x3),
             _QuoteBlock(reply: quotedReply),
@@ -334,27 +413,33 @@ class _ReplyComposerPageState extends ConsumerState<ReplyComposerPage> {
                   _ComposerErrorBanner(errors: _errors),
                   const SizedBox(height: Mv2Spacing.x3),
                 ],
-                TextField(
-                  controller: _controller,
-                  focusNode: _focusNode,
-                  // The keyboard is the point of the sheet: open it immediately.
-                  autofocus: true,
-                  maxLines: null,
-                  minLines: 10,
-                  keyboardType: TextInputType.multiline,
-                  textAlignVertical: TextAlignVertical.top,
-                  cursorColor: colors.accent,
-                  style: context.text.body.copyWith(color: colors.textPrimary),
-                  decoration: InputDecoration(
-                    isDense: true,
-                    filled: false,
-                    border: InputBorder.none,
-                    enabledBorder: InputBorder.none,
-                    focusedBorder: InputBorder.none,
-                    contentPadding: EdgeInsets.zero,
-                    hintText: '写下你的回复...',
-                    hintStyle: context.text.body.copyWith(
-                      color: colors.textTertiary,
+                ConstrainedBox(
+                  constraints: BoxConstraints(maxHeight: maxEditorHeight),
+                  child: TextField(
+                    controller: _controller,
+                    focusNode: _focusNode,
+                    // The keyboard is the point of the sheet: open it
+                    // immediately.
+                    autofocus: true,
+                    maxLines: null,
+                    minLines: 10,
+                    keyboardType: TextInputType.multiline,
+                    textAlignVertical: TextAlignVertical.top,
+                    cursorColor: colors.accent,
+                    style: context.text.body.copyWith(
+                      color: colors.textPrimary,
+                    ),
+                    decoration: InputDecoration(
+                      isDense: true,
+                      filled: false,
+                      border: InputBorder.none,
+                      enabledBorder: InputBorder.none,
+                      focusedBorder: InputBorder.none,
+                      contentPadding: EdgeInsets.zero,
+                      hintText: '写下你的回复...',
+                      hintStyle: context.text.body.copyWith(
+                        color: colors.textTertiary,
+                      ),
                     ),
                   ),
                 ),
@@ -404,6 +489,101 @@ class _ComposerErrorBanner extends StatelessWidget {
 }
 
 /// The topic being replied to, quoted at the top of the composer.
+/// Loading placeholder matching [_QuotedTopicCard] metrics.
+class _QuotedTopicSkeleton extends StatelessWidget {
+  const _QuotedTopicSkeleton();
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+
+    return Mv2Surface(
+      padding: const EdgeInsets.all(Mv2Spacing.x4),
+      shadowed: false,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Container(
+            width: 72,
+            height: 16,
+            decoration: BoxDecoration(
+              color: colors.divider,
+              borderRadius: Mv2Radius.allSm,
+            ),
+          ),
+          const SizedBox(height: Mv2Spacing.x2),
+          Container(
+            width: double.infinity,
+            height: 18,
+            decoration: BoxDecoration(
+              color: colors.divider,
+              borderRadius: Mv2Radius.allSm,
+            ),
+          ),
+          const SizedBox(height: Mv2Spacing.x2),
+          FractionallySizedBox(
+            widthFactor: 0.6,
+            child: Container(
+              height: 14,
+              decoration: BoxDecoration(
+                color: colors.divider,
+                borderRadius: Mv2Radius.allSm,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// One-line collapsed form of the quoted topic. Tap to expand the full card
+/// again; the composer auto-collapses it while the reply is long.
+class _QuotedTopicSummary extends StatelessWidget {
+  const _QuotedTopicSummary({required this.topic, required this.onToggle});
+
+  final V2Topic topic;
+  final VoidCallback onToggle;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: onToggle,
+      child: Mv2Surface(
+        padding: const EdgeInsets.symmetric(
+          horizontal: Mv2Spacing.x3,
+          vertical: Mv2Spacing.x2,
+        ),
+        shadowed: false,
+        child: Row(
+          children: <Widget>[
+            Mv2NodeBadge(node: topic.node),
+            const SizedBox(width: Mv2Spacing.x2),
+            Expanded(
+              child: Text(
+                topic.title,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: context.text.bodySmall.copyWith(
+                  color: colors.textSecondary,
+                ),
+              ),
+            ),
+            Icon(
+              Icons.keyboard_arrow_down_rounded,
+              size: 18,
+              color: colors.textTertiary,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class _QuotedTopicCard extends StatelessWidget {
   const _QuotedTopicCard({required this.topic});
 
