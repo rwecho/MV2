@@ -1,5 +1,6 @@
 import 'package:drift/drift.dart';
 import 'package:drift_flutter/drift_flutter.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 
 part 'cache_database.g.dart';
 
@@ -65,7 +66,21 @@ class HistoryEntries extends Table {
 )
 class CacheDatabase extends _$CacheDatabase {
   CacheDatabase([QueryExecutor? executor])
-    : super(executor ?? driftDatabase(name: 'mv2_cache'));
+    : super(
+        executor ??
+            driftDatabase(
+              name: 'mv2_cache',
+              // Web needs the sqlite3 WASM module and the drift worker served
+              // next to the app (web/sqlite3.wasm, web/drift_worker.js).
+              // Native platforms ignore this parameter.
+              web: kIsWeb
+                  ? DriftWebOptions(
+                      sqlite3Wasm: Uri.parse('sqlite3.wasm'),
+                      driftWorker: Uri.parse('drift_worker.js'),
+                    )
+                  : null,
+            ),
+      );
 
   @override
   int get schemaVersion => 2;

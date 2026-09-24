@@ -6,8 +6,21 @@ import 'dart:io' show Platform;
 /// Everything fragile lives here so a site change is a one-file diff.
 abstract final class V2exEndpoints {
   static const String host = 'www.v2ex.com';
-  static const String baseUrl = 'https://www.v2ex.com';
-  static const String searchBaseUrl = 'https://www.sov2ex.com';
+
+  /// Overridable at compile time so the Flutter Web build can point both at a
+  /// local CORS proxy (`--dart-define=V2EX_BASE_URL=http://127.0.0.1:9090/v2ex`
+  /// plus `--dart-define=SOV2EX_BASE_URL=http://127.0.0.1:9090/sov2ex`, proxy
+  /// in `tool/cors_proxy.mjs`). Browsers block cross-origin reads of v2ex.com
+  /// because it sends no `Access-Control-Allow-Origin` header. Native
+  /// platforms keep the defaults unchanged.
+  static const String baseUrl = String.fromEnvironment(
+    'V2EX_BASE_URL',
+    defaultValue: 'https://www.v2ex.com',
+  );
+  static const String searchBaseUrl = String.fromEnvironment(
+    'SOV2EX_BASE_URL',
+    defaultValue: 'https://www.sov2ex.com',
+  );
 
   /// Mobile Safari UA used for reads (and login writes). V2EX serves the same
   /// DOM to mobile and desktop UAs (verified 2026-09: home, topic, node,
