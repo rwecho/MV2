@@ -73,6 +73,7 @@ abstract final class Mv2Events {
   static const String topicIgnore = 'topic_ignore';
 
   /// 分享主题(share_plus 不回调用户选的渠道,故无 channel 参数)。
+  /// `mode`: text(系统面板)|image(长图)|copy(复制链接)
   static const String topicShare = 'topic_share';
 
   /// 长按回复复制内容。`floor`: 楼层号
@@ -278,7 +279,7 @@ abstract final class Mv2Events {
     replyThank: ['topic_id', 'floor', 'result'],
     topicFavorite: ['topic_id', 'enabled', 'result'],
     topicIgnore: ['topic_id', 'enabled', 'result'],
-    topicShare: ['topic_id'],
+    topicShare: ['topic_id', 'mode'],
     replyCopy: ['topic_id', 'floor'],
     reportSubmit: ['target'],
     mentionTap: ['jumped'],

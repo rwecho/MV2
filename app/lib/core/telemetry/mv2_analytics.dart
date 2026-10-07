@@ -212,8 +212,8 @@ abstract final class Mv2Analytics {
     'result': result,
   });
 
-  static void logTopicShare({required int topicId}) =>
-      _log(Mv2Events.topicShare, {'topic_id': topicId});
+  static void logTopicShare({required int topicId, String mode = 'text'}) =>
+      _log(Mv2Events.topicShare, {'topic_id': topicId, 'mode': mode});
 
   static void logReplyCopy({required int topicId, required int floor}) =>
       _log(Mv2Events.replyCopy, {'topic_id': topicId, 'floor': floor});

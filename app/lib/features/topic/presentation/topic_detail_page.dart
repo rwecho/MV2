@@ -41,6 +41,7 @@ import '../../settings/application/settings_controller.dart';
 import '../../shell/application/tablet_topic_pane.dart';
 import '../application/topic_actions.dart';
 import '../application/topic_providers.dart';
+import 'topic_share_image.dart';
 
 /// Native share sheet for a topic: `标题  https://www.v2ex.com/t/{id}`.
 ///
@@ -70,6 +71,158 @@ Future<void> _shareTopic(BuildContext context, V2Topic topic) async {
     if (!context.mounted) return;
     ScaffoldMessenger.of(context)
         .showSnackBar(const SnackBar(content: Text('无法打开分享面板，链接已复制到剪贴板')));
+  }
+}
+
+/// The topic share entry: a picker between the long-image share (正文长图,
+/// V2EX Polish 同款) and the plain link share. `ref` resolves the loaded
+/// detail so the image path can bail out to the link share when the detail
+/// hasn't arrived.
+void _showShareSheet(BuildContext context, WidgetRef ref, V2Topic topic) {
+  showModalBottomSheet<void>(
+    context: context,
+    backgroundColor: context.colors.elevatedSurface,
+    shape: const RoundedRectangleBorder(borderRadius: Mv2Radius.allXl),
+    builder: (BuildContext sheetContext) {
+      void close() => Navigator.of(sheetContext).pop();
+
+      Future<void> shareImage() async {
+        close();
+        final detail = ref
+            .read(topicDetailProvider(TopicDetailArgs(topic.id)))
+            .value;
+        if (detail == null || !context.mounted) {
+          await _shareTopic(context, topic);
+          return;
+        }
+        final shared = await shareTopicAsImage(context, detail);
+        // 长图失败（纹理超限、磁盘异常等小概率）时不能给死胡同：退回链接分享。
+        if (!shared && context.mounted) await _shareTopic(context, topic);
+      }
+
+      return SafeArea(
+        top: false,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(
+            Mv2Spacing.x4,
+            Mv2Spacing.x5,
+            Mv2Spacing.x4,
+            Mv2Spacing.x3,
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: <Widget>[
+              Text(
+                '分享主题',
+                style: sheetContext.text.sectionTitle.copyWith(
+                  color: sheetContext.colors.textPrimary,
+                ),
+              ),
+              const SizedBox(height: Mv2Spacing.x3),
+              _ShareOption(
+                icon: Icons.image_outlined,
+                label: '生成分享图',
+                description: '把标题和正文渲染成长图，适合发群聊',
+                onTap: () {
+                  Mv2Analytics.logTopicShare(topicId: topic.id, mode: 'image');
+                  unawaited(shareImage());
+                },
+              ),
+              _ShareOption(
+                icon: Icons.ios_share_rounded,
+                label: '分享链接',
+                onTap: () {
+                  close();
+                  unawaited(_shareTopic(context, topic));
+                },
+              ),
+              _ShareOption(
+                icon: Icons.copy_rounded,
+                label: '复制链接',
+                showDivider: false,
+                onTap: () {
+                  close();
+                  Mv2Analytics.logTopicShare(topicId: topic.id, mode: 'copy');
+                  unawaited(
+                    Clipboard.setData(
+                      ClipboardData(
+                        text: 'https://www.v2ex.com/t/${topic.id}',
+                      ),
+                    ),
+                  );
+                  ScaffoldMessenger.of(context)
+                      .showSnackBar(const SnackBar(content: Text('链接已复制')));
+                },
+              ),
+            ],
+          ),
+        ),
+      );
+    },
+  );
+}
+
+/// One row of the share picker sheet.
+class _ShareOption extends StatelessWidget {
+  const _ShareOption({
+    required this.icon,
+    required this.label,
+    this.description,
+    required this.onTap,
+    this.showDivider = true,
+  });
+
+  final IconData icon;
+  final String label;
+  final String? description;
+  final VoidCallback onTap;
+  final bool showDivider;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: <Widget>[
+        GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: onTap,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: Mv2Spacing.x3),
+            child: Row(
+              children: <Widget>[
+                Icon(icon, size: 20, color: colors.textSecondary),
+                const SizedBox(width: Mv2Spacing.x3),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: <Widget>[
+                      Text(
+                        label,
+                        style: context.text.body.copyWith(
+                          color: colors.textPrimary,
+                        ),
+                      ),
+                      if (description != null) ...<Widget>[
+                        const SizedBox(height: 2),
+                        Text(
+                          description!,
+                          style: context.text.metadata.copyWith(
+                            color: colors.textTertiary,
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+        if (showDivider) Container(height: 1, color: colors.divider),
+      ],
+    );
   }
 }
 
@@ -326,7 +479,7 @@ class _TopicDetailTopBar extends ConsumerWidget {
         onShare: () {
           Navigator.of(sheetContext).pop();
           final topic = detail?.topic;
-          if (topic != null) unawaited(_shareTopic(context, topic));
+          if (topic != null) _showShareSheet(context, ref, topic);
         },
         onIgnore: () {
           Navigator.of(sheetContext).pop();
@@ -825,9 +978,10 @@ class _TopicDetailBodyState extends ConsumerState<_TopicDetailBody> {
     }());
   }
 
-  /// Sharing needs no session — always available.
+  /// Sharing needs no session — always available. Opens the picker between
+  /// 长图 and 链接 rather than committing to the plain link share.
   void _onShare() {
-    unawaited(_shareTopic(context, widget.detail.topic));
+    _showShareSheet(context, ref, widget.detail.topic);
   }
 
   /// `@someone` in a reply means "replying to that member's earlier comment",
@@ -1083,6 +1237,10 @@ class _TopicDetailBodyState extends ConsumerState<_TopicDetailBody> {
       _BodyRow(
         () => _ReplySectionHeader(
           label: detail.replyStatsLabel ?? '${replies.length} 条回复',
+          sort: settings.replySort,
+          onSortSelected: (sort) => unawaited(
+            ref.read(settingsProvider.notifier).setReplySort(sort),
+          ),
         ),
       ),
       _BodyRow(() => const SizedBox(height: Mv2Spacing.x3)),
@@ -1591,11 +1749,19 @@ class _ReplyAction extends StatelessWidget {
   }
 }
 
-/// `54 条回复` + a static `默认排序` selector.
+/// `54 条回复` + the sort selector (时间/热度). The chip writes the global
+/// 默认回复排序 setting — the same preference the settings page owns — so
+/// the next topic opens sorted the same way.
 class _ReplySectionHeader extends StatelessWidget {
-  const _ReplySectionHeader({required this.label});
+  const _ReplySectionHeader({
+    required this.label,
+    required this.sort,
+    required this.onSortSelected,
+  });
 
   final String label;
+  final Mv2ReplySort sort;
+  final ValueChanged<Mv2ReplySort> onSortSelected;
 
   @override
   Widget build(BuildContext context) {
@@ -1608,17 +1774,136 @@ class _ReplySectionHeader extends StatelessWidget {
           style: context.text.sectionTitle.copyWith(color: colors.textPrimary),
         ),
         const Spacer(),
-        Text(
-          '默认排序',
-          style: context.text.metadata.copyWith(color: colors.textSecondary),
-        ),
-        const SizedBox(width: Mv2Spacing.x1),
-        Icon(
-          Icons.keyboard_arrow_down_rounded,
-          size: 16,
-          color: colors.textSecondary,
+        GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: () => _showSortSheet(context),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: Mv2Spacing.x1),
+            child: Row(
+              children: <Widget>[
+                Text(
+                  sort.label,
+                  style: context.text.metadata.copyWith(
+                    color: colors.accent,
+                  ),
+                ),
+                const SizedBox(width: Mv2Spacing.x1),
+                Icon(
+                  Icons.keyboard_arrow_down_rounded,
+                  size: 16,
+                  color: colors.accent,
+                ),
+              ],
+            ),
+          ),
         ),
       ],
+    );
+  }
+
+  /// Single-choice sheet over [Mv2ReplySort.values], check mark on the
+  /// current one — mirrors the settings page's 排序 sheet.
+  void _showSortSheet(BuildContext context) {
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: context.colors.elevatedSurface,
+      shape: const RoundedRectangleBorder(borderRadius: Mv2Radius.allXl),
+      builder: (BuildContext sheetContext) {
+        final colors = sheetContext.colors;
+        return SafeArea(
+          top: false,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: <Widget>[
+              Padding(
+                padding: const EdgeInsets.fromLTRB(
+                  Mv2Spacing.x4,
+                  Mv2Spacing.x5,
+                  Mv2Spacing.x4,
+                  Mv2Spacing.x2,
+                ),
+                child: Text(
+                  '回复排序',
+                  style: sheetContext.text.sectionTitle.copyWith(
+                    color: colors.textPrimary,
+                  ),
+                ),
+              ),
+              for (final Mv2ReplySort option in Mv2ReplySort.values)
+                _SortOption(
+                  label: option.label,
+                  hint: switch (option) {
+                    Mv2ReplySort.likes => '按感谢数从高到低，先看热评',
+                    Mv2ReplySort.time => '按楼层从早到晚',
+                  },
+                  selected: option == sort,
+                  onTap: () {
+                    Navigator.of(sheetContext).pop();
+                    onSortSelected(option);
+                  },
+                ),
+              const SizedBox(height: Mv2Spacing.x3),
+            ],
+          ),
+        );
+      },
+    );
+  }
+}
+
+/// One selectable row of the sort sheet.
+class _SortOption extends StatelessWidget {
+  const _SortOption({
+    required this.label,
+    required this.hint,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final String label;
+  final String hint;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: onTap,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(
+          horizontal: Mv2Spacing.x4,
+          vertical: Mv2Spacing.x3,
+        ),
+        child: Row(
+          children: <Widget>[
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  Text(
+                    label,
+                    style: context.text.body.copyWith(
+                      color: selected ? colors.accent : colors.textPrimary,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    hint,
+                    style: context.text.metadata.copyWith(
+                      color: colors.textTertiary,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            if (selected)
+              Icon(Icons.check_rounded, size: 20, color: colors.accent),
+          ],
+        ),
+      ),
     );
   }
 }

@@ -191,9 +191,13 @@ void main() {
   group('分享', () {
     const channel = MethodChannel('dev.fluttercommunity.plus/share');
 
-    testWidgets('tapping 分享 invokes the platform share channel', (
-      tester,
-    ) async {
+    /// 分享入口现在先弹「分享主题」面板；这里滚到分享按钮、点开面板。
+    Future<void> openShareSheet(WidgetTester tester) async {
+      await tapShare(tester);
+      expect(find.text('生成分享图'), findsOneWidget);
+    }
+
+    testWidgets('分享链接走系统分享面板', (tester) async {
       final calls = <MethodCall>[];
       TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
           .setMockMethodCallHandler(channel, (MethodCall call) async {
@@ -206,7 +210,10 @@ void main() {
       );
 
       await pumpTopic(tester);
-      await tapShare(tester);
+      await openShareSheet(tester);
+      await tester.tap(find.text('分享链接'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 200));
 
       expect(calls, hasLength(1));
       expect(calls.single.method, 'share');
@@ -214,6 +221,41 @@ void main() {
         calls.single.arguments['text'],
         contains('https://www.v2ex.com/t/1'),
       );
+    });
+
+    testWidgets('分享面板挂载长图与复制入口', (tester) async {
+      await pumpTopic(tester);
+      await openShareSheet(tester);
+
+      expect(find.text('生成分享图'), findsOneWidget);
+      expect(find.text('分享链接'), findsOneWidget);
+      expect(find.text('复制链接'), findsOneWidget);
+    });
+
+    testWidgets('复制链接写入剪贴板', (tester) async {
+      final clipboard = <String>{};
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(SystemChannels.platform, (
+            MethodCall call,
+          ) async {
+            if (call.method == 'Clipboard.setData') {
+              clipboard.add(call.arguments['text'] as String);
+            }
+            return null;
+          });
+      addTearDown(
+        () => TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+            .setMockMethodCallHandler(SystemChannels.platform, null),
+      );
+
+      await pumpTopic(tester);
+      await openShareSheet(tester);
+      await tester.tap(find.text('复制链接'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 200));
+
+      expect(clipboard, contains('https://www.v2ex.com/t/1'));
+      expect(find.text('链接已复制'), findsOneWidget);
     });
 
     testWidgets('a failing share channel falls back to the clipboard', (
@@ -237,10 +279,35 @@ void main() {
       });
 
       await pumpTopic(tester);
-      await tapShare(tester);
+      await openShareSheet(tester);
+      await tester.tap(find.text('分享链接'));
       await tester.pump(const Duration(milliseconds: 400));
 
       expect(find.text('无法打开分享面板，链接已复制到剪贴板'), findsOneWidget);
+    });
+  });
+
+  group('回复排序', () {
+    testWidgets('回复区的排序 chip 打开面板，选热度写入全局排序', (tester) async {
+      await pumpTopic(tester);
+
+      // Header chip shows the current sort (默认 时间).
+      await tester.scrollUntilVisible(
+        find.text('时间'),
+        300,
+        scrollable: find.byType(Scrollable).first,
+      );
+      await tester.tap(find.text('时间'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('回复排序'), findsOneWidget);
+      await tester.tap(find.text('热度'));
+      await tester.pumpAndSettle();
+
+      // The chip now reads 热度 — the global setting changed and the
+      // reply section rebuilt under it.
+      expect(find.text('热度'), findsOneWidget);
+      expect(find.text('时间'), findsNothing);
     });
   });
 
