@@ -233,6 +233,10 @@ abstract final class Mv2Events {
   /// 分享应用(share_plus 不回调用户选的渠道,故无 channel 参数)。
   static const String appShare = 'app_share';
 
+  /// Base64 编解码(联系方式防爬虫场景)。`action`: decode(阅读端点解码)|
+  /// encode(编辑器把选中文本转 base64)
+  static const String base64Tool = 'base64_tool';
+
   // ------------------------------------------------------------------
   // 设置与数据
   // ------------------------------------------------------------------
@@ -320,6 +324,7 @@ abstract final class Mv2Events {
     appReview: ['method'],
     appRedeem: [],
     appShare: [],
+    base64Tool: ['action'],
   };
 
   /// 文本长度分桶(回复/标题/搜索词),避免记录原文。

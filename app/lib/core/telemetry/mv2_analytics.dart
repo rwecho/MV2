@@ -401,6 +401,9 @@ abstract final class Mv2Analytics {
 
   static void logAppShare() => _log(Mv2Events.appShare, const {});
 
+  static void logBase64Tool({required String action}) =>
+      _log(Mv2Events.base64Tool, {'action': action});
+
   // ------------------------------------------------------------------
   // 用户属性
   // ------------------------------------------------------------------

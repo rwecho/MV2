@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/telemetry/mv2_analytics.dart';
+import '../../../core/text/base64_text.dart';
 import '../../../design_system/effects/mv2_glass.dart';
 import '../../../design_system/theme/mv2_theme.dart';
 import '../../../design_system/tokens/mv2_radius.dart';
@@ -153,6 +154,21 @@ class _PublishTopicPageState extends ConsumerState<PublishTopicPage> {
     ref.read(publishProvider.notifier).setContent(_content.text);
   }
 
+  /// 把正文选中的文字原位编码为 Base64（联系方式防爬虫）。未选中只提示，
+  /// 不整体编码。
+  void _encodeBase64() {
+    final selection = _content.selection;
+    if (!selection.isValid || selection.isCollapsed) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('先选中要编码的文字，再点编码')),
+      );
+      return;
+    }
+    _content.value = Base64Text.encodeSelection(_content.value);
+    ref.read(publishProvider.notifier).setContent(_content.text);
+    Mv2Analytics.logBase64Tool(action: 'encode');
+  }
+
   void _togglePreview() => ref.read(publishProvider.notifier).togglePreview();
 
   /// Inserts [snippet] (an uploaded image) at the body caret and syncs the draft.
@@ -203,6 +219,7 @@ class _PublishTopicPageState extends ConsumerState<PublishTopicPage> {
                   onBold: () => _wrapSelection('**', '**'),
                   onCode: () => _wrapSelection('`', '`'),
                   onLink: () => _wrapSelection('[', '](https://)'),
+                  onBase64: _encodeBase64,
                 ),
                 _PublishFooter(saved: state.draftSaved),
               ],
@@ -448,7 +465,7 @@ class _PreviewPane extends StatelessWidget {
   }
 }
 
-/// Pinned composer toolbar (图片 + 预览/编辑 + Markdown helpers).
+/// Pinned composer toolbar (图片 + 预览/编辑 + Markdown helpers + Base64).
 class _PublishToolbar extends StatelessWidget {
   const _PublishToolbar({
     required this.preview,
@@ -459,6 +476,7 @@ class _PublishToolbar extends StatelessWidget {
     required this.onBold,
     required this.onCode,
     required this.onLink,
+    required this.onBase64,
   });
 
   final bool preview;
@@ -469,6 +487,7 @@ class _PublishToolbar extends StatelessWidget {
   final VoidCallback onBold;
   final VoidCallback onCode;
   final VoidCallback onLink;
+  final VoidCallback onBase64;
 
   @override
   Widget build(BuildContext context) {
@@ -518,6 +537,11 @@ class _PublishToolbar extends StatelessWidget {
                     label: '链接',
                     icon: Icons.link_rounded,
                     onPressed: preview ? null : onLink,
+                  ),
+                  Mv2ToolbarButton(
+                    label: '编码',
+                    leadingText: '64',
+                    onPressed: preview ? null : onBase64,
                   ),
                 ],
               ),

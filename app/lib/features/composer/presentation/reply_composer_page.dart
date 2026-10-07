@@ -7,6 +7,7 @@ import '../../../core/data/session_once.dart';
 import '../../../core/data/v2ex_providers.dart';
 import '../../../core/errors/failures.dart';
 import '../../../core/telemetry/mv2_analytics.dart';
+import '../../../core/text/base64_text.dart';
 import '../../../design_system/effects/mv2_glass.dart';
 import '../../../design_system/theme/mv2_theme.dart';
 import '../../../design_system/tokens/mv2_radius.dart';
@@ -167,6 +168,21 @@ class _ReplyComposerPageState extends ConsumerState<ReplyComposerPage> {
       text: value.text.replaceRange(start, end, snippet),
       selection: TextSelection.collapsed(offset: start + snippet.length),
     );
+  }
+
+  /// 把选中的文字原位编码为 Base64（联系方式防爬虫，V2EX Polish 的
+  /// 「文字转 Base64」同款）。没选中时只提示，绝不整体编码——那是
+  /// 不可逆感很强的破坏性操作。
+  void _encodeBase64() {
+    final selection = _controller.selection;
+    if (!selection.isValid || selection.isCollapsed) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('先选中要编码的文字，再点 Base64')),
+      );
+      return;
+    }
+    _controller.value = Base64Text.encodeSelection(_controller.value);
+    Mv2Analytics.logBase64Tool(action: 'encode');
   }
 
   /// Resolves the reply being quoted, so the quote block always mirrors the
@@ -363,6 +379,7 @@ class _ReplyComposerPageState extends ConsumerState<ReplyComposerPage> {
             onInsertImage: _insertAtCursor,
             emojiOpen: _emojiOpen,
             onToggleEmoji: _toggleEmoji,
+            onBase64: _encodeBase64,
           ),
           _ComposerFooter(draftSaved: _controller.text.trim().isNotEmpty),
         ],
@@ -707,18 +724,21 @@ class _QuoteBlock extends StatelessWidget {
 
 /// Pinned toolbar directly above the footer (`designs/03-reply-composer.png`).
 ///
-/// Image + emoji only: V2EX is Markdown by default, and the old 引用/预览/
-/// Markdown buttons were stubs. 表情 opens V2EX Polish's emoji library.
+/// Image + emoji + base64: V2EX is Markdown by default, and the old 引用/
+/// 预览/Markdown buttons were stubs. 表情 opens V2EX Polish's emoji library;
+/// Base64 encodes the selected text (contact-info anti-crawler convention).
 class _ComposerToolbar extends StatelessWidget {
   const _ComposerToolbar({
     required this.onInsertImage,
     required this.emojiOpen,
     required this.onToggleEmoji,
+    required this.onBase64,
   });
 
   final ValueChanged<String> onInsertImage;
   final bool emojiOpen;
   final VoidCallback onToggleEmoji;
+  final VoidCallback onBase64;
 
   @override
   Widget build(BuildContext context) {
@@ -740,6 +760,11 @@ class _ComposerToolbar extends StatelessWidget {
                   icon: Icons.sentiment_satisfied_alt_outlined,
                   active: emojiOpen,
                   onPressed: onToggleEmoji,
+                ),
+                Mv2ToolbarButton(
+                  label: '编码',
+                  leadingText: '64',
+                  onPressed: onBase64,
                 ),
               ],
             ),

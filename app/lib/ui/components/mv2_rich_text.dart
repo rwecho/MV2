@@ -1,5 +1,3 @@
-import 'dart:convert';
-
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
@@ -10,10 +8,12 @@ import 'package:html/parser.dart' as html_parser;
 
 import '../../core/parser/html_dom.dart';
 import '../../core/telemetry/mv2_analytics.dart';
+import '../../core/text/base64_text.dart';
 import '../../design_system/theme/mv2_theme.dart';
 import '../../design_system/tokens/mv2_radius.dart';
 import '../../design_system/tokens/mv2_spacing.dart';
 import '../../features/reader/application/open_external_url.dart';
+import '../primitives/mv2_buttons.dart';
 import 'mv2_image_viewer.dart';
 import 'video_embed/mv2_video_embed.dart';
 import 'video_embed/mv2_video_embed_card.dart';
@@ -852,7 +852,7 @@ class _Mv2RichTextState extends State<Mv2RichText> {
     TextStyle style,
   ) {
     if (widget.onFloorRefTap == null) {
-      return _textWithDecodeHint(context, text, style);
+      return _textWithBase64(context, text, style);
     }
     final spans = <InlineSpan>[];
     var cursor = 0;
@@ -861,7 +861,7 @@ class _Mv2RichTextState extends State<Mv2RichText> {
       if (floor == null) continue;
       if (match.start > cursor) {
         spans.addAll(
-          _textWithDecodeHint(
+          _textWithBase64(
             context,
             text.substring(cursor, match.start),
             style,
@@ -872,7 +872,7 @@ class _Mv2RichTextState extends State<Mv2RichText> {
       cursor = match.end;
     }
     if (cursor < text.length) {
-      spans.addAll(_textWithDecodeHint(context, text.substring(cursor), style));
+      spans.addAll(_textWithBase64(context, text.substring(cursor), style));
     }
     return spans;
   }
@@ -954,34 +954,39 @@ class _Mv2RichTextState extends State<Mv2RichText> {
     );
   }
 
-  /// V2EX sometimes renders links as bare base64 runs; mirroring the legacy
-  /// client we offer a one-tap decode that copies the result.
-  List<InlineSpan> _textWithDecodeHint(
+  /// 正文里的 base64 串（站友常用它编码联系方式防爬虫，V2EX Polish 同款
+  /// 场景）：整段可点，弹层展示解码结果并可复制。
+  List<InlineSpan> _textWithBase64(
     BuildContext context,
     String text,
     TextStyle style,
   ) {
-    final match = RegExp(r'[A-Za-z0-9+/]{16,}={0,2}').firstMatch(text);
+    final match = Base64Text.candidatePattern.firstMatch(text);
     if (match == null) return <InlineSpan>[TextSpan(text: text)];
 
     final candidate = match.group(0)!;
-    final decoded = _tryDecodeBase64(candidate);
+    final decoded = Base64Text.tryDecode(candidate);
     if (decoded == null) return <InlineSpan>[TextSpan(text: text)];
+
+    void decode() => _showBase64Sheet(context, candidate, decoded);
+    final recognizer = TapGestureRecognizer()..onTap = decode;
+    _recognizers.add(recognizer);
 
     return <InlineSpan>[
       TextSpan(text: text.substring(0, match.start)),
-      TextSpan(text: candidate, style: style),
+      // 串本身染 accent 提示可点；正文里碰巧长得像 base64 的单词不会被
+      // 染色——tryDecode 不过就按普通文本渲染。
+      TextSpan(
+        text: candidate,
+        style: style.copyWith(color: context.colors.accent),
+        recognizer: recognizer,
+      ),
       WidgetSpan(
         alignment: PlaceholderAlignment.middle,
         child: Padding(
           padding: const EdgeInsets.only(left: 4),
           child: GestureDetector(
-            onTap: () async {
-              await Clipboard.setData(ClipboardData(text: decoded));
-              if (!context.mounted) return;
-              ScaffoldMessenger.of(context)
-                  .showSnackBar(const SnackBar(content: Text('已解码并复制')));
-            },
+            onTap: decode,
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
               decoration: BoxDecoration(
@@ -1002,19 +1007,85 @@ class _Mv2RichTextState extends State<Mv2RichText> {
     ];
   }
 
-  String? _tryDecodeBase64(String value) {
-    try {
-      final bytes = const Base64Decoder().convert(value);
-      final decoded = String.fromCharCodes(bytes);
-      if (decoded.isEmpty) return null;
-      final printable = decoded.runes
-          .where((rune) => rune >= 0x20 && rune < 0x7F)
-          .length;
-      if (printable / decoded.length < 0.8) return null;
-      return decoded;
-    } catch (_) {
-      return null;
-    }
+  /// 解码结果弹层：可选中的明文 + 复制。解码这一步与剪贴板解耦——
+  /// 联系方式应该先看得见再决定要不要复制。
+  void _showBase64Sheet(
+    BuildContext context,
+    String candidate,
+    String decoded,
+  ) {
+    Mv2Analytics.logBase64Tool(action: 'decode');
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: context.colors.elevatedSurface,
+      shape: const RoundedRectangleBorder(borderRadius: Mv2Radius.allXl),
+      builder: (sheetContext) {
+        final colors = sheetContext.colors;
+        return SafeArea(
+          top: false,
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(
+              Mv2Spacing.x4,
+              Mv2Spacing.x5,
+              Mv2Spacing.x4,
+              Mv2Spacing.x3,
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: <Widget>[
+                Text(
+                  'Base64 解码',
+                  style: sheetContext.text.sectionTitle.copyWith(
+                    color: colors.textPrimary,
+                  ),
+                ),
+                const SizedBox(height: Mv2Spacing.x1),
+                Text(
+                  candidate,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: sheetContext.text.metadata.copyWith(
+                    color: colors.textTertiary,
+                  ),
+                ),
+                const SizedBox(height: Mv2Spacing.x3),
+                Flexible(
+                  child: SingleChildScrollView(
+                    child: Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(Mv2Spacing.x3),
+                      decoration: BoxDecoration(
+                        color: colors.divider,
+                        borderRadius: Mv2Radius.allXs,
+                      ),
+                      child: SelectableText(
+                        decoded,
+                        style: sheetContext.text.reading.copyWith(
+                          color: colors.textPrimary,
+                          height: 1.5,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: Mv2Spacing.x4),
+                Mv2FilledButton(
+                  label: '复制',
+                  onPressed: () async {
+                    await Clipboard.setData(ClipboardData(text: decoded));
+                    if (!sheetContext.mounted) return;
+                    Navigator.of(sheetContext).pop();
+                    ScaffoldMessenger.of(context)
+                        .showSnackBar(const SnackBar(content: Text('已复制')));
+                  },
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
   }
 
   Future<void> _openLink(BuildContext context, String href) async {
