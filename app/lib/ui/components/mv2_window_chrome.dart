@@ -113,6 +113,7 @@ class _Mv2WindowChromeHostState extends ConsumerState<Mv2WindowChromeHost> {
                 notificationUnread: ref.watch(notificationUnreadProvider),
                 topInset: topInset,
                 bottomInset: padding.bottom,
+                stripWidth: stripWidth,
               ),
             ),
           ],

@@ -49,6 +49,28 @@ double mv2StripWidthFrom(EdgeInsets padding) {
 /// they never reach the threshold.
 const double trailingRailMinInset = 60.0;
 
+/// Width of the Duo's own status column inside the trailing strip.
+///
+/// Measured on the folded cover display (466×678pt, strip x 382..466): the
+/// island / sensor block and the status glyphs span x 397.7..438.3pt, i.e.
+/// **42pt wide and 16pt in from the strip's leading edge**. The strip's own
+/// centre (424pt) is *not* that column's centre (418pt) — the app's toolbar and
+/// tab bar align to the column, so all three share one axis.
+const double duoStatusColumnWidth = 42.0;
+
+/// Distance from the strip's leading edge to that column.
+const double duoStatusColumnLeading = 16.0;
+
+/// Horizontal padding that puts the app's chrome exactly on the system
+/// column's axis.
+EdgeInsets mv2StripColumnInsets(double stripWidth) => EdgeInsets.only(
+  left: duoStatusColumnLeading,
+  right: (stripWidth - duoStatusColumnLeading - duoStatusColumnWidth).clamp(
+    0,
+    double.infinity,
+  ),
+);
+
 /// Height the Duo's system hardware covers at the top of the trailing strip,
 /// used until the platform reports the reserved region itself.
 ///

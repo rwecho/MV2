@@ -7,6 +7,7 @@ import '../../design_system/tokens/mv2_motion.dart';
 import '../../design_system/tokens/mv2_radius.dart';
 import '../../design_system/tokens/mv2_spacing.dart';
 import '../../features/shell/application/chrome_actions.dart';
+import '../utils/scene_geometry.dart';
 import 'mv2_floating_tab_bar.dart';
 
 /// The iPhone Duo's trailing edge chrome: **a toolbar on top of a tab bar**,
@@ -33,6 +34,7 @@ class Mv2TrailingChrome extends ConsumerWidget {
     this.notificationUnread = 0,
     this.topInset = 0,
     this.bottomInset = 0,
+    this.stripWidth = duoStatusColumnWidth + 2 * duoStatusColumnLeading,
   });
 
   /// Currently selected shell destination.
@@ -50,37 +52,49 @@ class Mv2TrailingChrome extends ConsumerWidget {
   /// Safe-area inset at the bottom of the window.
   final double bottomInset;
 
+  /// Width of the strip this chrome lives in, so its contents can sit on the
+  /// system column's axis (see [mv2StripColumnInsets]).
+  final double stripWidth;
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final pageActions =
         ref.watch(toolbarActionsProvider) ?? const <Mv2ToolbarAction>[];
 
     return Padding(
-      // Clear the system chrome first; each cluster then keeps its own margin
-      // inside what is left of the strip.
+      // Clear the system chrome first.
       padding: EdgeInsets.only(top: topInset, bottom: bottomInset),
-      child: Column(
-        // Two distinct clusters, not one continuous bar (Apple's Duo mockups):
-        // the tab bar is pinned to the bottom, the toolbar sits right below the
-        // system's column and scrolls if a page offers more actions than the
-        // strip's height can show at once.
-        children: <Widget>[
-          Expanded(
-            child: Align(
+      child: Padding(
+        // Both sections sit on the *system* column's axis, not the strip's
+        // centre: measured island/glyphs span 16..58pt of the 84pt strip.
+        padding: mv2StripColumnInsets(stripWidth),
+        child: Column(
+          // Two distinct clusters, not one continuous bar (Apple's Duo mockups):
+          // the tab bar is pinned to the bottom, the toolbar sits right below
+          // the system's column and scrolls if a page offers more actions than
+          // the strip's height can show at once.
+          children: <Widget>[
+            Align(
               alignment: Alignment.topCenter,
               child: SingleChildScrollView(
                 child: _ToolbarSection(actions: pageActions),
               ),
             ),
-          ),
-          _Cluster(
-            child: _TabBarSection(
-              current: current,
-              onSelect: onSelect,
-              notificationUnread: notificationUnread,
+            // Centred in the space left below the toolbar, the way Apple's
+            // mockup floats this cluster instead of pinning it to the edge.
+            Expanded(
+              child: Center(
+                child: _Cluster(
+                  child: _TabBarSection(
+                    current: current,
+                    onSelect: onSelect,
+                    notificationUnread: notificationUnread,
+                  ),
+                ),
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -96,15 +110,13 @@ class _Cluster extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.symmetric(
-        horizontal: Mv2Spacing.x2,
-        vertical: Mv2Spacing.x2,
-      ),
+      padding: const EdgeInsets.symmetric(vertical: Mv2Spacing.x2),
       child: Mv2GlassSurface(
         borderRadius: Mv2Radius.nav,
         blur: 20,
         padding: const EdgeInsets.symmetric(vertical: Mv2Spacing.x3),
-        child: child,
+        // Same width as the status column above and the toolbar buttons.
+        child: SizedBox(width: duoStatusColumnWidth, child: child),
       ),
     );
   }
@@ -186,10 +198,7 @@ class _CircleSurface extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.symmetric(
-        horizontal: Mv2Spacing.x2,
-        vertical: Mv2Spacing.x1,
-      ),
+      padding: const EdgeInsets.symmetric(vertical: Mv2Spacing.x1),
       child: Mv2GlassSurface(
         borderRadius: Mv2Radius.pill,
         blur: 20,
@@ -204,10 +213,18 @@ class _CircleSurface extends StatelessWidget {
   }
 }
 
-/// Diameter Apple uses for edge toolbar buttons.
-const double _circleSize = 44;
+/// Toolbar button diameter: the system column's width, so a button lines up
+/// with the status column above it.
+const double _circleSize = duoStatusColumnWidth;
 
-/// The strip's tab bar: the five shell destinations.
+/// 发布 accent disc, kept inside the column width.
+const double _publishSize = 28;
+
+/// The strip's tab bar: the five shell destinations as icon tiles.
+///
+/// Apple's mockup for this edge shows icon-only tiles in a narrow cluster (the
+/// labels of the phone bar do not fit an 42pt-wide column), with the selected
+/// one on a filled rounded square, so that is what this renders.
 class _TabBarSection extends StatelessWidget {
   const _TabBarSection({
     required this.current,
@@ -241,53 +258,7 @@ class _TabBarSection extends StatelessWidget {
   }
 }
 
-/// Icon + label column shared by both sections.
-class _ChromeTile extends StatelessWidget {
-  const _ChromeTile({
-    required this.leading,
-    required this.label,
-    required this.labelColor,
-    required this.onTap,
-    required this.semanticsLabel,
-    this.selected = false,
-  });
-
-  final Widget leading;
-  final String label;
-  final Color labelColor;
-  final VoidCallback onTap;
-  final String semanticsLabel;
-  final bool selected;
-
-  @override
-  Widget build(BuildContext context) {
-    return Semantics(
-      button: true,
-      selected: selected,
-      label: semanticsLabel,
-      child: GestureDetector(
-        behavior: HitTestBehavior.opaque,
-        onTap: onTap,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: Mv2Spacing.x2),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: <Widget>[
-              leading,
-              const SizedBox(height: 3),
-              AnimatedDefaultTextStyle(
-                duration: Mv2Motion.tab,
-                style: context.text.tabLabel.copyWith(color: labelColor),
-                child: Text(label),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
+/// One destination: a square icon tile, sized to the column.
 class _TabBarItem extends StatelessWidget {
   const _TabBarItem({
     required this.spec,
@@ -306,27 +277,51 @@ class _TabBarItem extends StatelessWidget {
     final colors = context.colors;
     final fg = selected ? colors.accent : colors.textTertiary;
 
-    return _ChromeTile(
+    return Semantics(
+      button: true,
       selected: selected,
-      semanticsLabel: spec.label,
       label: spec.label,
-      labelColor: fg,
-      onTap: onTap,
-      leading: Stack(
-        clipBehavior: Clip.none,
-        children: <Widget>[
-          Icon(selected ? spec.activeIcon : spec.icon, size: 22, color: fg),
-          if (badgeCount > 0)
-            Positioned(
-              right: -7,
-              top: -5,
-              child: _ChromeBadge(count: badgeCount),
-            ),
-        ],
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: onTap,
+        child: SizedBox(
+          width: duoStatusColumnWidth,
+          height: _tileSize,
+          child: Stack(
+            clipBehavior: Clip.none,
+            children: <Widget>[
+              Center(
+                child: AnimatedContainer(
+                  duration: Mv2Motion.tab,
+                  width: _tileSize - 6,
+                  height: _tileSize - 6,
+                  decoration: BoxDecoration(
+                    color: selected ? colors.accentSoft : Colors.transparent,
+                    borderRadius: Mv2Radius.allMd,
+                  ),
+                  child: Icon(
+                    selected ? spec.activeIcon : spec.icon,
+                    size: 20,
+                    color: fg,
+                  ),
+                ),
+              ),
+              if (badgeCount > 0)
+                Positioned(
+                  right: 2,
+                  top: 2,
+                  child: _ChromeBadge(count: badgeCount),
+                ),
+            ],
+          ),
+        ),
       ),
     );
   }
 }
+
+/// Height of one destination tile in the strip.
+const double _tileSize = 40;
 
 class _TabBarPublish extends StatelessWidget {
   const _TabBarPublish({required this.onTap});
@@ -336,22 +331,30 @@ class _TabBarPublish extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = context.colors;
-    return _ChromeTile(
-      semanticsLabel: '发布',
+    return Semantics(
+      button: true,
       label: '发布',
-      labelColor: colors.textTertiary,
-      onTap: onTap,
-      leading: Container(
-        width: 32,
-        height: 32,
-        decoration: BoxDecoration(
-          color: colors.accent,
-          shape: BoxShape.circle,
-        ),
-        child: Icon(
-          Icons.add_rounded,
-          size: 20,
-          color: colors.accentContrast,
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: onTap,
+        child: SizedBox(
+          width: duoStatusColumnWidth,
+          height: _tileSize,
+          child: Center(
+            child: Container(
+              width: _publishSize,
+              height: _publishSize,
+              decoration: BoxDecoration(
+                color: colors.accent,
+                shape: BoxShape.circle,
+              ),
+              child: Icon(
+                Icons.add_rounded,
+                size: 18,
+                color: colors.accentContrast,
+              ),
+            ),
+          ),
         ),
       ),
     );

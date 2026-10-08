@@ -147,12 +147,19 @@ void main() {
       ),
       findsOneWidget,
     );
-    // Tab bar: the five destinations, labelled.
-    for (final label in <String>['首页', '节点', '发布', '通知', '我的']) {
+    // Tab bar: the five destinations as icon tiles.
+    for (final icon in <IconData>[
+      // 首页 is the selected tab here, so it renders its active icon.
+      Icons.home_rounded,
+      Icons.grid_view_outlined,
+      Icons.add_rounded,
+      Icons.notifications_none_rounded,
+      Icons.person_outline_rounded,
+    ]) {
       expect(
-        find.descendant(of: chrome, matching: find.text(label)),
+        find.descendant(of: chrome, matching: find.byIcon(icon)),
         findsOneWidget,
-        reason: '«$label» should live in the strip',
+        reason: '«$icon» should live in the strip',
       );
     }
     // Still two-pane: the rail is chrome, not a layout mode.
@@ -199,17 +206,29 @@ void main() {
       greaterThanOrEqualTo(statusColumnHeight),
       reason: 'page actions must clear the system column',
     );
+    // The destinations float, centred in the space below the toolbar — Apple's
+    // mockup for this edge does not pin the tab bar to the window edge.
+    final destinations = tester.getRect(
+      find.descendant(
+        of: find.byType(Mv2TrailingChrome),
+        matching: find.byType(Mv2GlassSurface),
+      ).last,
+    );
+    final toolbar = tester.getRect(
+      find.descendant(
+        of: find.byType(Mv2TrailingChrome),
+        matching: find.byType(Mv2GlassSurface),
+      ).first,
+    );
     expect(
-      tester
-          .getBottomLeft(
-            find.descendant(
-              of: find.byType(Mv2TrailingChrome),
-              matching: find.text('我的'),
-            ),
-          )
-          .dy,
-      greaterThan(unfoldedSize.height - 60),
-      reason: 'destinations sit at the bottom of the strip',
+      destinations.center.dy,
+      greaterThan(toolbar.bottom),
+      reason: 'tab bar sits below the toolbar',
+    );
+    expect(
+      destinations.center.dy,
+      closeTo((toolbar.bottom + unfoldedSize.height) / 2, 40),
+      reason: 'tab bar is centred in the space below the toolbar',
     );
   });
 
@@ -274,6 +293,33 @@ void main() {
     expect(find.byIcon(Icons.more_horiz_rounded), findsOneWidget);
   });
 
+  testWidgets('toolbar and tab bar share the system column axis', (
+    tester,
+  ) async {
+    await boot(tester, foldedSize, padding: foldedPadding);
+    final chrome = find.byType(Mv2TrailingChrome);
+    final chromeRect = tester.getRect(chrome);
+
+    // The device's own column sits 16pt into the strip and is 42pt wide; our
+    // chrome must land on that axis, not the strip's centre.
+    final columnLeft = chromeRect.left + duoStatusColumnLeading;
+    final columnCentre = columnLeft + duoStatusColumnWidth / 2;
+    expect(columnCentre, isNot(closeTo(chromeRect.center.dx, 1.0)));
+
+    final discs = find.descendant(
+      of: chrome,
+      matching: find.byType(Mv2GlassSurface),
+    );
+    // First disc is the toolbar button, last is the tab bar cluster.
+    final button = tester.getRect(discs.first);
+    expect(button.width, closeTo(duoStatusColumnWidth, 0.5));
+    expect(button.center.dx, closeTo(columnCentre, 0.5));
+
+    final tabBar = tester.getRect(discs.last);
+    expect(tabBar.width, closeTo(duoStatusColumnWidth, 0.5));
+    expect(tabBar.center.dx, closeTo(columnCentre, 0.5));
+  });
+
   testWidgets('the toolbar follows the page', (tester) async {
     await boot(tester, foldedSize, padding: foldedPadding);
     final chrome = find.byType(Mv2TrailingChrome);
@@ -284,8 +330,8 @@ void main() {
       findsOneWidget,
     );
 
-    Future<void> switchTo(String label) async {
-      await tester.tap(find.descendant(of: chrome, matching: find.text(label)));
+    Future<void> switchTo(IconData icon) async {
+      await tester.tap(find.descendant(of: chrome, matching: find.byIcon(icon)));
       for (var i = 0; i < 4; i++) {
         await tester.pump(const Duration(milliseconds: 400));
       }
@@ -293,7 +339,7 @@ void main() {
 
     // 节点 ships 筛选节点; 我的 ships 设置. Each replaces the previous page's
     // action, which is the point of hosting the toolbar in the strip.
-    await switchTo('节点');
+    await switchTo(Icons.grid_view_outlined);
     expect(
       find.descendant(
         of: chrome,
@@ -306,7 +352,7 @@ void main() {
       findsNothing,
     );
 
-    await switchTo('我的');
+    await switchTo(Icons.person_outline_rounded);
     expect(
       find.descendant(
         of: chrome,
@@ -356,7 +402,7 @@ void main() {
     await tester.tap(
       find.descendant(
         of: find.byType(Mv2TrailingChrome),
-        matching: find.text('节点'),
+        matching: find.byIcon(Icons.grid_view_outlined),
       ),
     );
     await tester.pump(const Duration(milliseconds: 400));
