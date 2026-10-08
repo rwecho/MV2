@@ -135,19 +135,28 @@ GET `/signin` 得到 18081 → 47098 → 75285）。所以手里缓存的 token 
 - **安全区不对称**：Duo 折叠外屏（`466×678`）与展开内屏（`951×669`）都是**尾侧 `84pt`、首侧 `0`**
   （屏下摄像头/传感器条那一侧；折叠态另有底部 `34pt`）。右侧留白偏大是硬件要求，
   不要用负 padding 把内容顶进该区域。
-- **尾侧 chrome = toolbar + tab bar**：Apple 对 Duo 的指导是把系统状态栏（灵动岛/时钟）、
-  **toolbar**、**tab bar** 都放进同一条尾侧竖带（"Designing for iPhone Duo"）；系统那列由 iOS 画，
-  另外两块由我们画，且**是两块独立的玻璃簇，不是一条整条**：
-  - `_ToolbarSection`（上）：当前页面的操作键。主题详情经 `toolbarActionsProvider`
-    投递 收藏 / 感谢 / 分享（与页面内按钮同一套回调与 toast）；其它页面回退到 搜索 / 账号。
-  - `_TabBarSection`（下）：首页 · 节点 · 发布 · 通知 · 我的，钉在竖带底部；操作键多于此时代码会把
-    toolbar 区变成可滚动，永不溢出。
-- **这条带子是窗口级 chrome**：由 `ui/components/mv2_window_chrome.dart` 的
-  `Mv2WindowChromeHost` 挂在路由**之上**（`Mv2App.builder`），所以 push 出整屏路由（主题详情、登录…）
-  时它依然在；内容区通过 `Mv2WindowChromeScope` 读回测量值，避免二次预留尾侧 inset。
-  路由变化时 host 会清掉上一页投递的工具栏操作。判定 `mv2TrailingStripWidth()`：尾侧 inset ≥60
-  且大于首侧——折叠外屏与展开内屏都命中，手机（横屏 inset 对称）与 iPad 继续用底部悬浮条，
-  两者共用 `mv2TabSpecs`。
+- **导航 chrome 由 `adaptive_platform_ui` 提供**（MIT，依赖 `foldable`）：顶部/尾侧的工具条与
+  tab bar 不再是自绘组件。
+  - **tab bar**：`AdaptiveScaffold(bottomNavigationBar: AdaptiveBottomNavigationBar(...))`，
+    `items` 来自 `ui/components/adaptive/mv2_adaptive_destinations.dart`（首页 · 节点 · 发布 · 通知 ·
+    我的，通知带未读角标）。iOS 26+ 走**原生 UITabBar + Liquid Glass**，老 iOS 走 Cupertino，
+    Android/测试环境走 Material。发布仍是**动作**：shell 拦截后打开组合器，不切分支。
+  - **Duo 尾侧竖条**：由 `AdaptiveToolbarHost`（装在 `Mv2App.builder`，位于路由之上）绘制
+    `DuoVerticalBar` —— 页面工具条胶囊 + tab 胶囊，放不下的项进**系统 overflow 菜单**；位置由
+    `foldable` 上报的 reserved regions 决定（哪一侧、顶部让位多深、底边余量）。
+  - **页面工具条**：`Mv2PageScaffold` 把页头（`Mv2PageHeader` 或显式 `appBar`）转成
+    `AdaptiveAppBar` + `AdaptiveAppBarAction`，因此 feed / 节点 / 通知 / 我的 / 设置 / 主题详情等
+    共用**一条常驻工具条**，切页时只有条目变化。`iosSymbol` 由 `mv2SfSymbolFor` 映射
+    （Duo 胶囊只认 SF Symbol 名）。
+- **安全区不对称**：Duo 折叠外屏（`466×678`）与展开内屏（`951×669`）都是**尾侧 `84pt`、首侧 `0`**
+  （屏下摄像头/传感器条那一侧；折叠态另有底部 `34pt`）。右侧留白偏大是硬件要求，
+  不要用负 padding 把内容顶进该区域。
+- **`foldable` 的真机读数**（debug 构建会在状态变化时打一行 `MV2: fold …`）：
+  折叠外屏 `status=closed angle=0.0 sizeClass=compact`，
+  `occlusion(382,0,466,170)`（系统状态区，深 170pt）与 `occlusion(399.7,29.3,436.7,66.3)`（摄像头，
+  中心 x=418.2pt）——后者正是包在竖带里排布胶囊的中轴。
+  包的 `MediaQuery.displayFeatures` 桥接**保持关闭**：一旦发布折痕，Material 的弹窗/抽屉会被
+  `DisplayFeatureSubScreen` 限制到半屏。
 - **构建 SDK 必须 27.1**：用 iOS **27.0** SDK 构建的包在 Duo 上会被系统判为「未适配」，
   窗口只有 `871×669pt`，右侧 `80pt` 是系统黑边（与 iPhone X 时代 letterbox 同一机制），
   Flutter 只能按 871pt 排版，页面看起来「右侧少一截」。检查命令：
