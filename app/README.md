@@ -125,6 +125,25 @@ GET `/signin` 得到 18081 → 47098 → 75285）。所以手里缓存的 token 
 的 `transformEmoji` 把已知 token 换成低清图 URL，V2EX 才会渲染成图片（草稿保留可读 token）。
 面板是工具栏上方的内联面板，点输入框自动收起。
 
+### iPhone Duo（折叠屏）
+
+- **分栏依据**：Duo 展开内屏逻辑尺寸 `951×669pt`，水平 size class 为 `regular`，走列表 + 详情双栏；
+  普通 iPhone（含横屏约 874pt）恒为 `compact`，保持单栏。判定在 `ui/utils/mv2_breakpoints.dart`：
+  `width >= 900 || (trait == 'regular' && width >= 850)`；trait 来自
+  `MV2NativeBridge.horizontalSizeClass()`（iOS 侧读 `UIWindowScene.traitCollection`）。
+  双栏时安全区只作用在贴屏幕的那一侧（左栏留左、右栏留右），分隔条一侧不再重复扣 34pt。
+- **安全区不对称**：展开横屏时左侧 inset 为 `0`、**右侧为 `84pt`**（屏下摄像头/传感器条那一侧）。
+  详情列右侧留白偏大是硬件要求，不要用负 padding 把内容顶进该区域。
+- **构建 SDK 必须 27.1**：用 iOS **27.0** SDK 构建的包在 Duo 上会被系统判为「未适配」，
+  窗口只有 `871×669pt`，右侧 `80pt` 是系统黑边（与 iPhone X 时代 letterbox 同一机制），
+  Flutter 只能按 871pt 排版，页面看起来「右侧少一截」。检查命令：
+  `xcrun vtool -show-build <Runner.app>/Runner`，`sdk` 应为 `27.1`。
+  本地只有 Xcode 27.0 时，可在**调试包**上做一次性补丁来核验布局
+  （`xcrun vtool -set-build-version iossim 15.0 27.1 -replace -output <out> <binary>` +
+  `Info.plist` 的 `DTSDKName`/`DTPlatformVersion` 改为 27.1 + `codesign --force --deep --sign -`）；
+  **这只用于本地模拟器核验，发布包必须在 Xcode 27.1 上构建。**
+
+
 ### 从外部打开（Deep Link）
 
 `core/deeplink/`：
