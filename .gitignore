@@ -41,3 +41,4 @@ preferences.json
 
 # ZCode local session data
 .zcode/
+.zcodeignore
