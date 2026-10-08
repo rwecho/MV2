@@ -1,3 +1,3 @@
-• Fixed: pressing enter while writing a reply no longer hides the new text under the keyboard — the caret always stays visible
-• Improved: the quoted topic card auto-collapses as your reply grows, giving more room to write
+• New: encode selected text as Base64 when posting or replying — share contact info without letting scrapers grab it; tap a Base64 string in a topic to decode and copy it
+• New: share a topic as a beautifully formatted long image, perfect for chat groups
 • Stability and performance improvements
