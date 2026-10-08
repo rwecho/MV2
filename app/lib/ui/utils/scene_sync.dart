@@ -14,8 +14,7 @@ import '../utils/scene_geometry.dart';
 /// bridge whenever the window size changes — exactly the moment folding,
 /// unfolding or rotation changes the trait, the safe area and the strip the
 /// system keeps for its own chrome on the Duo. A re-sync that yields a different
-/// value triggers a rebuild so the shell can re-evaluate [mv2IsTwoPane] and
-/// [mv2UsesTrailingRail].
+/// value triggers a rebuild so the shell can re-evaluate [mv2IsTwoPane].
 class Mv2SceneSync extends StatefulWidget {
   const Mv2SceneSync({required this.child, super.key});
 

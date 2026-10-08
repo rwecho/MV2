@@ -7,11 +7,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:foldable/foldable.dart';
 import 'package:mv2/app/app.dart';
-import 'package:mv2/core/data/v2ex_providers.dart';
-import 'package:mv2/ui/components/mv2_floating_tab_bar.dart';
-import 'package:mv2/ui/components/mv2_trailing_chrome.dart';
 import 'package:mv2/ui/utils/mv2_breakpoints.dart';
 import 'package:mv2/ui/utils/scene_geometry.dart';
+import 'package:mv2/core/data/v2ex_providers.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'support/test_container.dart';
@@ -27,8 +25,6 @@ void main() {
   // Folded cover display: 466×678, trailing strip 84pt, bottom 34pt.
   const foldedSize = Size(466, 678);
   const foldedPadding = EdgeInsets.only(right: 84, bottom: 34);
-  // Unfolded inner display: 951×669, trailing strip 84pt, no bottom inset.
-  const unfoldedSize = Size(951, 669);
 
   String? nativeSizeClass;
   Map<Object?, Object?>? nativeGeometry;
@@ -181,10 +177,6 @@ void main() {
     for (final label in <String>['首页', '节点', '发布', '通知', '我的']) {
       expect(destination(label), findsOneWidget);
     }
-
-    // Our own chrome is retired: no floating bar, no self-drawn strip.
-    expect(find.byType(Mv2FloatingTabBar), findsNothing);
-    expect(find.byType(Mv2TrailingChrome), findsNothing);
   });
 
   testWidgets('发布 stays an action, not a branch', (tester) async {
@@ -206,61 +198,4 @@ void main() {
     expect(find.text('MV2'), findsWidgets);
   });
 
-  testWidgets('strip geometry follows the reported regions', (tester) async {
-    late double strip;
-    late double top;
-    late double bottom;
-
-    Future<void> probe(
-      Size size,
-      EdgeInsets padding, {
-      List<ReservedRegion> regions = const <ReservedRegion>[],
-    }) async {
-      await tester.pumpWidget(
-        MediaQuery(
-          data: MediaQueryData(
-            size: size,
-            padding: padding,
-            // The bar side is read from the *view* padding, exactly as the
-            // reference implementation does (it survives a SafeArea above).
-            viewPadding: padding,
-          ),
-          child: Builder(
-            builder: (BuildContext context) {
-              strip = mv2TrailingStripWidth(context);
-              final insets = mv2DuoBarInsetsOf(context);
-              top = insets.top;
-              bottom = insets.bottom;
-              return const SizedBox.shrink();
-            },
-          ),
-        ),
-      );
-    }
-
-    // Duo strip, no readings yet → the status-cluster fallback keeps controls
-    // out of the 170pt region the device reports.
-    await probe(foldedSize, foldedPadding);
-    expect(strip, 84);
-    expect(top, mv2DuoStatusClusterFallbackHeight);
-    expect(bottom, 34, reason: 'the home indicator still has to stay clear');
-
-    // With the device's own region the clearance is exactly its bottom edge.
-    await probe(
-      foldedSize,
-      foldedPadding,
-      regions: <ReservedRegion>[
-        const ReservedRegion(
-          kind: ReservedRegionKind.occlusion,
-          bounds: Rect.fromLTRB(382, 0, 466, 170),
-          isActive: true,
-        ),
-      ],
-    );
-    expect(top, 170);
-
-    // Phones keep horizontal bars: symmetric side insets, no strip.
-    await probe(unfoldedSize, const EdgeInsets.symmetric(horizontal: 59));
-    expect(strip, 0);
-  });
 }

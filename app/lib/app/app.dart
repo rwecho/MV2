@@ -14,7 +14,6 @@ import '../../ui/primitives/mv2_shad_theme.dart';
 import 'package:adaptive_platform_ui/adaptive_platform_ui.dart';
 import 'package:foldable/foldable.dart';
 
-import '../../ui/components/mv2_window_chrome.dart';
 import '../../ui/utils/scene_sync.dart';
 import 'router.dart';
 import 'session_cache_refresh.dart';
@@ -87,11 +86,7 @@ class Mv2App extends ConsumerWidget {
               child: AdaptiveToolbarHost(
                 // ignore: invalid_use_of_visible_for_testing_member
                 debugFold: debugFold,
-                child: Mv2WindowChromeHost(
-                  navigatorKey: rootNavigatorKey,
-                  router: ref.watch(routerProvider),
-                  child: child ?? const SizedBox.shrink(),
-                ),
+                child: child ?? const SizedBox.shrink(),
               ),
             ),
           ),

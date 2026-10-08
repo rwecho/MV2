@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
-import '../../../../ui/components/mv2_floating_tab_bar.dart';
+import 'package:mv2/ui/components/adaptive/mv2_tabs.dart';
 import '../../../../ui/primitives/mv2_avatar.dart';
 import '../../../design_system/theme/mv2_theme.dart';
 import '../../auth/application/auth_controller.dart';

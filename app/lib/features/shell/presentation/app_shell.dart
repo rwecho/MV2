@@ -9,7 +9,7 @@ import 'package:multi_split_view/multi_split_view.dart';
 import '../../../design_system/theme/mv2_theme.dart';
 import '../../../design_system/tokens/mv2_spacing.dart';
 import '../../../ui/components/adaptive/mv2_adaptive_destinations.dart';
-import '../../../ui/components/mv2_floating_tab_bar.dart';
+import 'package:mv2/ui/components/adaptive/mv2_tabs.dart';
 import '../../../ui/components/states/mv2_state_view.dart';
 import '../../../ui/utils/mv2_breakpoints.dart';
 import '../../auth/application/auth_controller.dart';

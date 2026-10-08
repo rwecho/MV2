@@ -39,7 +39,6 @@ import '../../composer/presentation/composer_sheets.dart';
 import '../../nodes/application/open_node.dart';
 import '../../reader/application/open_external_url.dart';
 import '../../settings/application/settings_controller.dart';
-import '../../shell/application/chrome_actions.dart';
 import '../../shell/application/tablet_topic_pane.dart';
 import '../application/topic_actions.dart';
 import '../application/topic_providers.dart';
@@ -788,11 +787,6 @@ class _TopicDetailBodyState extends ConsumerState<_TopicDetailBody> {
   /// 归零或结算。
   late final DateTime _enteredAt = DateTime.now();
 
-  /// 侧边工具栏的投递口。缓存成字段：Riverpod 不允许在 `dispose()` 里用
-  /// `ref`（此时 BuildContext 已失效），而页面消失时必须把操作撤下来。
-  late final Mv2ToolbarActionsController _toolbarActions = ref.read(
-    toolbarActionsProvider.notifier,
-  );
 
   @override
   void initState() {
@@ -1202,44 +1196,6 @@ class _TopicDetailBodyState extends ConsumerState<_TopicDetailBody> {
     return const <Widget>[];
   }
 
-  /// Publishes 收藏 / 感谢 / 分享 to the Duo's trailing rail.
-  ///
-  /// Deferred past the frame: the provider is written from `build`, which
-  /// Riverpod forbids synchronously. The rail outlives this route when another
-  /// page takes the strip over, so each callback re-checks [mounted] and
-  /// `dispose` clears the chrome.
-  void _publishRailChrome(TopicActionsState actions) {
-    final detail = widget.detail;
-    final chrome = <Mv2ToolbarAction>[
-      Mv2ToolbarAction(
-        icon: Icons.star_border_rounded,
-        activeIcon: Icons.star_rounded,
-        active: actions.favoritedOf(detail.favorited),
-        label: '收藏',
-        onTap: _onFavorite,
-      ),
-      Mv2ToolbarAction(
-        icon: Icons.favorite_border_rounded,
-        activeIcon: Icons.favorite_rounded,
-        active: actions.thankedOf(detail.thanked),
-        label: '感谢',
-        onTap: _onThankTopic,
-      ),
-      // 分享 / 忽略 / 举报 live in this ellipsis (its sheet already offers all
-      // three), which is what the HIG asks for: reserve the ellipsis for
-      // overflow and put the secondary actions in that one menu.
-      Mv2ToolbarAction(
-        icon: Icons.more_horiz_rounded,
-        label: '更多',
-        onTap: () => mv2ShowTopicOverflowSheet(context, ref, widget.topicId),
-      ),
-    ];
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
-      _toolbarActions.set(chrome);
-    });
-  }
-
   @override
   Widget build(BuildContext context) {
     final colors = context.colors;
@@ -1247,9 +1203,6 @@ class _TopicDetailBodyState extends ConsumerState<_TopicDetailBody> {
     final topic = detail.topic;
     final contentHtml = detail.contentHtml;
     final actions = ref.watch(topicActionsProvider(widget.topicId));
-    // Duo trailing rail mirrors this page's actions (Apple's trailing-pane
-    // controls): 收藏 / 感谢 / 分享 through the very same callbacks.
-    _publishRailChrome(actions);
 
     // Surface failures once: an expired session routes to /login, anything else
     // (anti-flood, rejection) shows its own message.

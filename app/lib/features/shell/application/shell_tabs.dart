@@ -3,7 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/telemetry/mv2_analytics.dart';
-import '../../../ui/components/mv2_floating_tab_bar.dart';
+import 'package:mv2/ui/components/adaptive/mv2_tabs.dart';
 import '../../../ui/mv2_haptics.dart';
 import '../../composer/presentation/composer_sheets.dart';
 import '../../settings/application/settings_controller.dart';

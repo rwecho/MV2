@@ -9,7 +9,7 @@ import 'mv2_page_header.dart';
 import '../primitives/mv2_buttons.dart';
 import 'adaptive/mv2_adaptive_destinations.dart';
 import '../../features/settings/application/settings_controller.dart';
-import 'mv2_floating_tab_bar.dart';
+import 'package:mv2/ui/components/adaptive/mv2_tabs.dart';
 
 /// Shared page frame for the primary (tabbed) and secondary pages.
 ///
