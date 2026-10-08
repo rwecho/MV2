@@ -71,6 +71,14 @@ class Mv2TrailingRail extends StatelessWidget {
           blur: 20,
           padding: const EdgeInsets.symmetric(vertical: Mv2Spacing.x3),
           child: Column(
+            // Bottom-anchored: the system's own column (Dynamic Island + status
+            // items) sits at the *top* of this strip, and no API on this Flutter
+            // version reports how far down it reaches (see `mv2RailTopInset`).
+            // Keeping our controls in the lower part of the strip — where
+            // Apple's Duo mockups place the toolbar and the tab bar — avoids the
+            // overlap regardless; [topInset] clamps it further once the reserved
+            // region is known.
+            mainAxisAlignment: MainAxisAlignment.end,
             children: <Widget>[
               if (onSearch != null)
                 _RailAction(
@@ -80,7 +88,7 @@ class Mv2TrailingRail extends StatelessWidget {
                 ),
               const SizedBox(height: Mv2Spacing.x2),
               const Mv2AccountAvatar(size: 32),
-              const Spacer(),
+              const SizedBox(height: Mv2Spacing.x3),
               for (final spec in mv2TabSpecs)
                 if (spec.tab == Mv2Tab.publish)
                   _RailPublish(onTap: () => onSelect(spec.tab))

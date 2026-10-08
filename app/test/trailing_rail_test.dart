@@ -157,11 +157,36 @@ void main() {
       tester.widget<Mv2TrailingRail>(find.byType(Mv2TrailingRail)).topInset,
       statusColumnHeight,
     );
-    // The glass column — and with it the account avatar — begins after the
-    // system chrome, never underneath the Dynamic Island.
+    // The glass column starts after the system chrome, and the controls sit in
+    // the lower half of the strip — the top of it belongs to the system.
     expect(
       tester.getTopLeft(find.byType(Mv2GlassSurface)).dy,
       greaterThanOrEqualTo(statusColumnHeight),
+    );
+    // Bottom-anchored, so the strip's top — where the system draws its own
+    // column — is left empty and the last destination hugs the bottom edge.
+    expect(
+      tester
+          .getBottomLeft(
+            find.descendant(
+              of: find.byType(Mv2TrailingRail),
+              matching: find.text('我的'),
+            ),
+          )
+          .dy,
+      greaterThan(unfoldedSize.height - 60),
+    );
+    expect(
+      tester
+          .getTopLeft(
+            find.descendant(
+              of: find.byType(Mv2TrailingRail),
+              matching: find.text('搜索'),
+            ),
+          )
+          .dy,
+      greaterThan(statusColumnHeight),
+      reason: 'controls must stay clear of the system column at the top',
     );
   });
 
