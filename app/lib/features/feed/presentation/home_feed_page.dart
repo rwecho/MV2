@@ -1,3 +1,4 @@
+import 'package:adaptive_platform_ui/adaptive_platform_ui.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -7,7 +8,6 @@ import '../../../core/telemetry/mv2_analytics.dart';
 import '../../../design_system/tokens/mv2_motion.dart';
 import '../../../design_system/tokens/mv2_spacing.dart';
 import '../../../ui/components/mv2_error_feedback.dart';
-import '../../../ui/components/mv2_page_header.dart';
 import '../../../ui/components/mv2_page_scaffold.dart';
 import '../../../ui/components/mv2_refreshable.dart';
 import '../../../ui/components/mv2_scroll_collapse.dart';
@@ -16,7 +16,6 @@ import '../../../ui/components/states/mv2_skeleton.dart';
 import '../../../ui/components/states/mv2_state_view.dart';
 import '../../../ui/components/topic_item.dart';
 import '../../../ui/components/xna_item.dart';
-import '../../../ui/primitives/mv2_buttons.dart';
 import '../../auth/presentation/mv2_account_avatar.dart';
 import '../../shell/application/shell_chrome.dart';
 import '../../topic/application/open_topic.dart';
@@ -45,7 +44,9 @@ class _HomeFeedPageState extends ConsumerState<HomeFeedPage> {
   bool _animatingFromTap = false;
 
   /// True while the page header is shrunk to just the tab row.
-  bool _headerCollapsed = false;
+  /// Last collapse state pushed to the shell; the page header itself is part
+  /// of the fixed toolbar now, so this only keeps that shared state in step.
+  bool _barCollapsed = false;
 
   @override
   void initState() {
@@ -66,8 +67,8 @@ class _HomeFeedPageState extends ConsumerState<HomeFeedPage> {
   /// [mv2CollapseFromScroll].
   bool _onScrollNotification(ScrollNotification notification) {
     final collapsed = mv2CollapseFromScroll(notification);
-    if (collapsed != null && collapsed != _headerCollapsed) {
-      setState(() => _headerCollapsed = collapsed);
+    if (collapsed != null && collapsed != _barCollapsed) {
+      _barCollapsed = collapsed;
       ref.read(shellBarCollapsedProvider.notifier).set(collapsed);
     }
     return false;
@@ -98,54 +99,58 @@ class _HomeFeedPageState extends ConsumerState<HomeFeedPage> {
       _pageController.jumpToPage(next.index);
     });
 
-    return Mv2PageScaffold(
-      header: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: <Widget>[
-          // Reading down shrinks the page header away so only the tab row
-          // stays; scrolling back expands it.
-          AnimatedSize(
-            duration: Mv2Motion.sheet,
-            curve: Mv2Motion.standard,
-            alignment: Alignment.topCenter,
-            child: _headerCollapsed
-                ? const SizedBox(width: double.infinity, height: 0)
-                : Mv2PageHeader(
-                    title: 'MV2',
-                    subtitle: 'Wake Up to V2EX',
-                    actions: <Widget>[
-                      Mv2IconButton(
-                        icon: Icons.search_rounded,
-                        filled: true,
-                        onPressed: () => context.push('/feed/search'),
-                      ),
-                      const SizedBox(width: Mv2Spacing.x2),
-                      const Mv2AccountAvatar(),
-                    ],
-                  ),
+    // Feed header → the fixed toolbar: title, subtitle and the search action
+    // are published to `adaptive_platform_ui`'s chrome (which on the Duo draws
+    // them in the trailing capsule bar) instead of scrolling away with the
+    // list. The manual collapse is therefore gone — the native toolbar
+    // minimises on its own.
+    return AdaptiveScaffold(
+      resizeToAvoidBottomInset: false,
+      appBar: AdaptiveAppBar(
+        title: 'MV2',
+        subtitle: 'Wake Up to V2EX',
+        actions: <AdaptiveAppBarAction>[
+          AdaptiveAppBarAction(
+            iosSymbol: 'magnifyingglass',
+            icon: Icons.search_rounded,
+            iconWidget: const Icon(Icons.search_rounded),
+            label: '搜索',
+            onPressed: () => context.push('/feed/search'),
           ),
+          AdaptiveAppBarAction(
+            iconWidget: const Mv2AccountAvatar(),
+            label: '账号',
+            onPressed: () {},
+          ),
+        ],
+      ),
+      body: Column(
+        children: <Widget>[
           Mv2TabStrip(
             labels: <String>[for (final tab in HomeTab.values) tab.label],
             selectedIndex: tab.index,
             onChanged: _onTabSelected,
           ),
           const SizedBox(height: Mv2Spacing.x3),
+          Expanded(
+            child: NotificationListener<ScrollNotification>(
+              onNotification: _onScrollNotification,
+              child: PageView.builder(
+                controller: _pageController,
+                itemCount: HomeTab.values.length,
+                onPageChanged: (index) => ref
+                    .read(homeTabProvider.notifier)
+                    .select(HomeTab.values[index]),
+                itemBuilder: (context, index) {
+                  final pageTab = HomeTab.values[index];
+                  return pageTab.isAggregator
+                      ? const _XnaFeedBody()
+                      : _TopicFeedBody(tab: pageTab);
+                },
+              ),
+            ),
+          ),
         ],
-      ),
-      child: NotificationListener<ScrollNotification>(
-        onNotification: _onScrollNotification,
-        child: PageView.builder(
-          controller: _pageController,
-          itemCount: HomeTab.values.length,
-          onPageChanged: (index) =>
-              ref.read(homeTabProvider.notifier).select(HomeTab.values[index]),
-          itemBuilder: (context, index) {
-            final pageTab = HomeTab.values[index];
-            return pageTab.isAggregator
-                ? const _XnaFeedBody()
-                : _TopicFeedBody(tab: pageTab);
-          },
-        ),
       ),
     );
   }

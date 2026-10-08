@@ -200,8 +200,10 @@ void main() {
       await tester.pump(const Duration(milliseconds: 400));
     }
 
-    // The composer opens over the feed; the branch did not change.
-    expect(find.text('MV2'), findsOneWidget);
+    // The composer opens over the feed; the branch did not change. (「MV2」
+    // appears twice now: the large title in the content and the fixed
+    // toolbar's inline title.)
+    expect(find.text('MV2'), findsWidgets);
   });
 
   testWidgets('strip geometry follows the reported regions', (tester) async {

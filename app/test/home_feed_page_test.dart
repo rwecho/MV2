@@ -103,7 +103,7 @@ void main() {
     expect(container.read(homeTabProvider), HomeTab.vxna);
   });
 
-  testWidgets('reading down collapses the header and hides the bottom bar', (
+  testWidgets('reading down flips the shared collapse state', (
     tester,
   ) async {
     // Shrink the viewport so the short fixture list is scrollable.
@@ -114,25 +114,24 @@ void main() {
 
     final container = await boot(tester);
     expect(container.read(shellBarCollapsedProvider), isFalse);
-    expect(find.text('MV2'), findsOneWidget);
 
-    // Scroll toward the end of the list — chrome collapses.
+    // Scroll toward the end of the list — the state flips.
     await tester.drag(find.byType(PageView), const Offset(0, -160));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 400));
 
+    // The title and its actions belong to `adaptive_platform_ui`'s fixed
+    // toolbar now, so nothing is swapped out of the body; the native toolbar
+    // minimises on its own. Only the shared collapse state follows the scroll.
     expect(container.read(shellBarCollapsedProvider), isTrue);
-    // The big header is swapped out entirely, leaving the tab row.
-    expect(find.text('MV2'), findsNothing);
     expect(find.text('R2'), findsOneWidget);
 
-    // Scroll back — chrome returns.
+    // Scroll back — state returns.
     await tester.drag(find.byType(PageView), const Offset(0, 200));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 400));
 
     expect(container.read(shellBarCollapsedProvider), isFalse);
-    expect(find.text('MV2'), findsOneWidget);
   });
 
   testWidgets('pulling down refreshes the active tab', (tester) async {
