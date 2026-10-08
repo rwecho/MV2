@@ -319,7 +319,7 @@ class _AppShellState extends ConsumerState<AppShell> {
 /// Widths for the two-pane split: the list pane never gets narrower than a
 /// readable card column, and the detail pane always keeps room for its
 /// centred reading column.
-const double paneDividerThickness = 24.0;
+const double paneDividerThickness = 12.0;
 const double minPaneWidth = 320.0;
 const double minDetailWidth = 420.0;
 
