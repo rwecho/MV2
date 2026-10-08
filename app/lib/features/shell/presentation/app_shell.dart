@@ -12,6 +12,7 @@ import '../../../ui/components/mv2_floating_tab_bar.dart';
 import '../../../ui/components/mv2_trailing_rail.dart';
 import '../../../ui/components/states/mv2_state_view.dart';
 import '../../../ui/utils/mv2_breakpoints.dart';
+import '../../../ui/utils/scene_geometry.dart';
 import '../../auth/application/auth_controller.dart';
 import '../../auth/domain/auth_session.dart';
 import '../../notifications/application/notifications_providers.dart';
@@ -139,13 +140,16 @@ class _AppShellState extends ConsumerState<AppShell> {
       settingsProvider.select((AppSettings s) => s.splitRatio),
     );
 
-    // Unfolded Duo: the trailing safe-area strip (the sensor-bar side, where
-    // iOS parks the status bar and the Dynamic Island) hosts all chrome. The
-    // panes then stop reserving that inset — the rail already lives inside it —
-    // and the floating bottom bar steps aside, handing its height back to the
-    // content. Phones and iPads report no such strip and keep the old chrome.
-    final outerPadding = MediaQuery.paddingOf(context);
-    final railWidth = mv2UsesTrailingRail(context) ? outerPadding.right : 0.0;
+    // iPhone Duo: the trailing safe-area strip (the sensor-bar edge, where iOS
+    // parks the Dynamic Island and its status column) hosts all chrome — in
+    // both the folded and the unfolded state. The panes then stop reserving
+    // that inset (the rail already lives inside it) and the floating bottom bar
+    // steps aside, handing its height back to the content. Phones and iPads
+    // report no such strip and keep the old chrome.
+    final padding = MediaQuery.paddingOf(context);
+    final railWidth = mv2TrailingStripWidth(context);
+    final railMode = railWidth > 0;
+    final railTop = railMode ? mv2RailTopInset(context, railWidth) : 0.0;
     final contentWidth = windowWidth - railWidth;
 
     // The left pane is always a fixed-width `SizedBox` — never swapped for an
@@ -164,7 +168,7 @@ class _AppShellState extends ConsumerState<AppShell> {
       child: Stack(
         children: <Widget>[
           widget.navigationShell,
-          if (railWidth == 0)
+          if (!railMode)
             Positioned(
               left: 0,
               right: 0,
@@ -199,7 +203,6 @@ class _AppShellState extends ConsumerState<AppShell> {
               context,
               splitRatio: splitRatio,
               windowWidth: contentWidth,
-              railMode: railWidth > 0,
               leftPane: leftPane,
             ),
           )
@@ -209,28 +212,35 @@ class _AppShellState extends ConsumerState<AppShell> {
             ],
           );
 
+    if (!railMode) {
+      return ColoredBox(color: context.colors.background, child: shell);
+    }
+
+    // With the rail, the horizontal safe areas are already spent: the rail owns
+    // the trailing strip in full (it also clears the system's status column via
+    // `railTop`), so the panes below must not reserve that inset a second time.
+    final paneMedia = MediaQuery.of(context).copyWith(
+      padding: EdgeInsets.only(top: padding.top, bottom: padding.bottom),
+      viewPadding: EdgeInsets.only(top: padding.top, bottom: padding.bottom),
+    );
     return ColoredBox(
       color: context.colors.background,
-      child: railWidth > 0
-          ? Row(
-              children: <Widget>[
-                Expanded(child: shell),
-                SizedBox(
-                  width: railWidth,
-                  child: SafeArea(
-                    left: false,
-                    right: false,
-                    child: Mv2TrailingRail(
-                      current: _current,
-                      onSelect: (tab) => _onSelect(context, tab),
-                      notificationUnread: ref.watch(notificationUnreadProvider),
-                      onSearch: () => context.push('/feed/search'),
-                    ),
-                  ),
-                ),
-              ],
-            )
-          : shell,
+      child: Row(
+        children: <Widget>[
+          Expanded(child: MediaQuery(data: paneMedia, child: shell)),
+          SizedBox(
+            width: railWidth,
+            child: Mv2TrailingRail(
+              current: _current,
+              onSelect: (tab) => _onSelect(context, tab),
+              notificationUnread: ref.watch(notificationUnreadProvider),
+              onSearch: () => context.push('/feed/search'),
+              topInset: railTop,
+              bottomInset: padding.bottom,
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -243,7 +253,6 @@ class _AppShellState extends ConsumerState<AppShell> {
     BuildContext context, {
     required double splitRatio,
     required double windowWidth,
-    required bool railMode,
     required Widget leftPane,
   }) {
     final controller = _splitController;
@@ -297,20 +306,13 @@ class _AppShellState extends ConsumerState<AppShell> {
       // only: the left pane keeps the leading inset and the right pane the
       // trailing one, so the divider side of each pane is not double-padded
       // (which would make the content columns look narrower than the window).
-      // With the trailing rail the horizontal insets are already spent: the
-      // rail owns the trailing strip, and the leading side of the Duo is flush.
       builder: (context, area) {
         final isLeft = _splitController != null &&
             identical(area, _splitController!.getArea(0));
         final outer = MediaQuery.paddingOf(context);
-        final EdgeInsets panePadding;
-        if (railMode) {
-          panePadding = EdgeInsets.fromLTRB(0, outer.top, 0, outer.bottom);
-        } else {
-          panePadding = isLeft
-              ? EdgeInsets.fromLTRB(outer.left, outer.top, 0, outer.bottom)
-              : EdgeInsets.fromLTRB(0, outer.top, outer.right, outer.bottom);
-        }
+        final panePadding = isLeft
+            ? EdgeInsets.fromLTRB(outer.left, outer.top, 0, outer.bottom)
+            : EdgeInsets.fromLTRB(0, outer.top, outer.right, outer.bottom);
         return MediaQuery(
           data: MediaQuery.of(context)
               .copyWith(padding: panePadding, viewPadding: panePadding),

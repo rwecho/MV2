@@ -63,6 +63,25 @@ class Mv2NativeBridge {
     }
   }
 
+  /// Window-scene geometry: where the system draws its status bar and how much
+  /// safe area the window keeps (see `ui/utils/scene_geometry.dart`).
+  ///
+  /// Flutter's own channel for this is `MediaQuery.displayFeaturesOf` (the
+  /// engine is meant to report the Duo's reserved edge strip as a
+  /// `DisplayFeatureType.cutout` — flutter/flutter#193025), but the engine in
+  /// Flutter 3.47.3 reports `displayFeatures: []` on the Duo, so the native side
+  /// supplies it until we upgrade. Returns `null` when the channel is missing
+  /// or answers nothing usable.
+  Future<Map<Object?, Object?>?> uiGeometry() async {
+    try {
+      return await channel.invokeMapMethod<Object?, Object?>('uiGeometry');
+    } on MissingPluginException {
+      return null;
+    } on PlatformException {
+      return null;
+    }
+  }
+
   Future<void> _invoke(String method, [Object? arguments]) async {
     try {
       await channel.invokeMethod<void>(method, arguments);

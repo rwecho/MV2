@@ -82,6 +82,13 @@ final class MV2NativeBridge {
       // 让 Duo 展开进入双栏而不误伤手机横屏（Dart: mv2_breakpoints.dart）。
       result(Self.currentHorizontalSizeClass)
 
+    case "uiGeometry":
+      // Duo 的尾侧竖带里，系统自己会画一列状态栏（灵动岛 + 时钟/信号/电量）。
+      // 这条竖带在 Duo 折叠（外屏）和展开（内屏）时都存在，Dart 侧要据此
+      // 把 shell chrome 放进竖带、并让开系统那一列 —— 只有 UIKit 知道那列
+      // 占多高，所以把 statusBarFrame 一并报给 Dart（Dart: scene_geometry.dart）。
+      result(Self.currentUiGeometry)
+
     default:
       result(FlutterMethodNotImplemented)
     }
@@ -101,6 +108,37 @@ final class MV2NativeBridge {
     case .compact: return "compact"
     default: return "unspecified"
     }
+  }
+
+  /// `{"statusBar": {x,y,width,height}, "safeArea": {top,left,bottom,right}}`
+  /// for the key window's scene, in logical points.
+  ///
+  /// `statusBarFrame` is the key piece: on the Duo the status bar is a vertical
+  /// column inside the trailing sensor-bar strip, so its `bottom` tells Dart how
+  /// far down the system chrome reaches — the rail must start below it.
+  static var currentUiGeometry: [String: Any] {
+    guard
+      let scene = UIApplication.shared.connectedScenes
+        .compactMap({ $0 as? UIWindowScene })
+        .first,
+      let window = scene.windows.first(where: { $0.isKeyWindow })
+    else { return [:] }
+    let status = scene.statusBarManager?.statusBarFrame ?? .zero
+    let insets = window.safeAreaInsets
+    return [
+      "statusBar": [
+        "x": status.origin.x,
+        "y": status.origin.y,
+        "width": status.size.width,
+        "height": status.size.height,
+      ],
+      "safeArea": [
+        "top": insets.top,
+        "left": insets.left,
+        "bottom": insets.bottom,
+        "right": insets.right,
+      ],
+    ]
   }
 
   private func writeSnapshot(_ payload: [String: Any]) {

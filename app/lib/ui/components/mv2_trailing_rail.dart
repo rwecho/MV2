@@ -8,20 +8,23 @@ import '../../design_system/tokens/mv2_spacing.dart';
 import '../../features/auth/presentation/mv2_account_avatar.dart';
 import 'mv2_floating_tab_bar.dart';
 
-/// Vertical chrome rail for the unfolded iPhone Duo.
+/// Vertical chrome rail for the iPhone Duo's trailing edge strip.
 ///
-/// The unfolded Duo leaves a wide safe-area strip on the sensor-bar side; iOS
-/// parks the status bar and the Dynamic Island there, and Apple's guidance for
-/// the device ("Designing for iPhone Duo") is to host the toolbar and the tab
-/// bar in that same strip instead of the bottom edge.
+/// The Duo keeps a wide safe-area strip along its sensor-bar edge in **both**
+/// states (folded cover display and unfolded inner display), and iOS itself
+/// parks the Dynamic Island plus the vertical status column there. Apple's
+/// guidance for the device ("Designing for iPhone Duo") is to keep the toolbar
+/// and the tab bar in that same strip, below the system's own items.
 ///
 /// This rail follows that layout:
 ///
 /// * leading segment — page actions (搜索 / 账号), the *toolbar* stand-in;
 /// * trailing segment — the five shell destinations, the *tab bar* stand-in.
 ///
-/// It draws entirely inside the inset the window already reserves, so the panes
-/// keep their full width and win back the bottom bar's height. Phones and iPads
+/// [topInset] clears the system's status column (see `mv2RailTopInset`), so our
+/// controls never land under the Dynamic Island or the status items. The rail
+/// draws inside the inset the window already reserves, so the panes keep their
+/// full width and win back the bottom bar's height. Devices without such a strip
 /// keep [Mv2FloatingTabBar].
 class Mv2TrailingRail extends StatelessWidget {
   const Mv2TrailingRail({
@@ -30,6 +33,8 @@ class Mv2TrailingRail extends StatelessWidget {
     required this.onSelect,
     this.notificationUnread = 0,
     this.onSearch,
+    this.topInset = 0,
+    this.bottomInset = 0,
   });
 
   /// Currently selected shell destination.
@@ -44,45 +49,52 @@ class Mv2TrailingRail extends StatelessWidget {
   /// Opens search; hidden when the shell has no search route.
   final VoidCallback? onSearch;
 
-  /// Minimum strip width the rail needs; narrower strips fall back to the
-  /// floating bar (see `mv2UsesTrailingRail`).
-  static const double minStripWidth = 64;
+  /// Height the system's own status column occupies at the top of the strip.
+  final double topInset;
+
+  /// Safe-area inset at the bottom of the window.
+  final double bottomInset;
 
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.symmetric(
-        horizontal: Mv2Spacing.x2,
-        vertical: Mv2Spacing.x2,
-      ),
-      child: Mv2GlassSurface(
-        borderRadius: Mv2Radius.nav,
-        blur: 20,
-        padding: const EdgeInsets.symmetric(vertical: Mv2Spacing.x3),
-        child: Column(
-          children: <Widget>[
-            if (onSearch != null)
-              _RailAction(
-                icon: Icons.search_rounded,
-                label: '搜索',
-                onTap: onSearch!,
-              ),
-            const SizedBox(height: Mv2Spacing.x2),
-            const Mv2AccountAvatar(size: 32),
-            const Spacer(),
-            for (final spec in mv2TabSpecs)
-              if (spec.tab == Mv2Tab.publish)
-                _RailPublish(onTap: () => onSelect(spec.tab))
-              else
-                _RailTab(
-                  spec: spec,
-                  selected: current == spec.tab,
-                  badgeCount: spec.tab == Mv2Tab.notifications
-                      ? notificationUnread
-                      : 0,
-                  onTap: () => onSelect(spec.tab),
+      // Clear the system chrome first, then float the glass column inside the
+      // remaining strip.
+      padding: EdgeInsets.only(top: topInset, bottom: bottomInset),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(
+          horizontal: Mv2Spacing.x2,
+          vertical: Mv2Spacing.x2,
+        ),
+        child: Mv2GlassSurface(
+          borderRadius: Mv2Radius.nav,
+          blur: 20,
+          padding: const EdgeInsets.symmetric(vertical: Mv2Spacing.x3),
+          child: Column(
+            children: <Widget>[
+              if (onSearch != null)
+                _RailAction(
+                  icon: Icons.search_rounded,
+                  label: '搜索',
+                  onTap: onSearch!,
                 ),
-          ],
+              const SizedBox(height: Mv2Spacing.x2),
+              const Mv2AccountAvatar(size: 32),
+              const Spacer(),
+              for (final spec in mv2TabSpecs)
+                if (spec.tab == Mv2Tab.publish)
+                  _RailPublish(onTap: () => onSelect(spec.tab))
+                else
+                  _RailTab(
+                    spec: spec,
+                    selected: current == spec.tab,
+                    badgeCount: spec.tab == Mv2Tab.notifications
+                        ? notificationUnread
+                        : 0,
+                    onTap: () => onSelect(spec.tab),
+                  ),
+            ],
+          ),
         ),
       ),
     );

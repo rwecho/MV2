@@ -35,29 +35,3 @@ bool mv2IsTwoPane(BuildContext context) {
   // the explicit floor.
   return mv2HorizontalSizeClass == 'regular' && w >= duoExpandedBreakpoint;
 }
-
-/// Trailing safe-area inset (logical px) that marks the unfolded Duo's
-/// sensor-bar side. Measured on the unfolded inner display: 84pt, while the
-/// leading side is 0 — every other supported device has a much smaller (or
-/// symmetric) trailing inset.
-const double trailingRailMinInset = 60.0;
-
-/// Whether the shell should host its chrome in a vertical trailing rail.
-///
-/// Only the unfolded iPhone Duo in landscape qualifies: a **regular-width**
-/// window (so a phone in landscape, always compact, can never match) carrying a
-/// trailing safe-area strip wider than its leading one. That strip is where iOS
-/// itself parks the status bar and the Dynamic Island, and it is otherwise dead
-/// space — so moving 首页/节点/发布/通知/我的 plus the page actions into it costs
-/// no content width and frees the bottom bar's height (Apple HIG: "Designing
-/// for iPhone Duo").
-///
-/// Phones (compact) and iPads (symmetric insets) keep the floating bottom bar.
-bool mv2UsesTrailingRail(BuildContext context) {
-  final padding = MediaQuery.paddingOf(context);
-  final width = MediaQuery.sizeOf(context).width;
-  return mv2HorizontalSizeClass == 'regular' &&
-      width >= duoExpandedBreakpoint &&
-      padding.right >= trailingRailMinInset &&
-      padding.right > padding.left;
-}

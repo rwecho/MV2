@@ -132,14 +132,24 @@ GET `/signin` 得到 18081 → 47098 → 75285）。所以手里缓存的 token 
   `width >= 900 || (trait == 'regular' && width >= 850)`；trait 来自
   `MV2NativeBridge.horizontalSizeClass()`（iOS 侧读 `UIWindowScene.traitCollection`）。
   双栏时安全区只作用在贴屏幕的那一侧（左栏留左、右栏留右），分隔条一侧不再重复扣 34pt。
-- **安全区不对称**：展开横屏时左侧 inset 为 `0`、**右侧为 `84pt`**（屏下摄像头/传感器条那一侧）。
-  详情列右侧留白偏大是硬件要求，不要用负 padding 把内容顶进该区域。
-- **侧边 chrome rail**：Apple 对 Duo 的指导是把状态栏 / toolbar / tab bar 都放进这条侧边带
+- **安全区不对称**：Duo 折叠外屏（`466×678`）与展开内屏（`951×669`）都是**尾侧 `84pt`、首侧 `0`**
+  （屏下摄像头/传感器条那一侧；折叠态另有底部 `34pt`）。右侧留白偏大是硬件要求，
+  不要用负 padding 把内容顶进该区域。
+- **侧边 chrome rail**：Apple 对 Duo 的指导是把灵动岛/状态栏、toolbar、tab bar 都放进这条尾侧竖带
   （"Designing for iPhone Duo"）。`ui/components/mv2_trailing_rail.dart` 就是这段竖排 chrome：
-  上半是页面操作（搜索 / 账号），下半是五个一级 Tab；判定 `mv2UsesTrailingRail()` =
-  `regular` + 宽度 ≥850 + 尾侧 inset ≥60 且大于首侧，因此只会在 Duo 展开横屏出现，
-  手机 / iPad 仍旧用底部悬浮条（`mv2_floating_tab_bar.dart`，两者共用 `mv2TabSpecs`）。
-  开 rail 时两个 pane 不再预留尾侧 inset（rail 已经吃掉了），竖向也省掉了底部条的高度。
+  上半是页面操作（搜索 / 账号），下半是五个一级 Tab。判定在 `ui/utils/scene_geometry.dart`：
+  `mv2TrailingStripWidth()`（尾侧 inset ≥60 且大于首侧）——**折叠态同样命中**，因此两种形态都由 rail
+  取代底部悬浮条；手机（横屏 inset 对称）与 iPad（无尾侧竖带）继续用 `mv2_floating_tab_bar.dart`，
+  两者共用 `mv2TabSpecs`。开 rail 时两个 pane 不再预留尾侧 inset（rail 已经吃掉了），
+  竖向也省掉底部条的高度。
+- **rail 顶部要让开系统那一列**：Duo 的尾侧竖带里，系统自己会画灵动岛 + 竖向状态栏（时钟/信号/电量）。
+  `mv2RailTopInset()` 用 `UIStatusBarManager.statusBarFrame` 求出那列占的高度，rail 从它下面开始，
+  所以账号头像不会被压在灵动岛下（原生桥 `mv2/native` → `uiGeometry`）。
+  Flutter 自己的对应能力是 `MediaQuery.displayFeaturesOf` 里的 `DisplayFeatureType.cutout`
+  （flutter/flutter#193025 正在让 iOS 引擎把 Duo 的铰链与预留区填进去，#193878 在给
+  Scaffold/Cupertino 做横屏侧边栏自适应）；**本机 Flutter 3.47.3 引擎实测 `displayFeatures: []`
+  `displayCornerRadii: null`**，所以暂时走原生回退，升级 Flutter 后把 `mv2SceneGeometry` 的来源
+  换成 display features 即可（判定集中在 `scene_geometry.dart`）。
 - **构建 SDK 必须 27.1**：用 iOS **27.0** SDK 构建的包在 Duo 上会被系统判为「未适配」，
   窗口只有 `871×669pt`，右侧 `80pt` 是系统黑边（与 iPhone X 时代 letterbox 同一机制），
   Flutter 只能按 871pt 排版，页面看起来「右侧少一截」。检查命令：
