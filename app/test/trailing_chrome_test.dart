@@ -175,7 +175,8 @@ void main() {
       foldable: coverDisplay(),
     );
 
-    expect(find.byType(AdaptiveScaffold), findsOneWidget);
+    // The shell publishes one, and the page inside it another.
+    expect(find.byType(AdaptiveScaffold), findsWidgets);
     expect(find.byType(NavigationBar), findsOneWidget);
     for (final label in <String>['首页', '节点', '发布', '通知', '我的']) {
       expect(destination(label), findsOneWidget);

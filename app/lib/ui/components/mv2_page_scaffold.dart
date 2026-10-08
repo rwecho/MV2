@@ -1,9 +1,12 @@
+import 'package:adaptive_platform_ui/adaptive_platform_ui.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/data/v2ex_providers.dart';
 import '../../design_system/theme/mv2_theme.dart';
 import '../../design_system/tokens/mv2_spacing.dart';
+import 'mv2_page_header.dart';
+import '../primitives/mv2_buttons.dart';
 import 'adaptive/mv2_adaptive_destinations.dart';
 import '../../features/settings/application/settings_controller.dart';
 import 'mv2_floating_tab_bar.dart';
@@ -47,21 +50,50 @@ class Mv2PageScaffold extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final colors = context.colors;
-    final hasTabBar = currentTab != null;
     // Quietly tells the user the content is stale, so "the app works but this
     // one page fails" is never mistaken for a broken page.
     final fromCache = ref.watch(cacheFallbackProvider);
-    // 设置 → 内容宽度. Applied to the reading column only: the header scrolls
-    // with it, while the floating bars stay edge-to-edge. On phones the cap is
-    // wider than the viewport, so this is a no-op there.
+    // 设置 → 内容宽度. Applied to the reading column only.
     final contentWidth = ref.watch(
       settingsProvider.select((AppSettings s) => s.contentWidth),
     );
 
-    return Scaffold(
-      backgroundColor: colors.background,
+    // The page's header becomes the *fixed* toolbar: `adaptive_platform_ui`'s
+    // chrome draws one persistent bar whose items change as pages come and go
+    // (and, on the Duo, the same items in the trailing capsule bar). A header
+    // that is not an [Mv2PageHeader] — a segmented control, a topic top bar —
+    // still renders in the body.
+    final headerWidget = header;
+    final pageHeader = headerWidget is Mv2PageHeader ? headerWidget : null;
+
+    return AdaptiveScaffold(
       resizeToAvoidBottomInset: resizeToAvoidBottomInset,
+      appBar: pageHeader == null
+          ? null
+          : AdaptiveAppBar(
+              title: pageHeader.title,
+              subtitle: pageHeader.subtitle,
+              actions: <AdaptiveAppBarAction>[
+                for (final Widget action in pageHeader.actions)
+                  if (action is Mv2IconButton)
+                    AdaptiveAppBarAction(
+                      iosSymbol: mv2SfSymbolFor(action.icon),
+                      icon: action.icon,
+                      iconWidget: Icon(action.icon),
+                      label: action.tooltip ?? pageHeader.title,
+                      onPressed: action.onPressed ?? () {},
+                    )
+                  else
+                    // Custom header widgets (the account avatar, a draft
+                    // status label) ride along as an item so nothing the page
+                    // put in its header disappears.
+                    AdaptiveAppBarAction(
+                      iconWidget: action,
+                      label: '',
+                      onPressed: () {},
+                    ),
+              ],
+            ),
       body: Stack(
         children: <Widget>[
           SafeArea(
@@ -74,7 +106,7 @@ class Mv2PageScaffold extends ConsumerWidget {
                   width: double.infinity,
                   child: Column(
                     children: <Widget>[
-                      ?header,
+                      if (pageHeader == null) ?headerWidget,
                       if (fromCache) const _OfflineNotice(),
                       Expanded(child: child),
                     ],
@@ -83,17 +115,8 @@ class Mv2PageScaffold extends ConsumerWidget {
               ),
             ),
           ),
-          if (hasTabBar)
-            Positioned(
-              left: 0,
-              right: 0,
-              bottom: 0,
-              child: Mv2FloatingTabBar(
-                current: currentTab!,
-                onSelect: onTabSelect ?? (_) {},
-                notificationUnread: notificationUnread,
-              ),
-            ),
+          // Page-level bottom bar (the composer's action row). The shell's own
+          // tab bar is `adaptive_platform_ui`'s now, not this.
           if (bottomBar != null)
             Positioned(left: 0, right: 0, bottom: 0, child: bottomBar!),
         ],

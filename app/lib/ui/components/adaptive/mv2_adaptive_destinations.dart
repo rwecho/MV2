@@ -97,3 +97,33 @@ double mv2BarContentInset(BuildContext context) {
   final safe = MediaQuery.viewPaddingOf(context).bottom;
   return 80 + (safe > 0 ? safe : 0) + 12;
 }
+
+/// SF Symbol for the icons our page headers use, so the native toolbar (and
+/// the Duo's trailing capsule bar, which draws only `iosSymbol`) shows the
+/// same affordance as the Cupertino/Material paths.
+String? mv2SfSymbolFor(IconData icon) {
+  if (icon == Icons.settings_outlined || icon == Icons.settings) {
+    return 'gearshape';
+  }
+  if (icon == Icons.search_rounded || icon == Icons.search) {
+    return 'magnifyingglass';
+  }
+  if (icon == Icons.filter_list_rounded || icon == Icons.filter_list) {
+    return 'line.3.horizontal.decrease';
+  }
+  if (icon == Icons.more_horiz_rounded || icon == Icons.more_horiz) {
+    return 'ellipsis';
+  }
+  if (icon == Icons.ios_share_rounded || icon == Icons.ios_share) {
+    return 'square.and.arrow.up';
+  }
+  if (icon == Icons.add_rounded || icon == Icons.add) return 'plus';
+  if (icon == Icons.refresh_rounded || icon == Icons.refresh) {
+    return 'arrow.clockwise';
+  }
+  if (icon == Icons.star_border_rounded) return 'star';
+  if (icon == Icons.star_rounded) return 'star.fill';
+  if (icon == Icons.favorite_border_rounded) return 'heart';
+  if (icon == Icons.favorite_rounded) return 'heart.fill';
+  return null;
+}

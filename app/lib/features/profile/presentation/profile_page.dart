@@ -1,4 +1,3 @@
-import 'package:adaptive_platform_ui/adaptive_platform_ui.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -10,6 +9,7 @@ import '../../../design_system/tokens/mv2_radius.dart';
 import '../../../design_system/tokens/mv2_spacing.dart';
 import '../../../shared/models/daily_mission.dart';
 import '../../../shared/models/models.dart';
+import '../../../ui/components/mv2_page_header.dart';
 import '../../../ui/components/mv2_page_scaffold.dart';
 import '../../../ui/components/mv2_settings_row.dart';
 import '../../../ui/components/states/mv2_skeleton.dart';
@@ -33,24 +33,23 @@ class ProfilePage extends ConsumerWidget {
     final signedIn = ref.watch(isSignedInProvider);
     final profile = ref.watch(profileProvider);
 
-    // Pilot page for the fixed toolbar: the title and its action are published
-    // to `adaptive_platform_ui`'s chrome, which draws one persistent bar (and,
-    // on the Duo, the same items in the trailing capsule bar).
-    return AdaptiveScaffold(
-      resizeToAvoidBottomInset: false,
-      appBar: AdaptiveAppBar(
+    // The page scaffold publishes this header to `adaptive_platform_ui`'s
+    // fixed chrome, which draws it as the persistent toolbar (and, on the Duo,
+    // in the trailing capsule bar).
+    return Mv2PageScaffold(
+      header: Mv2PageHeader(
         title: '我的',
         subtitle: 'Wake Up to V2EX',
-        actions: <AdaptiveAppBarAction>[
-          AdaptiveAppBarAction(
-            iosSymbol: 'gearshape',
+        actions: <Widget>[
+          Mv2IconButton(
             icon: Icons.settings_outlined,
-            label: '设置',
+            filled: true,
+            tooltip: '设置',
             onPressed: () => context.push('/settings'),
           ),
         ],
       ),
-      body: SingleChildScrollView(
+      child: SingleChildScrollView(
         padding: EdgeInsets.fromLTRB(
           Mv2Spacing.pageNarrow,
           0,
