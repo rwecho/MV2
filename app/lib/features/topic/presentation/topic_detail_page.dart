@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:adaptive_platform_ui/adaptive_platform_ui.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart' show Clipboard, ClipboardData;
@@ -39,7 +40,6 @@ import '../../nodes/application/open_node.dart';
 import '../../reader/application/open_external_url.dart';
 import '../../settings/application/settings_controller.dart';
 import '../../shell/application/chrome_actions.dart';
-import '../../../ui/utils/scene_geometry.dart';
 import '../../shell/application/tablet_topic_pane.dart';
 import '../application/topic_actions.dart';
 import '../application/topic_providers.dart';
@@ -148,9 +148,7 @@ void _showShareSheet(BuildContext context, WidgetRef ref, V2Topic topic) {
                   Mv2Analytics.logTopicShare(topicId: topic.id, mode: 'copy');
                   unawaited(
                     Clipboard.setData(
-                      ClipboardData(
-                        text: 'https://www.v2ex.com/t/${topic.id}',
-                      ),
+                      ClipboardData(text: 'https://www.v2ex.com/t/${topic.id}'),
                     ),
                   );
                   ScaffoldMessenger.of(context)
@@ -322,6 +320,73 @@ class _TopicDetailPageState extends ConsumerState<TopicDetailPage> {
     return false;
   }
 
+  /// The page's toolbar, published to the fixed chrome: the back affordance,
+  /// the title, and the topic's own actions (收藏 / 感谢 / ⋯). The ellipsis is
+  /// reserved for overflow, whose sheet holds 分享 / 忽略 / 举报 — one entry
+  /// point for everything secondary, in one place.
+  AdaptiveAppBar _topicAppBar(
+    BuildContext context,
+    WidgetRef ref,
+    AsyncValue<V2TopicDetail> detail,
+  ) {
+    final loaded = detail.value;
+    final actions = ref.watch(topicActionsProvider(widget.topicId));
+    final colors = context.colors;
+    final favorited = actions.favoritedOf(loaded?.favorited ?? false);
+    final thanked = actions.thankedOf(loaded?.thanked ?? false);
+
+    return AdaptiveAppBar(
+      title: loaded?.topic.title,
+      leading: Mv2IconButton(
+        icon: Icons.arrow_back_ios_new_rounded,
+        onPressed: widget.inPane
+            // Dismiss the tablet detail pane (no pushed route to pop).
+            ? () => ref.read(tabletTopicPaneProvider.notifier).close()
+            // As the stack root (cold-started notification / deep link) there
+            // is nothing to pop — go up to the feed instead.
+            : () => (ModalRoute.of(context)?.canPop ?? false)
+                  ? context.pop()
+                  : context.go('/feed'),
+      ),
+      actions: <AdaptiveAppBarAction>[
+        AdaptiveAppBarAction(
+          iosSymbol: favorited ? 'star.fill' : 'star',
+          icon: favorited ? Icons.star_rounded : Icons.star_border_rounded,
+          iconWidget: Icon(
+            favorited ? Icons.star_rounded : Icons.star_border_rounded,
+            color: favorited ? colors.accent : null,
+          ),
+          label: '收藏',
+          onPressed: loaded == null
+              ? () {}
+              : () => mv2TopicFavoriteFromChrome(context, ref, widget.topicId),
+        ),
+        AdaptiveAppBarAction(
+          iosSymbol: thanked ? 'heart.fill' : 'heart',
+          icon: thanked
+              ? Icons.favorite_rounded
+              : Icons.favorite_border_rounded,
+          iconWidget: Icon(
+            thanked ? Icons.favorite_rounded : Icons.favorite_border_rounded,
+            color: thanked ? colors.accent : null,
+          ),
+          label: '感谢',
+          onPressed: loaded == null
+              ? () {}
+              : () => mv2TopicThankFromChrome(context, ref, widget.topicId),
+        ),
+        AdaptiveAppBarAction(
+          iosSymbol: 'ellipsis',
+          icon: Icons.more_horiz_rounded,
+          iconWidget: const Icon(Icons.more_horiz_rounded),
+          label: '更多',
+          onPressed: () =>
+              mv2ShowTopicOverflowSheet(context, ref, widget.topicId),
+        ),
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final args = TopicDetailArgs(widget.topicId);
@@ -340,11 +405,7 @@ class _TopicDetailPageState extends ConsumerState<TopicDetailPage> {
         if (!didPop) context.go('/feed');
       },
       child: Mv2PageScaffold(
-        header: _TopicDetailTopBar(
-          topicId: widget.topicId,
-          collapsed: _collapsed,
-          inPane: widget.inPane,
-        ),
+        appBar: _topicAppBar(context, ref, detail),
         bottomBar: AnimatedSlide(
           // 1.2× the reply bar height clears its own safe-area padding.
           offset: _collapsed ? const Offset(0, 1.2) : Offset.zero,
@@ -395,76 +456,62 @@ class _TopicDetailPageState extends ConsumerState<TopicDetailPage> {
 /// When [collapsed] the centre fades in the topic title, so the article's title
 /// follows the reader into the bar once it scrolls out of view. The overflow
 /// (`⋯`) opens the 忽略 / 举报 sheet; the 忽略 state comes from
-/// [topicActionsProvider] so it stays in sync with the action controller.
-class _TopicDetailTopBar extends ConsumerWidget {
-  const _TopicDetailTopBar({
-    required this.topicId,
-    required this.collapsed,
-    this.inPane = false,
-  });
-
-  final int topicId;
-  final bool collapsed;
-
-  /// Mirrors [TopicDetailPage.inPane]: close the pane instead of popping.
-  final bool inPane;
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final colors = context.colors;
-    final title = ref
-        .watch(topicDetailProvider(TopicDetailArgs(topicId)))
-        .value
-        ?.topic
-        .title;
-
-    return Padding(
-      padding: const EdgeInsets.symmetric(
-        horizontal: Mv2Spacing.x1,
-        vertical: Mv2Spacing.x1,
-      ),
-      child: Row(
-        children: <Widget>[
-          Mv2IconButton(
-            icon: Icons.arrow_back_ios_new_rounded,
-            onPressed: inPane
-                // Dismiss the tablet detail pane (no pushed route to pop).
-                ? () => ProviderScope.containerOf(context, listen: false)
-                    .read(tabletTopicPaneProvider.notifier)
-                    .close()
-                // As the stack root (cold-started notification / deep link)
-                // there is nothing to pop — go up to the feed instead.
-                : () => (ModalRoute.of(context)?.canPop ?? false)
-                    ? context.pop()
-                    : context.go('/feed'),
-          ),
-          Expanded(
-            child: AnimatedOpacity(
-              opacity: collapsed ? 1 : 0,
-              duration: Mv2Motion.tab,
-              curve: Mv2Motion.standard,
-              child: Text(
-                title ?? '',
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                textAlign: TextAlign.center,
-                style: context.text.itemTitle.copyWith(
-                  color: colors.textPrimary,
-                ),
-              ),
-            ),
-          ),
-          // On the Duo the toolbar in the trailing strip owns overflow, so the
-          // page keeps only one ellipsis (in one place, per the HIG).
-          if (mv2TrailingStripWidth(context) == 0)
-            Mv2IconButton(
-              icon: Icons.more_horiz_rounded,
-              onPressed: () => mv2ShowTopicOverflowSheet(context, ref, topicId),
-            ),
-        ],
-      ),
-    );
+/// 收藏 from the fixed toolbar: same controller, double-tap guard and feedback
+/// ladder as the on-page action bar.
+void mv2TopicFavoriteFromChrome(
+  BuildContext context,
+  WidgetRef ref,
+  int topicId,
+) {
+  final detail = ref.read(topicDetailProvider(TopicDetailArgs(topicId))).value;
+  if (detail == null) return;
+  if (!detail.canReply) {
+    context.push('/login');
+    return;
   }
+  final actions = ref.read(topicActionsProvider(topicId));
+  if (actions.isInFlight(TopicActionsController.favoriteKey)) return;
+  final target = !actions.favoritedOf(detail.favorited);
+  mv2RunTopicWrite(
+    context,
+    ref,
+    () => ref.read(topicActionsProvider(topicId).notifier).toggleFavorite(),
+    message: target ? '已收藏' : '已取消收藏',
+  );
+}
+
+/// 感谢 from the fixed toolbar.
+void mv2TopicThankFromChrome(BuildContext context, WidgetRef ref, int topicId) {
+  final detail = ref.read(topicDetailProvider(TopicDetailArgs(topicId))).value;
+  if (detail == null) return;
+  if (!detail.canReply) {
+    context.push('/login');
+    return;
+  }
+  mv2RunTopicWrite(
+    context,
+    ref,
+    () => ref.read(topicActionsProvider(topicId).notifier).thankTopic(),
+    message: '已感谢',
+  );
+}
+
+/// Shared feedback ladder for one topic write: a selection click at tap time,
+/// then a stronger haptic and a short toast when the request lands.
+void mv2RunTopicWrite(
+  BuildContext context,
+  WidgetRef ref,
+  Future<Failure?> Function() action, {
+  required String message,
+}) {
+  final haptics = ref.read(settingsProvider).hapticsEnabled;
+  Mv2Haptics.tap(haptics);
+  unawaited(() async {
+    final failure = await action();
+    if (!context.mounted || failure != null) return;
+    Mv2Haptics.success(haptics);
+    mv2ShowSuccess(ScaffoldMessenger.of(context), message);
+  }());
 }
 
 /// 更多操作：主题的 overflow 菜单。Duo 的尾侧 toolbar 与手机顶栏都用它，
@@ -474,9 +521,7 @@ void mv2ShowTopicOverflowSheet(
   WidgetRef ref,
   int topicId,
 ) {
-  final detail = ref
-      .read(topicDetailProvider(TopicDetailArgs(topicId)))
-      .value;
+  final detail = ref.read(topicDetailProvider(TopicDetailArgs(topicId))).value;
   final ignored = ref
       .read(topicActionsProvider(topicId))
       .ignoredOf(detail?.ignored ?? false);
@@ -745,8 +790,9 @@ class _TopicDetailBodyState extends ConsumerState<_TopicDetailBody> {
 
   /// 侧边工具栏的投递口。缓存成字段：Riverpod 不允许在 `dispose()` 里用
   /// `ref`（此时 BuildContext 已失效），而页面消失时必须把操作撤下来。
-  late final Mv2ToolbarActionsController _toolbarActions =
-      ref.read(toolbarActionsProvider.notifier);
+  late final Mv2ToolbarActionsController _toolbarActions = ref.read(
+    toolbarActionsProvider.notifier,
+  );
 
   @override
   void initState() {
@@ -971,7 +1017,8 @@ class _TopicDetailBodyState extends ConsumerState<_TopicDetailBody> {
       return;
     }
     _runWriteAction(
-      () => ref.read(topicActionsProvider(widget.topicId).notifier).thankTopic(),
+      () =>
+          ref.read(topicActionsProvider(widget.topicId).notifier).thankTopic(),
       message: '已感谢',
     );
   }
@@ -1039,10 +1086,8 @@ class _TopicDetailBodyState extends ConsumerState<_TopicDetailBody> {
   /// `@user #5 ` seeded so the posted comment actually references the tapped
   /// one — without the mention, V2EX never notifies the author and the reply
   /// points at nothing.
-  String? _replyPrefill(V2Reply reply) => mv2ReplyFloorPrefill(
-    author: reply.author.username,
-    floor: reply.floor,
-  );
+  String? _replyPrefill(V2Reply reply) =>
+      mv2ReplyFloorPrefill(author: reply.author.username, floor: reply.floor);
 
   /// 感谢回复。楼层号只有 UI 拿得到,所以 `reply_thank` 在这里记而不是在
   /// controller;haptics 语义与 [_runWriteAction] 一致(失败不震动)。
@@ -1231,8 +1276,9 @@ class _TopicDetailBodyState extends ConsumerState<_TopicDetailBody> {
     );
     final replies = switch (settings.replySort) {
       Mv2ReplySort.time => visible,
-      Mv2ReplySort.likes => <V2Reply>[...visible]
-        ..sort((V2Reply a, V2Reply b) => b.likes.compareTo(a.likes)),
+      Mv2ReplySort.likes => <V2Reply>[
+        ...visible,
+      ]..sort((V2Reply a, V2Reply b) => b.likes.compareTo(a.likes)),
     };
     // Floor → first row index; also guards the per-floor `GlobalKey` so a floor
     // V2EX repeated (it can shift floors when replies are deleted) never puts
@@ -1256,11 +1302,8 @@ class _TopicDetailBodyState extends ConsumerState<_TopicDetailBody> {
                 node: topic.node,
                 onTap: topic.node.key.isEmpty
                     ? null
-                    : () => openNode(
-                        context,
-                        topic.node,
-                        source: 'topic_detail',
-                      ),
+                    : () =>
+                          openNode(context, topic.node, source: 'topic_detail'),
               ),
               const SizedBox(height: Mv2Spacing.x3),
               Text(
@@ -1298,9 +1341,8 @@ class _TopicDetailBodyState extends ConsumerState<_TopicDetailBody> {
         () => _ReplySectionHeader(
           label: detail.replyStatsLabel ?? '${replies.length} 条回复',
           sort: settings.replySort,
-          onSortSelected: (sort) => unawaited(
-            ref.read(settingsProvider.notifier).setReplySort(sort),
-          ),
+          onSortSelected: (sort) =>
+              unawaited(ref.read(settingsProvider.notifier).setReplySort(sort)),
         ),
       ),
       _BodyRow(() => const SizedBox(height: Mv2Spacing.x3)),
@@ -1843,9 +1885,7 @@ class _ReplySectionHeader extends StatelessWidget {
               children: <Widget>[
                 Text(
                   sort.label,
-                  style: context.text.metadata.copyWith(
-                    color: colors.accent,
-                  ),
+                  style: context.text.metadata.copyWith(color: colors.accent),
                 ),
                 const SizedBox(width: Mv2Spacing.x1),
                 Icon(

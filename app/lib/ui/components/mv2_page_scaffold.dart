@@ -26,6 +26,7 @@ class Mv2PageScaffold extends ConsumerWidget {
     this.notificationUnread = 0,
     this.bottomBar,
     this.resizeToAvoidBottomInset = true,
+    this.appBar,
   });
 
   /// Usually a `CustomScrollView` / `ListView`.
@@ -42,6 +43,10 @@ class Mv2PageScaffold extends ConsumerWidget {
   final Widget? bottomBar;
 
   final bool resizeToAvoidBottomInset;
+
+  /// Toolbar for pages whose top bar is not an [Mv2PageHeader] (a topic's own
+  /// bar with a back affordance, say). Takes precedence over [header].
+  final AdaptiveAppBar? appBar;
 
   /// Extra bottom padding a scrollable must reserve so its last row clears the
   /// floating bar.
@@ -65,35 +70,38 @@ class Mv2PageScaffold extends ConsumerWidget {
     // still renders in the body.
     final headerWidget = header;
     final pageHeader = headerWidget is Mv2PageHeader ? headerWidget : null;
+    final explicitAppBar = appBar;
 
     return AdaptiveScaffold(
       resizeToAvoidBottomInset: resizeToAvoidBottomInset,
-      appBar: pageHeader == null
-          ? null
-          : AdaptiveAppBar(
-              title: pageHeader.title,
-              subtitle: pageHeader.subtitle,
-              actions: <AdaptiveAppBarAction>[
-                for (final Widget action in pageHeader.actions)
-                  if (action is Mv2IconButton)
-                    AdaptiveAppBarAction(
-                      iosSymbol: mv2SfSymbolFor(action.icon),
-                      icon: action.icon,
-                      iconWidget: Icon(action.icon),
-                      label: action.tooltip ?? pageHeader.title,
-                      onPressed: action.onPressed ?? () {},
-                    )
-                  else
-                    // Custom header widgets (the account avatar, a draft
-                    // status label) ride along as an item so nothing the page
-                    // put in its header disappears.
-                    AdaptiveAppBarAction(
-                      iconWidget: action,
-                      label: '',
-                      onPressed: () {},
-                    ),
-              ],
-            ),
+      appBar:
+          explicitAppBar ??
+          (pageHeader == null
+              ? null
+              : AdaptiveAppBar(
+                  title: pageHeader.title,
+                  subtitle: pageHeader.subtitle,
+                  actions: <AdaptiveAppBarAction>[
+                    for (final Widget action in pageHeader.actions)
+                      if (action is Mv2IconButton)
+                        AdaptiveAppBarAction(
+                          iosSymbol: mv2SfSymbolFor(action.icon),
+                          icon: action.icon,
+                          iconWidget: Icon(action.icon),
+                          label: action.tooltip ?? pageHeader.title,
+                          onPressed: action.onPressed ?? () {},
+                        )
+                      else
+                        // Custom header widgets (the account avatar, a draft
+                        // status label) ride along as an item so nothing the page
+                        // put in its header disappears.
+                        AdaptiveAppBarAction(
+                          iconWidget: action,
+                          label: '',
+                          onPressed: () {},
+                        ),
+                  ],
+                )),
       body: Stack(
         children: <Widget>[
           SafeArea(
@@ -106,7 +114,8 @@ class Mv2PageScaffold extends ConsumerWidget {
                   width: double.infinity,
                   child: Column(
                     children: <Widget>[
-                      if (pageHeader == null) ?headerWidget,
+                      if (pageHeader == null && explicitAppBar == null)
+                        ?headerWidget,
                       if (fromCache) const _OfflineNotice(),
                       Expanded(child: child),
                     ],

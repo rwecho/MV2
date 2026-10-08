@@ -117,13 +117,10 @@ void main() {
         .topic
         .title;
 
-    // The top-bar copy of the title is the one wrapped in an AnimatedOpacity;
-    // the article renders the same string as a plain Text.
-    final titleOpacity = find.ancestor(
-      of: find.text(title),
-      matching: find.byType(AnimatedOpacity),
-    );
-    expect(tester.widget<AnimatedOpacity>(titleOpacity).opacity, 0);
+    // The title now lives in the fixed toolbar, which shows it from the start
+    // (the native bar minimises on its own) — the page no longer fades a copy
+    // in. The reply bar still slides away as the page is read.
+    expect(find.text(title), findsWidgets);
     expect(
       tester.widget<AnimatedSlide>(find.byType(AnimatedSlide)).offset,
       Offset.zero,
@@ -133,7 +130,6 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 400));
 
-    expect(tester.widget<AnimatedOpacity>(titleOpacity).opacity, 1);
     expect(
       tester.widget<AnimatedSlide>(find.byType(AnimatedSlide)).offset,
       isNot(Offset.zero),
@@ -143,7 +139,6 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 400));
 
-    expect(tester.widget<AnimatedOpacity>(titleOpacity).opacity, 0);
     expect(
       tester.widget<AnimatedSlide>(find.byType(AnimatedSlide)).offset,
       Offset.zero,
