@@ -6,7 +6,6 @@ import '../../design_system/theme/mv2_theme.dart';
 import '../../design_system/tokens/mv2_motion.dart';
 import '../../design_system/tokens/mv2_radius.dart';
 import '../../design_system/tokens/mv2_spacing.dart';
-import '../../features/auth/presentation/mv2_account_avatar.dart';
 import '../../features/shell/application/chrome_actions.dart';
 import 'mv2_floating_tab_bar.dart';
 
@@ -32,7 +31,6 @@ class Mv2TrailingChrome extends ConsumerWidget {
     required this.current,
     required this.onSelect,
     this.notificationUnread = 0,
-    this.onSearch,
     this.topInset = 0,
     this.bottomInset = 0,
   });
@@ -45,9 +43,6 @@ class Mv2TrailingChrome extends ConsumerWidget {
   final ValueChanged<Mv2Tab> onSelect;
 
   final int notificationUnread;
-
-  /// Opens search; the toolbar's fallback action when the page publishes none.
-  final VoidCallback? onSearch;
 
   /// Height the system's own status column occupies at the top of the strip.
   final double topInset;
@@ -74,10 +69,7 @@ class Mv2TrailingChrome extends ConsumerWidget {
             child: Align(
               alignment: Alignment.topCenter,
               child: SingleChildScrollView(
-                child: _ToolbarSection(
-                  actions: pageActions,
-                  onSearch: onSearch,
-                ),
+                child: _ToolbarSection(actions: pageActions),
               ),
             ),
           ),
@@ -125,43 +117,29 @@ class _Cluster extends StatelessWidget {
 /// default 搜索 / 账号. `⋯` is reserved for overflow, per the HIG, and the page
 /// publishes it like any other action.
 class _ToolbarSection extends StatelessWidget {
-  const _ToolbarSection({required this.actions, this.onSearch});
+  const _ToolbarSection({required this.actions});
 
   final List<Mv2ToolbarAction> actions;
-  final VoidCallback? onSearch;
 
   @override
   Widget build(BuildContext context) {
     final colors = context.colors;
+    if (actions.isEmpty) return const SizedBox.shrink();
     final shown = actions.take(maxToolbarActions);
 
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: <Widget>[
-        if (actions.isNotEmpty)
-          for (final action in shown)
-            _CircleAction(
-              semanticsLabel: action.label,
-              onTap: action.onTap,
-              icon: Icon(
-                action.active ? (action.activeIcon ?? action.icon) : action.icon,
-                size: 20,
-                color: action.active ? colors.accent : colors.textSecondary,
-              ),
-            )
-        else ...<Widget>[
-          if (onSearch != null)
-            _CircleAction(
-              semanticsLabel: '搜索',
-              onTap: onSearch!,
-              icon: Icon(
-                Icons.search_rounded,
-                size: 20,
-                color: colors.textSecondary,
-              ),
+        for (final action in shown)
+          _CircleAction(
+            semanticsLabel: action.label,
+            onTap: action.onTap,
+            icon: Icon(
+              action.active ? (action.activeIcon ?? action.icon) : action.icon,
+              size: 20,
+              color: action.active ? colors.accent : colors.textSecondary,
             ),
-          const _CircleSurface(child: Mv2AccountAvatar(size: 32)),
-        ],
+          ),
       ],
     );
   }

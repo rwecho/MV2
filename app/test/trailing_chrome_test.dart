@@ -274,6 +274,55 @@ void main() {
     expect(find.byIcon(Icons.more_horiz_rounded), findsOneWidget);
   });
 
+  testWidgets('the toolbar follows the page', (tester) async {
+    await boot(tester, foldedSize, padding: foldedPadding);
+    final chrome = find.byType(Mv2TrailingChrome);
+
+    // Feed: its header search moves into the strip.
+    expect(
+      find.descendant(of: chrome, matching: find.byIcon(Icons.search_rounded)),
+      findsOneWidget,
+    );
+
+    Future<void> switchTo(String label) async {
+      await tester.tap(find.descendant(of: chrome, matching: find.text(label)));
+      for (var i = 0; i < 4; i++) {
+        await tester.pump(const Duration(milliseconds: 400));
+      }
+    }
+
+    // 节点 ships 筛选节点; 我的 ships 设置. Each replaces the previous page's
+    // action, which is the point of hosting the toolbar in the strip.
+    await switchTo('节点');
+    expect(
+      find.descendant(
+        of: chrome,
+        matching: find.byIcon(Icons.filter_list_rounded),
+      ),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(of: chrome, matching: find.byIcon(Icons.search_rounded)),
+      findsNothing,
+    );
+
+    await switchTo('我的');
+    expect(
+      find.descendant(
+        of: chrome,
+        matching: find.byIcon(Icons.settings_outlined),
+      ),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(
+        of: chrome,
+        matching: find.byIcon(Icons.filter_list_rounded),
+      ),
+      findsNothing,
+    );
+  });
+
   testWidgets('tablet without a trailing strip keeps the floating bar', (
     tester,
   ) async {

@@ -111,8 +111,6 @@ class _Mv2WindowChromeHostState extends ConsumerState<Mv2WindowChromeHost> {
                 onSelect: (Mv2Tab tab) =>
                     selectShellTab(actionContext, ref, tab),
                 notificationUnread: ref.watch(notificationUnreadProvider),
-                onSearch: () =>
-                    GoRouter.of(actionContext).push('/feed/search'),
                 topInset: topInset,
                 bottomInset: padding.bottom,
               ),

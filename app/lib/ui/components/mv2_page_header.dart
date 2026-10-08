@@ -1,11 +1,15 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../design_system/theme/mv2_theme.dart';
 import '../../design_system/tokens/mv2_spacing.dart';
+import '../../features/shell/application/chrome_actions.dart';
+import '../primitives/mv2_buttons.dart';
+import '../utils/scene_geometry.dart';
 
 /// Page header used by the four primary pages
 /// (`designs/01`, `04`, `06`, `07`): large title + subtitle + trailing actions.
-class Mv2PageHeader extends StatelessWidget {
+class Mv2PageHeader extends ConsumerWidget {
   const Mv2PageHeader({
     super.key,
     required this.title,
@@ -18,8 +22,38 @@ class Mv2PageHeader extends StatelessWidget {
   final List<Widget> actions;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final colors = context.colors;
+
+    // On the Duo the trailing strip hosts the page's actions (Apple's toolbar),
+    // so they move out of the header and into that strip — that is what makes
+    // the toolbar follow the page. Header actions that are not [Mv2IconButton]s
+    // (custom widgets) stay put.
+    final stripMode = mv2TrailingStripWidth(context) > 0;
+    final boxed = <Mv2IconButton>[
+      for (final Widget action in actions)
+        if (action is Mv2IconButton && action.onPressed != null) action,
+    ];
+    if (stripMode) {
+      final published = <Mv2ToolbarAction>[
+        for (final Mv2IconButton button in boxed)
+          Mv2ToolbarAction(
+            icon: button.icon,
+            label: button.tooltip ?? title,
+            onTap: button.onPressed!,
+          ),
+      ];
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!context.mounted) return;
+        ref.read(toolbarActionsProvider.notifier).set(published);
+      });
+    }
+    final visibleActions = stripMode
+        ? <Widget>[
+            for (final Widget action in actions)
+              if (action is! Mv2IconButton) action,
+          ]
+        : actions;
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(
@@ -54,7 +88,7 @@ class Mv2PageHeader extends StatelessWidget {
               ],
             ),
           ),
-          ...actions,
+          ...visibleActions,
         ],
       ),
     );
