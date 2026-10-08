@@ -12,6 +12,20 @@ import 'package:flutter/widgets.dart';
 /// they never reach the threshold.
 const double trailingRailMinInset = 60.0;
 
+/// Height the Duo's system column occupies at the top of the trailing strip,
+/// used until the platform reports the reserved region itself.
+///
+/// Measured from the system's own drawing inside the strip (unfolded inner
+/// display, 951×669; the strip is the leading 80pt the pre-27.1-SDK build did
+/// not cover, so those pixels are purely system-drawn): clock glyphs at
+/// y 34..46pt, status icons at y 57..88pt, with the Dynamic Island above them
+/// (drawn black, so it is bounded by the clock). 96pt clears clock, icons and
+/// island with a small margin.
+///
+/// Fallback only: a `DisplayFeatureType.cutout` from the engine
+/// (flutter/flutter#193025) or a usable `statusBarFrame` wins when present.
+const double duoStatusColumnInset = 96.0;
+
 /// The window-scene geometry iOS reports (`mv2/native` → `uiGeometry`).
 @immutable
 class Mv2SceneGeometry {
@@ -122,8 +136,10 @@ bool mv2UsesTrailingRail(BuildContext context) =>
 /// is not covered by our controls.
 ///
 /// Prefers an engine-reported obstruction that sits inside the strip and hugs
-/// the top; falls back to `UIStatusBarManager.statusBarFrame` (bridged as
-/// `uiGeometry`), then to the media padding.
+/// the top; otherwise falls back to [duoStatusColumnInset], which was measured
+/// from the system's own drawing in that strip, and never goes below the media
+/// padding. (`UIStatusBarManager.statusBarFrame` is consulted too, but on the
+/// Duo it reports only ~2pt, so the measurement is what carries the layout.)
 double mv2RailTopInset(BuildContext context, double stripWidth) {
   final mediaTop = MediaQuery.paddingOf(context).top;
   if (stripWidth <= 0) return mediaTop;
@@ -141,13 +157,16 @@ double mv2RailTopInset(BuildContext context, double stripWidth) {
     }
   }
 
+  var inset = math.max(mediaTop, duoStatusColumnInset);
   final geometry = mv2SceneGeometry;
-  if (geometry == null) return mediaTop;
-
-  final frame = geometry.statusBarFrame;
-  final windowWidth = size.width;
-  // Only trust the frame when the system really draws that bar inside (or up to)
-  // our strip; a status bar that stops well before it is a different layout.
-  if (frame.right < windowWidth - stripWidth - 1) return mediaTop;
-  return math.max(mediaTop, frame.bottom);
+  if (geometry != null) {
+    final frame = geometry.statusBarFrame;
+    // Only trust the frame when the system really draws that bar inside (or up
+    // to) our strip; a status bar that stops well before it is a different
+    // layout. (On the Duo it reports ~2pt, hence the measured floor above.)
+    if (frame.right >= size.width - stripWidth - 1) {
+      inset = math.max(inset, frame.bottom);
+    }
+  }
+  return inset;
 }

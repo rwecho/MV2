@@ -71,36 +71,42 @@ class Mv2TrailingRail extends StatelessWidget {
           blur: 20,
           padding: const EdgeInsets.symmetric(vertical: Mv2Spacing.x3),
           child: Column(
-            // Bottom-anchored: the system's own column (Dynamic Island + status
-            // items) sits at the *top* of this strip, and no API on this Flutter
-            // version reports how far down it reaches (see `mv2RailTopInset`).
-            // Keeping our controls in the lower part of the strip — where
-            // Apple's Duo mockups place the toolbar and the tab bar — avoids the
-            // overlap regardless; [topInset] clamps it further once the reserved
-            // region is known.
-            mainAxisAlignment: MainAxisAlignment.end,
+            // Two groups, spread apart: page actions right below the system's
+            // column (cleared by [topInset]) and the destinations along the
+            // bottom — the arrangement Apple's own Duo mockups use for the
+            // toolbar and tab bar inside this strip.
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: <Widget>[
-              if (onSearch != null)
-                _RailAction(
-                  icon: Icons.search_rounded,
-                  label: '搜索',
-                  onTap: onSearch!,
-                ),
-              const SizedBox(height: Mv2Spacing.x2),
-              const Mv2AccountAvatar(size: 32),
-              const SizedBox(height: Mv2Spacing.x3),
-              for (final spec in mv2TabSpecs)
-                if (spec.tab == Mv2Tab.publish)
-                  _RailPublish(onTap: () => onSelect(spec.tab))
-                else
-                  _RailTab(
-                    spec: spec,
-                    selected: current == spec.tab,
-                    badgeCount: spec.tab == Mv2Tab.notifications
-                        ? notificationUnread
-                        : 0,
-                    onTap: () => onSelect(spec.tab),
-                  ),
+              Column(
+                mainAxisSize: MainAxisSize.min,
+                children: <Widget>[
+                  if (onSearch != null)
+                    _RailAction(
+                      icon: Icons.search_rounded,
+                      label: '搜索',
+                      onTap: onSearch!,
+                    ),
+                  const SizedBox(height: Mv2Spacing.x2),
+                  const Mv2AccountAvatar(size: 32),
+                ],
+              ),
+              Column(
+                mainAxisSize: MainAxisSize.min,
+                children: <Widget>[
+                  for (final spec in mv2TabSpecs)
+                    if (spec.tab == Mv2Tab.publish)
+                      _RailPublish(onTap: () => onSelect(spec.tab))
+                    else
+                      _RailTab(
+                        spec: spec,
+                        selected: current == spec.tab,
+                        badgeCount: spec.tab == Mv2Tab.notifications
+                            ? notificationUnread
+                            : 0,
+                        onTap: () => onSelect(spec.tab),
+                      ),
+                ],
+              ),
             ],
           ),
         ),

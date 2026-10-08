@@ -153,6 +153,7 @@ void main() {
     nativeSizeClass = 'regular';
     await boot(tester, unfoldedSize, padding: unfoldedPadding);
 
+    // The engine-reported obstruction (220) wins over the measured floor (96).
     expect(
       tester.widget<Mv2TrailingRail>(find.byType(Mv2TrailingRail)).topInset,
       statusColumnHeight,
@@ -165,6 +166,20 @@ void main() {
     );
     // Bottom-anchored, so the strip's top — where the system draws its own
     // column — is left empty and the last destination hugs the bottom edge.
+    // Two groups: page actions below the system column, destinations at the
+    // bottom of the strip.
+    expect(
+      tester
+          .getTopLeft(
+            find.descendant(
+              of: find.byType(Mv2TrailingRail),
+              matching: find.text('搜索'),
+            ),
+          )
+          .dy,
+      greaterThanOrEqualTo(statusColumnHeight),
+      reason: 'page actions must clear the system column',
+    );
     expect(
       tester
           .getBottomLeft(
@@ -175,18 +190,7 @@ void main() {
           )
           .dy,
       greaterThan(unfoldedSize.height - 60),
-    );
-    expect(
-      tester
-          .getTopLeft(
-            find.descendant(
-              of: find.byType(Mv2TrailingRail),
-              matching: find.text('搜索'),
-            ),
-          )
-          .dy,
-      greaterThan(statusColumnHeight),
-      reason: 'controls must stay clear of the system column at the top',
+      reason: 'destinations sit at the bottom of the strip',
     );
   });
 
@@ -202,7 +206,7 @@ void main() {
     expect(find.byType(Mv2FloatingTabBar), findsNothing);
     expect(
       tester.widget<Mv2TrailingRail>(find.byType(Mv2TrailingRail)).topInset,
-      54,
+      duoStatusColumnInset,
     );
   });
 
@@ -301,9 +305,12 @@ void main() {
       await probe(unfoldedSize, const EdgeInsets.only(right: 34)),
       (0.0, false, 0.0),
     );
-    // No native geometry yet → fall back to the media padding.
+    // No native geometry yet → the measured system-column floor applies.
     mv2SceneGeometry = null;
-    expect(await probe(unfoldedSize, unfoldedPadding), (84.0, true, 0.0));
+    expect(
+      await probe(unfoldedSize, unfoldedPadding),
+      (84.0, true, duoStatusColumnInset),
+    );
 
     // Once Flutter populates display features (flutter/flutter#193025) the
     // engine-reported reserved strip wins over the safe-area fallback — and a
@@ -316,7 +323,7 @@ void main() {
     );
     expect(
       await probe(unfoldedSize, EdgeInsets.zero, features: const [strip]),
-      (84.0, true, 0.0),
+      (84.0, true, duoStatusColumnInset),
     );
     const island = DisplayFeature(
       bounds: Rect.fromLTWH(867, 0, 84, 180),
