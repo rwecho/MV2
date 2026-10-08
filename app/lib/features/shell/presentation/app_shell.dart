@@ -9,7 +9,6 @@ import '../../../design_system/theme/mv2_theme.dart';
 import '../../../design_system/tokens/mv2_motion.dart';
 import '../../../design_system/tokens/mv2_spacing.dart';
 import '../../../ui/components/mv2_floating_tab_bar.dart';
-import '../../../ui/components/mv2_trailing_rail.dart';
 import '../../../ui/components/states/mv2_state_view.dart';
 import '../../../ui/utils/mv2_breakpoints.dart';
 import '../../../ui/utils/scene_geometry.dart';
@@ -19,6 +18,7 @@ import '../../notifications/application/notifications_providers.dart';
 import '../../settings/application/settings_controller.dart';
 import '../../topic/presentation/topic_detail_page.dart';
 import '../application/shell_chrome.dart';
+import '../application/chrome_actions.dart';
 import '../application/shell_tabs.dart';
 import '../application/tablet_topic_pane.dart';
 
@@ -135,22 +135,24 @@ class _AppShellState extends ConsumerState<AppShell> {
     });
     final barCollapsed = ref.watch(shellBarCollapsedProvider);
     final twoPane = mv2IsTwoPane(context);
-    final windowWidth = MediaQuery.sizeOf(context).width;
     final splitRatio = ref.watch(
       settingsProvider.select((AppSettings s) => s.splitRatio),
     );
 
-    // iPhone Duo: the trailing safe-area strip (the sensor-bar edge, where iOS
-    // parks the Dynamic Island and its status column) hosts all chrome — in
-    // both the folded and the unfolded state. The panes then stop reserving
-    // that inset (the rail already lives inside it) and the floating bottom bar
-    // steps aside, handing its height back to the content. Phones and iPads
-    // report no such strip and keep the old chrome.
-    final padding = MediaQuery.paddingOf(context);
-    final railWidth = mv2TrailingStripWidth(context);
-    final railMode = railWidth > 0;
-    final railTop = railMode ? mv2RailTopInset(context, railWidth) : 0.0;
-    final contentWidth = windowWidth - railWidth;
+    // iPhone Duo: the trailing strip (toolbar + tab bar) is rendered by
+    // [Mv2WindowChromeHost] above the router, so it survives pushed routes. The
+    // shell only needs to know whether that strip exists — then the floating
+    // bottom bar steps aside, because its tab bar lives in the strip instead.
+    final stripMode = mv2TrailingStripWidth(context) > 0;
+
+    // The strip's tab bar highlights the current branch; the shell owns that
+    // index, so publish it for the window chrome.
+    if (ref.read(shellTabProvider) != _current) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        ref.read(shellTabProvider.notifier).select(_current);
+      });
+    }
 
     // The left pane is always a fixed-width `SizedBox` — never swapped for an
     // `Expanded` on phones. A type change at this slot would reparent the
@@ -168,7 +170,7 @@ class _AppShellState extends ConsumerState<AppShell> {
       child: Stack(
         children: <Widget>[
           widget.navigationShell,
-          if (!railMode)
+          if (!stripMode)
             Positioned(
               left: 0,
               right: 0,
@@ -194,52 +196,32 @@ class _AppShellState extends ConsumerState<AppShell> {
     // full-screen route (see `openTopic`). The split divider doubles as the
     // drag handle for the pane split; sizes live in the controller, and the
     // settings ratio is written once per gesture (on drag end).
-    final Widget shell = twoPane
-        ? MultiSplitViewTheme(
-            data: MultiSplitViewThemeData(
-              dividerThickness: paneDividerThickness,
-            ),
-            child: _buildTwoPaneSplit(
-              context,
-              splitRatio: splitRatio,
-              windowWidth: contentWidth,
-              leftPane: leftPane,
-            ),
-          )
-        : Row(
-            children: <Widget>[
-              SizedBox(width: contentWidth, child: leftPane),
-            ],
-          );
-
-    if (!railMode) {
-      return ColoredBox(color: context.colors.background, child: shell);
-    }
-
-    // With the rail, the horizontal safe areas are already spent: the rail owns
-    // the trailing strip in full (it also clears the system's status column via
-    // `railTop`), so the panes below must not reserve that inset a second time.
-    final paneMedia = MediaQuery.of(context).copyWith(
-      padding: EdgeInsets.only(top: padding.top, bottom: padding.bottom),
-      viewPadding: EdgeInsets.only(top: padding.top, bottom: padding.bottom),
-    );
+    // The window chrome host already took the trailing strip out of this box,
+    // so lay the panes out against the *constraints* rather than the window
+    // size: `MediaQuery.sizeOf` still reports the full window.
     return ColoredBox(
       color: context.colors.background,
-      child: Row(
-        children: <Widget>[
-          Expanded(child: MediaQuery(data: paneMedia, child: shell)),
-          SizedBox(
-            width: railWidth,
-            child: Mv2TrailingRail(
-              current: _current,
-              onSelect: (tab) => _onSelect(context, tab),
-              notificationUnread: ref.watch(notificationUnreadProvider),
-              onSearch: () => context.push('/feed/search'),
-              topInset: railTop,
-              bottomInset: padding.bottom,
-            ),
-          ),
-        ],
+      child: LayoutBuilder(
+        builder: (BuildContext context, BoxConstraints constraints) {
+          final layoutWidth = constraints.maxWidth;
+          return twoPane
+              ? MultiSplitViewTheme(
+                  data: MultiSplitViewThemeData(
+                    dividerThickness: paneDividerThickness,
+                  ),
+                  child: _buildTwoPaneSplit(
+                    context,
+                    splitRatio: splitRatio,
+                    windowWidth: layoutWidth,
+                    leftPane: leftPane,
+                  ),
+                )
+              : Row(
+                  children: <Widget>[
+                    SizedBox(width: layoutWidth, child: leftPane),
+                  ],
+                );
+        },
       ),
     );
   }

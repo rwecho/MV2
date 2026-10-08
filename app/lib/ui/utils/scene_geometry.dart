@@ -3,6 +3,43 @@ import 'dart:ui' show DisplayFeature;
 
 import 'package:flutter/widgets.dart';
 
+/// Window-level chrome scope.
+///
+/// The trailing strip is *window* chrome (like the system status column): it
+/// must survive route pushes, so `Mv2WindowChromeHost` renders it above the
+/// router and publishes its measurements here. Descendants read them instead of
+/// the raw safe area, because the host already subtracts the strip from the
+/// content's media padding — without this, pages would reserve it twice.
+class Mv2WindowChromeScope extends InheritedWidget {
+  const Mv2WindowChromeScope({
+    super.key,
+    required this.stripWidth,
+    required this.topInset,
+    required super.child,
+  });
+
+  /// Width of the trailing strip, 0 when the window has none.
+  final double stripWidth;
+
+  /// Height the system's own column occupies at the top of the strip.
+  final double topInset;
+
+  static Mv2WindowChromeScope? maybeOf(BuildContext context) =>
+      context.dependOnInheritedWidgetOfExactType<Mv2WindowChromeScope>();
+
+  @override
+  bool updateShouldNotify(Mv2WindowChromeScope oldWidget) =>
+      oldWidget.stripWidth != stripWidth || oldWidget.topInset != topInset;
+}
+
+/// Trailing strip implied by [padding]: the Duo reserves one edge wider than
+/// the other (84pt vs 0 in both of its states); phones are symmetric.
+double mv2StripWidthFrom(EdgeInsets padding) {
+  if (padding.right < trailingRailMinInset) return 0;
+  if (padding.right <= padding.left) return 0;
+  return padding.right;
+}
+
 /// Trailing safe-area strip (logical px) from which on the window clearly
 /// reserves the iPhone Duo's sensor-bar edge.
 ///
@@ -101,12 +138,12 @@ Mv2SceneGeometry? mv2SceneGeometry;
 /// [mv2TrailingDisplayFeature]); otherwise the safe-area inset decides, with the
 /// asymmetry test that keeps phones out.
 double mv2TrailingStripWidth(BuildContext context) {
+  // Window chrome host wins: it already subtracted the strip from the content.
+  final scope = Mv2WindowChromeScope.maybeOf(context);
+  if (scope != null) return scope.stripWidth;
   final feature = mv2TrailingDisplayFeature(context);
   if (feature != null) return feature.bounds.width;
-  final padding = MediaQuery.paddingOf(context);
-  if (padding.right < trailingRailMinInset) return 0;
-  if (padding.right <= padding.left) return 0;
-  return padding.right;
+  return mv2StripWidthFrom(MediaQuery.paddingOf(context));
 }
 
 /// The engine-reported reserved strip hugging the trailing edge, if any.

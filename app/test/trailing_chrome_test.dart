@@ -8,7 +8,8 @@ import 'package:mv2/app/app.dart';
 import 'package:mv2/core/data/v2ex_providers.dart';
 import 'package:mv2/design_system/effects/mv2_glass.dart';
 import 'package:mv2/ui/components/mv2_floating_tab_bar.dart';
-import 'package:mv2/ui/components/mv2_trailing_rail.dart';
+import 'package:mv2/ui/components/mv2_trailing_chrome.dart';
+import 'package:mv2/ui/components/topic_item.dart';
 import 'package:mv2/ui/utils/mv2_breakpoints.dart';
 import 'package:mv2/ui/utils/scene_geometry.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -134,10 +135,10 @@ void main() {
     nativeSizeClass = 'regular';
     await boot(tester, unfoldedSize, padding: unfoldedPadding);
 
-    expect(find.byType(Mv2TrailingRail), findsOneWidget);
+    expect(find.byType(Mv2TrailingChrome), findsOneWidget);
     expect(find.byType(Mv2FloatingTabBar), findsNothing);
 
-    final rail = find.byType(Mv2TrailingRail);
+    final rail = find.byType(Mv2TrailingChrome);
     for (final label in <String>['搜索', '首页', '节点', '发布', '通知', '我的']) {
       expect(
         find.descendant(of: rail, matching: find.text(label)),
@@ -155,13 +156,22 @@ void main() {
 
     // The engine-reported obstruction (220) wins over the measured floor (96).
     expect(
-      tester.widget<Mv2TrailingRail>(find.byType(Mv2TrailingRail)).topInset,
+      tester.widget<Mv2TrailingChrome>(find.byType(Mv2TrailingChrome)).topInset,
       statusColumnHeight,
     );
     // The glass column starts after the system chrome, and the controls sit in
     // the lower half of the strip — the top of it belongs to the system.
     expect(
-      tester.getTopLeft(find.byType(Mv2GlassSurface)).dy,
+      tester
+          .getTopLeft(
+            find
+                .descendant(
+                  of: find.byType(Mv2TrailingChrome),
+                  matching: find.byType(Mv2GlassSurface),
+                )
+                .first,
+          )
+          .dy,
       greaterThanOrEqualTo(statusColumnHeight),
     );
     // Bottom-anchored, so the strip's top — where the system draws its own
@@ -172,7 +182,7 @@ void main() {
       tester
           .getTopLeft(
             find.descendant(
-              of: find.byType(Mv2TrailingRail),
+              of: find.byType(Mv2TrailingChrome),
               matching: find.text('搜索'),
             ),
           )
@@ -184,7 +194,7 @@ void main() {
       tester
           .getBottomLeft(
             find.descendant(
-              of: find.byType(Mv2TrailingRail),
+              of: find.byType(Mv2TrailingChrome),
               matching: find.text('我的'),
             ),
           )
@@ -202,12 +212,41 @@ void main() {
     );
     await boot(tester, foldedSize, padding: foldedPadding);
 
-    expect(find.byType(Mv2TrailingRail), findsOneWidget);
+    expect(find.byType(Mv2TrailingChrome), findsOneWidget);
     expect(find.byType(Mv2FloatingTabBar), findsNothing);
     expect(
-      tester.widget<Mv2TrailingRail>(find.byType(Mv2TrailingRail)).topInset,
+      tester.widget<Mv2TrailingChrome>(find.byType(Mv2TrailingChrome)).topInset,
       duoStatusColumnInset,
     );
+  });
+
+  testWidgets('topic detail hands its actions to the rail', (tester) async {
+    await boot(tester, foldedSize, padding: foldedPadding);
+
+    final rail = find.byType(Mv2TrailingChrome);
+    // Default chrome before a topic is open.
+    expect(
+      find.descendant(of: rail, matching: find.text('搜索')),
+      findsOneWidget,
+    );
+
+    await tester.tap(find.byType(TopicItem).first);
+    // The pushed detail needs its own fixture load, then one more frame for the
+    // page to publish its actions into the strip.
+    for (var i = 0; i < 4; i++) {
+      await tester.pump(const Duration(milliseconds: 400));
+    }
+
+    // Window chrome survives the push, and the page's own actions replace the
+    // defaults in that strip (Apple's trailing-pane controls).
+    for (final label in <String>['收藏', '感谢', '分享']) {
+      expect(
+        find.descendant(of: rail, matching: find.text(label)),
+        findsOneWidget,
+        reason: '«$label» should be offered by the rail',
+      );
+    }
+    expect(find.descendant(of: rail, matching: find.text('搜索')), findsNothing);
   });
 
   testWidgets('tablet without a trailing strip keeps the floating bar', (
@@ -217,7 +256,7 @@ void main() {
     await boot(tester, const Size(1200, 900));
 
     expect(find.byType(Mv2FloatingTabBar), findsOneWidget);
-    expect(find.byType(Mv2TrailingRail), findsNothing);
+    expect(find.byType(Mv2TrailingChrome), findsNothing);
   });
 
   testWidgets('phone with symmetric insets keeps the floating bar', (
@@ -230,7 +269,7 @@ void main() {
       padding: const EdgeInsets.symmetric(horizontal: 59),
     );
 
-    expect(find.byType(Mv2TrailingRail), findsNothing);
+    expect(find.byType(Mv2TrailingChrome), findsNothing);
     expect(find.byType(Mv2FloatingTabBar), findsOneWidget);
   });
 
@@ -242,7 +281,7 @@ void main() {
 
     await tester.tap(
       find.descendant(
-        of: find.byType(Mv2TrailingRail),
+        of: find.byType(Mv2TrailingChrome),
         matching: find.text('节点'),
       ),
     );
