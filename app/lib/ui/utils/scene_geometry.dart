@@ -12,19 +12,22 @@ import 'package:flutter/widgets.dart';
 /// they never reach the threshold.
 const double trailingRailMinInset = 60.0;
 
-/// Height the Duo's system column occupies at the top of the trailing strip,
+/// Height the Duo's system hardware covers at the top of the trailing strip,
 /// used until the platform reports the reserved region itself.
 ///
-/// Measured from the system's own drawing inside the strip (unfolded inner
-/// display, 951×669; the strip is the leading 80pt the pre-27.1-SDK build did
-/// not cover, so those pixels are purely system-drawn): clock glyphs at
-/// y 34..46pt, status icons at y 57..88pt, with the Dynamic Island above them
-/// (drawn black, so it is bounded by the clock). 96pt clears clock, icons and
-/// island with a small margin.
+/// Measured from the system's own drawing inside the strip, per state:
+///
+/// * unfolded inner display: clock glyphs at y 34..46pt and status icons at
+///   57..88pt, island above them → 96pt cleared it;
+/// * folded cover display: a solid black system/hardware block (the island /
+///   sensor area, 46×60pt) spans y 84..144pt, so the same clearance put our
+///   search icon (116..138pt) underneath it.
+///
+/// 160pt covers both states with a small margin.
 ///
 /// Fallback only: a `DisplayFeatureType.cutout` from the engine
 /// (flutter/flutter#193025) or a usable `statusBarFrame` wins when present.
-const double duoStatusColumnInset = 96.0;
+const double duoStatusColumnInset = 160.0;
 
 /// The window-scene geometry iOS reports (`mv2/native` → `uiGeometry`).
 @immutable
