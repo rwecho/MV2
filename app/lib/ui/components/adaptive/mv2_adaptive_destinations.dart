@@ -86,3 +86,14 @@ const List<int> _barIndexForBranch = <int>[0, 1, 3, 4];
 /// Bar index a branch highlights.
 int mv2BarIndexForBranch(int branchIndex) =>
     _barIndexForBranch[branchIndex.clamp(0, _barIndexForBranch.length - 1)];
+
+/// Height a page should keep clear at the bottom for the bar plus its home
+/// indicator, so scrolling content ends above it rather than underneath.
+///
+/// The bar is `adaptive_platform_ui`'s now: a native UITabBar on iOS 26+ (or
+/// its Material/Cupertino fallback elsewhere), all of which are ~80pt tall
+/// including their own padding.
+double mv2BarContentInset(BuildContext context) {
+  final safe = MediaQuery.viewPaddingOf(context).bottom;
+  return 80 + (safe > 0 ? safe : 0) + 12;
+}

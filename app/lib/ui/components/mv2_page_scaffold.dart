@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/data/v2ex_providers.dart';
 import '../../design_system/theme/mv2_theme.dart';
 import '../../design_system/tokens/mv2_spacing.dart';
+import 'adaptive/mv2_adaptive_destinations.dart';
 import '../../features/settings/application/settings_controller.dart';
 import 'mv2_floating_tab_bar.dart';
 
@@ -41,13 +42,8 @@ class Mv2PageScaffold extends ConsumerWidget {
 
   /// Extra bottom padding a scrollable must reserve so its last row clears the
   /// floating bar.
-  static double bottomContentInset(BuildContext context) {
-    final safe = MediaQuery.viewPaddingOf(context).bottom;
-    return Mv2FloatingTabBar.height +
-        Mv2FloatingTabBar.bottomGap +
-        (safe > 0 ? safe : 0) +
-        Mv2Spacing.x3;
-  }
+  static double bottomContentInset(BuildContext context) =>
+      mv2BarContentInset(context);
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
