@@ -32,9 +32,12 @@ enum Mv2FontSize {
 ///
 /// [maxWidth] is the pixel cap applied to reading lists on wide viewports;
 /// phones are narrower than both values, so it only bites on large screens.
+/// The caps sit well above every iPhone/Duo window (<1000pt usable) so the
+/// content column fills the window edge-to-edge there, and only ultra-wide
+/// tablets keep a deliberate reading column.
 enum Mv2ContentWidth {
-  narrow('标准', 600),
-  wide('宽', 760);
+  narrow('标准', 1000),
+  wide('宽', 1200);
 
   const Mv2ContentWidth(this.label, this.maxWidth);
 

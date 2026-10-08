@@ -258,10 +258,24 @@ class _AppShellState extends ConsumerState<AppShell> {
               : context.colors.border,
         ),
       ),
-      // v3 API: content is built per Area, identified by controller index.
-      builder: (context, area) => _splitController != null && identical(area, _splitController!.getArea(0))
-          ? leftPane
-          : const _TabletDetailPane(),
+      // v3 API: content is built per Area, identified by controller index. In
+      // two-pane mode the screen-padding safe area belongs to the window edges
+      // only: the left pane keeps the leading inset and the right pane the
+      // trailing one, so the divider side of each pane is not double-padded
+      // (which would make the content columns look narrower than the window).
+      builder: (context, area) {
+        final isLeft = _splitController != null &&
+            identical(area, _splitController!.getArea(0));
+        final outer = MediaQuery.paddingOf(context);
+        final panePadding = isLeft
+            ? EdgeInsets.fromLTRB(outer.left, outer.top, 0, outer.bottom)
+            : EdgeInsets.fromLTRB(0, outer.top, outer.right, outer.bottom);
+        return MediaQuery(
+          data: MediaQuery.of(context)
+              .copyWith(padding: panePadding, viewPadding: panePadding),
+          child: isLeft ? leftPane : const _TabletDetailPane(),
+        );
+      },
     );
   }
 

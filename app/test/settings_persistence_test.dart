@@ -55,7 +55,7 @@ void main() {
         .read(settingsProvider.notifier)
         .setContentWidth(Mv2ContentWidth.wide);
 
-    expect(container.read(settingsProvider).contentWidth.maxWidth, 760);
+    expect(container.read(settingsProvider).contentWidth.maxWidth, 1200);
     final prefs = await SharedPreferences.getInstance();
     expect(prefs.getString('mv2.contentWidth'), 'wide');
 
