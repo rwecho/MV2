@@ -39,6 +39,7 @@ import '../../nodes/application/open_node.dart';
 import '../../reader/application/open_external_url.dart';
 import '../../settings/application/settings_controller.dart';
 import '../../shell/application/chrome_actions.dart';
+import '../../../ui/utils/scene_geometry.dart';
 import '../../shell/application/tablet_topic_pane.dart';
 import '../application/topic_actions.dart';
 import '../application/topic_providers.dart';
@@ -453,67 +454,76 @@ class _TopicDetailTopBar extends ConsumerWidget {
               ),
             ),
           ),
-          Mv2IconButton(
-            icon: Icons.more_horiz_rounded,
-            onPressed: () => _showOverflowSheet(context, ref),
-          ),
+          // On the Duo the toolbar in the trailing strip owns overflow, so the
+          // page keeps only one ellipsis (in one place, per the HIG).
+          if (mv2TrailingStripWidth(context) == 0)
+            Mv2IconButton(
+              icon: Icons.more_horiz_rounded,
+              onPressed: () => mv2ShowTopicOverflowSheet(context, ref, topicId),
+            ),
         ],
       ),
     );
   }
+}
 
-  void _showOverflowSheet(BuildContext context, WidgetRef ref) {
-    final detail = ref
-        .read(topicDetailProvider(TopicDetailArgs(topicId)))
-        .value;
-    final ignored = ref
-        .read(topicActionsProvider(topicId))
-        .ignoredOf(detail?.ignored ?? false);
-    final signedIn = detail?.canReply ?? false;
+/// 更多操作：主题的 overflow 菜单。Duo 的尾侧 toolbar 与手机顶栏都用它，
+/// 保证「所有次要操作都在一处」（HIG: use the system overflow menu 的落地方式）。
+void mv2ShowTopicOverflowSheet(
+  BuildContext context,
+  WidgetRef ref,
+  int topicId,
+) {
+  final detail = ref
+      .read(topicDetailProvider(TopicDetailArgs(topicId)))
+      .value;
+  final ignored = ref
+      .read(topicActionsProvider(topicId))
+      .ignoredOf(detail?.ignored ?? false);
+  final signedIn = detail?.canReply ?? false;
 
-    showModalBottomSheet<void>(
-      context: context,
-      backgroundColor: context.colors.elevatedSurface,
-      shape: const RoundedRectangleBorder(borderRadius: Mv2Radius.allXl),
-      builder: (BuildContext sheetContext) => _TopicOverflowSheet(
-        ignored: ignored,
-        onShare: () {
-          Navigator.of(sheetContext).pop();
-          final topic = detail?.topic;
-          if (topic != null) _showShareSheet(context, ref, topic);
-        },
-        onIgnore: () {
-          Navigator.of(sheetContext).pop();
-          if (!signedIn) {
-            context.push('/login');
-            return;
-          }
-          final target = !ignored;
-          unawaited(() async {
-            // Same feedback ladder as the body's writes ([_TopicDetailBody]
-            // `_runWriteAction`); the ladder lives inline here because the
-            // sheet's callbacks sit on the top bar, not the body state.
-            final haptics = ref.read(settingsProvider).hapticsEnabled;
-            Mv2Haptics.tap(haptics);
-            final failure = await ref
-                .read(topicActionsProvider(topicId).notifier)
-                .toggleIgnore();
-            if (!context.mounted || failure != null) return;
-            Mv2Haptics.success(haptics);
-            mv2ShowSuccess(
-              ScaffoldMessenger.of(context),
-              target ? '已忽略' : '已取消忽略',
-            );
-          }());
-        },
-        onReport: () {
-          Navigator.of(sheetContext).pop();
-          final topic = detail?.topic;
-          if (topic != null) unawaited(_reportTopic(context, topic));
-        },
-      ),
-    );
-  }
+  showModalBottomSheet<void>(
+    context: context,
+    backgroundColor: context.colors.elevatedSurface,
+    shape: const RoundedRectangleBorder(borderRadius: Mv2Radius.allXl),
+    builder: (BuildContext sheetContext) => _TopicOverflowSheet(
+      ignored: ignored,
+      onShare: () {
+        Navigator.of(sheetContext).pop();
+        final topic = detail?.topic;
+        if (topic != null) _showShareSheet(context, ref, topic);
+      },
+      onIgnore: () {
+        Navigator.of(sheetContext).pop();
+        if (!signedIn) {
+          context.push('/login');
+          return;
+        }
+        final target = !ignored;
+        unawaited(() async {
+          // Same feedback ladder as the body's writes ([_TopicDetailBody]
+          // `_runWriteAction`); the ladder lives inline here because the
+          // sheet's callbacks sit on the top bar, not the body state.
+          final haptics = ref.read(settingsProvider).hapticsEnabled;
+          Mv2Haptics.tap(haptics);
+          final failure = await ref
+              .read(topicActionsProvider(topicId).notifier)
+              .toggleIgnore();
+          if (!context.mounted || failure != null) return;
+          Mv2Haptics.success(haptics);
+          mv2ShowSuccess(
+            ScaffoldMessenger.of(context),
+            target ? '已忽略' : '已取消忽略',
+          );
+        }());
+      },
+      onReport: () {
+        Navigator.of(sheetContext).pop();
+        final topic = detail?.topic;
+        if (topic != null) unawaited(_reportTopic(context, topic));
+      },
+    ),
+  );
 }
 
 /// Bottom sheet shared by the topic overflow actions. Mirrors the settings
@@ -1170,10 +1180,13 @@ class _TopicDetailBodyState extends ConsumerState<_TopicDetailBody> {
         label: '感谢',
         onTap: _onThankTopic,
       ),
+      // 分享 / 忽略 / 举报 live in this ellipsis (its sheet already offers all
+      // three), which is what the HIG asks for: reserve the ellipsis for
+      // overflow and put the secondary actions in that one menu.
       Mv2ToolbarAction(
-        icon: Icons.ios_share_rounded,
-        label: '分享',
-        onTap: _onShare,
+        icon: Icons.more_horiz_rounded,
+        label: '更多',
+        onTap: () => mv2ShowTopicOverflowSheet(context, ref, widget.topicId),
       ),
     ];
     WidgetsBinding.instance.addPostFrameCallback((_) {

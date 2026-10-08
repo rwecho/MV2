@@ -138,12 +138,21 @@ void main() {
     expect(find.byType(Mv2TrailingChrome), findsOneWidget);
     expect(find.byType(Mv2FloatingTabBar), findsNothing);
 
-    final rail = find.byType(Mv2TrailingChrome);
-    for (final label in <String>['搜索', '首页', '节点', '发布', '通知', '我的']) {
+    final chrome = find.byType(Mv2TrailingChrome);
+    // Toolbar: circular icon buttons (Apple's shape for this edge).
+    expect(
+      find.descendant(
+        of: chrome,
+        matching: find.byIcon(Icons.search_rounded),
+      ),
+      findsOneWidget,
+    );
+    // Tab bar: the five destinations, labelled.
+    for (final label in <String>['首页', '节点', '发布', '通知', '我的']) {
       expect(
-        find.descendant(of: rail, matching: find.text(label)),
+        find.descendant(of: chrome, matching: find.text(label)),
         findsOneWidget,
-        reason: '«$label» should live in the rail',
+        reason: '«$label» should live in the strip',
       );
     }
     // Still two-pane: the rail is chrome, not a layout mode.
@@ -183,7 +192,7 @@ void main() {
           .getTopLeft(
             find.descendant(
               of: find.byType(Mv2TrailingChrome),
-              matching: find.text('搜索'),
+              matching: find.byIcon(Icons.search_rounded),
             ),
           )
           .dy,
@@ -223,10 +232,13 @@ void main() {
   testWidgets('topic detail hands its actions to the rail', (tester) async {
     await boot(tester, foldedSize, padding: foldedPadding);
 
-    final rail = find.byType(Mv2TrailingChrome);
+    final chrome = find.byType(Mv2TrailingChrome);
     // Default chrome before a topic is open.
     expect(
-      find.descendant(of: rail, matching: find.text('搜索')),
+      find.descendant(
+        of: chrome,
+        matching: find.byIcon(Icons.search_rounded),
+      ),
       findsOneWidget,
     );
 
@@ -239,14 +251,27 @@ void main() {
 
     // Window chrome survives the push, and the page's own actions replace the
     // defaults in that strip (Apple's trailing-pane controls).
-    for (final label in <String>['收藏', '感谢', '分享']) {
+    for (final icon in <IconData>[
+      Icons.star_border_rounded,
+      Icons.favorite_border_rounded,
+      Icons.more_horiz_rounded,
+    ]) {
       expect(
-        find.descendant(of: rail, matching: find.text(label)),
+        find.descendant(of: chrome, matching: find.byIcon(icon)),
         findsOneWidget,
-        reason: '«$label» should be offered by the rail',
+        reason: '«$icon» should be offered by the strip toolbar',
       );
     }
-    expect(find.descendant(of: rail, matching: find.text('搜索')), findsNothing);
+    expect(
+      find.descendant(
+        of: chrome,
+        matching: find.byIcon(Icons.search_rounded),
+      ),
+      findsNothing,
+    );
+    // The ellipsis is reserved for overflow and lives in exactly one place: the
+    // page's own top-bar menu steps aside while the strip is present.
+    expect(find.byIcon(Icons.more_horiz_rounded), findsOneWidget);
   });
 
   testWidgets('tablet without a trailing strip keeps the floating bar', (

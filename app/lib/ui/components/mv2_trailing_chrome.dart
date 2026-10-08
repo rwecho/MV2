@@ -74,11 +74,9 @@ class Mv2TrailingChrome extends ConsumerWidget {
             child: Align(
               alignment: Alignment.topCenter,
               child: SingleChildScrollView(
-                child: _Cluster(
-                  child: _ToolbarSection(
-                    actions: pageActions,
-                    onSearch: onSearch,
-                  ),
+                child: _ToolbarSection(
+                  actions: pageActions,
+                  onSearch: onSearch,
                 ),
               ),
             ),
@@ -120,7 +118,12 @@ class _Cluster extends StatelessWidget {
   }
 }
 
-/// The strip's toolbar: the current page's actions, or 搜索 / 账号.
+/// The strip's toolbar: a column of **separate circular buttons** — Apple's
+/// shape for this edge (the tab bar below is a cluster, the toolbar is not).
+///
+/// Shows the current page's actions (收藏 / 感谢 / 分享 / ⋯ on a topic) or the
+/// default 搜索 / 账号. `⋯` is reserved for overflow, per the HIG, and the page
+/// publishes it like any other action.
 class _ToolbarSection extends StatelessWidget {
   const _ToolbarSection({required this.actions, this.onSearch});
 
@@ -137,39 +140,94 @@ class _ToolbarSection extends StatelessWidget {
       children: <Widget>[
         if (actions.isNotEmpty)
           for (final action in shown)
-            _ChromeTile(
+            _CircleAction(
               semanticsLabel: action.label,
-              label: action.label,
-              labelColor: action.active
-                  ? colors.accent
-                  : colors.textTertiary,
               onTap: action.onTap,
-              leading: Icon(
+              icon: Icon(
                 action.active ? (action.activeIcon ?? action.icon) : action.icon,
-                size: 22,
+                size: 20,
                 color: action.active ? colors.accent : colors.textSecondary,
               ),
             )
         else ...<Widget>[
           if (onSearch != null)
-            _ChromeTile(
+            _CircleAction(
               semanticsLabel: '搜索',
-              label: '搜索',
-              labelColor: colors.textTertiary,
               onTap: onSearch!,
-              leading: Icon(
+              icon: Icon(
                 Icons.search_rounded,
-                size: 22,
+                size: 20,
                 color: colors.textSecondary,
               ),
             ),
-          const SizedBox(height: Mv2Spacing.x2),
-          const Mv2AccountAvatar(size: 32),
+          const _CircleSurface(child: Mv2AccountAvatar(size: 32)),
         ],
       ],
     );
   }
 }
+
+/// One circular toolbar button: its own glass disc, 44pt across.
+class _CircleAction extends StatelessWidget {
+  const _CircleAction({
+    required this.icon,
+    required this.semanticsLabel,
+    required this.onTap,
+  });
+
+  final Widget icon;
+  final String semanticsLabel;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return _CircleSurface(
+      child: Semantics(
+        button: true,
+        label: semanticsLabel,
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: onTap,
+          child: SizedBox(
+            width: _circleSize,
+            height: _circleSize,
+            child: Center(child: icon),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Frosted disc + the margin that keeps consecutive buttons apart.
+class _CircleSurface extends StatelessWidget {
+  const _CircleSurface({required this.child});
+
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(
+        horizontal: Mv2Spacing.x2,
+        vertical: Mv2Spacing.x1,
+      ),
+      child: Mv2GlassSurface(
+        borderRadius: Mv2Radius.pill,
+        blur: 20,
+        padding: EdgeInsets.zero,
+        child: SizedBox(
+          width: _circleSize,
+          height: _circleSize,
+          child: Center(child: child),
+        ),
+      ),
+    );
+  }
+}
+
+/// Diameter Apple uses for edge toolbar buttons.
+const double _circleSize = 44;
 
 /// The strip's tab bar: the five shell destinations.
 class _TabBarSection extends StatelessWidget {
