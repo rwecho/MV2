@@ -9,6 +9,61 @@ import '../../design_system/tokens/mv2_spacing.dart';
 /// The five fixed MV2 destinations (`docs/01` §3).
 enum Mv2Tab { feed, nodes, publish, notifications, profile }
 
+/// One destination's icon/label pair.
+///
+/// Shared by the horizontal floating bar (phones / tablets) and the vertical
+/// trailing rail (iPhone Duo unfolded), so the two chromes can never drift
+/// apart. 发布 is an action rather than a branch, but it occupies the same slot
+/// in both.
+@immutable
+class Mv2TabSpec {
+  const Mv2TabSpec({
+    required this.tab,
+    required this.icon,
+    required this.activeIcon,
+    required this.label,
+  });
+
+  final Mv2Tab tab;
+  final IconData icon;
+  final IconData activeIcon;
+  final String label;
+}
+
+/// The fixed order shown in both chromes: 首页 · 节点 · 发布 · 通知 · 我的.
+const List<Mv2TabSpec> mv2TabSpecs = <Mv2TabSpec>[
+  Mv2TabSpec(
+    tab: Mv2Tab.feed,
+    icon: Icons.home_outlined,
+    activeIcon: Icons.home_rounded,
+    label: '首页',
+  ),
+  Mv2TabSpec(
+    tab: Mv2Tab.nodes,
+    icon: Icons.grid_view_outlined,
+    activeIcon: Icons.grid_view_rounded,
+    label: '节点',
+  ),
+  Mv2TabSpec(
+    tab: Mv2Tab.publish,
+    icon: Icons.add_rounded,
+    activeIcon: Icons.add_rounded,
+    label: '发布',
+  ),
+  Mv2TabSpec(
+    tab: Mv2Tab.notifications,
+    icon: Icons.notifications_none_rounded,
+    activeIcon: Icons.notifications_rounded,
+    label: '通知',
+  ),
+  Mv2TabSpec(
+    tab: Mv2Tab.profile,
+    icon: Icons.person_outline_rounded,
+    activeIcon: Icons.person_rounded,
+    label: '我的',
+  ),
+];
+
 /// Floating, frosted bottom navigation (`designs/01-home-feed.png`).
 ///
 /// Deliberately **not** a Material `BottomNavigationBar`, and the publish
@@ -51,36 +106,20 @@ class Mv2FloatingTabBar extends StatelessWidget {
               height: height,
               child: Row(
                 children: <Widget>[
-                  _TabButton(
-                    icon: Icons.home_outlined,
-                    activeIcon: Icons.home_rounded,
-                    label: '首页',
-                    selected: current == Mv2Tab.feed,
-                    onTap: () => onSelect(Mv2Tab.feed),
-                  ),
-                  _TabButton(
-                    icon: Icons.grid_view_outlined,
-                    activeIcon: Icons.grid_view_rounded,
-                    label: '节点',
-                    selected: current == Mv2Tab.nodes,
-                    onTap: () => onSelect(Mv2Tab.nodes),
-                  ),
-                  _PublishButton(onTap: () => onSelect(Mv2Tab.publish)),
-                  _TabButton(
-                    icon: Icons.notifications_none_rounded,
-                    activeIcon: Icons.notifications_rounded,
-                    label: '通知',
-                    selected: current == Mv2Tab.notifications,
-                    onTap: () => onSelect(Mv2Tab.notifications),
-                    badgeCount: notificationUnread,
-                  ),
-                  _TabButton(
-                    icon: Icons.person_outline_rounded,
-                    activeIcon: Icons.person_rounded,
-                    label: '我的',
-                    selected: current == Mv2Tab.profile,
-                    onTap: () => onSelect(Mv2Tab.profile),
-                  ),
+                  for (final spec in mv2TabSpecs)
+                    if (spec.tab == Mv2Tab.publish)
+                      _PublishButton(onTap: () => onSelect(spec.tab))
+                    else
+                      _TabButton(
+                        icon: spec.icon,
+                        activeIcon: spec.activeIcon,
+                        label: spec.label,
+                        selected: current == spec.tab,
+                        onTap: () => onSelect(spec.tab),
+                        badgeCount: spec.tab == Mv2Tab.notifications
+                            ? notificationUnread
+                            : 0,
+                      ),
                 ],
               ),
             ),

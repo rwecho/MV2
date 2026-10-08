@@ -134,14 +134,21 @@ GET `/signin` 得到 18081 → 47098 → 75285）。所以手里缓存的 token 
   双栏时安全区只作用在贴屏幕的那一侧（左栏留左、右栏留右），分隔条一侧不再重复扣 34pt。
 - **安全区不对称**：展开横屏时左侧 inset 为 `0`、**右侧为 `84pt`**（屏下摄像头/传感器条那一侧）。
   详情列右侧留白偏大是硬件要求，不要用负 padding 把内容顶进该区域。
+- **侧边 chrome rail**：Apple 对 Duo 的指导是把状态栏 / toolbar / tab bar 都放进这条侧边带
+  （"Designing for iPhone Duo"）。`ui/components/mv2_trailing_rail.dart` 就是这段竖排 chrome：
+  上半是页面操作（搜索 / 账号），下半是五个一级 Tab；判定 `mv2UsesTrailingRail()` =
+  `regular` + 宽度 ≥850 + 尾侧 inset ≥60 且大于首侧，因此只会在 Duo 展开横屏出现，
+  手机 / iPad 仍旧用底部悬浮条（`mv2_floating_tab_bar.dart`，两者共用 `mv2TabSpecs`）。
+  开 rail 时两个 pane 不再预留尾侧 inset（rail 已经吃掉了），竖向也省掉了底部条的高度。
 - **构建 SDK 必须 27.1**：用 iOS **27.0** SDK 构建的包在 Duo 上会被系统判为「未适配」，
   窗口只有 `871×669pt`，右侧 `80pt` 是系统黑边（与 iPhone X 时代 letterbox 同一机制），
   Flutter 只能按 871pt 排版，页面看起来「右侧少一截」。检查命令：
   `xcrun vtool -show-build <Runner.app>/Runner`，`sdk` 应为 `27.1`。
-  本地只有 Xcode 27.0 时，可在**调试包**上做一次性补丁来核验布局
+  用 `DEVELOPER_DIR=<Xcode 27.1>/Contents/Developer flutter build ios` 即可产出正确 SDK 的包；
+  本机若只有 Xcode 27.0，也可在**调试包**上做一次性补丁来核验布局
   （`xcrun vtool -set-build-version iossim 15.0 27.1 -replace -output <out> <binary>` +
   `Info.plist` 的 `DTSDKName`/`DTPlatformVersion` 改为 27.1 + `codesign --force --deep --sign -`）；
-  **这只用于本地模拟器核验，发布包必须在 Xcode 27.1 上构建。**
+  **补丁只用于本地模拟器核验，发布包必须在 Xcode 27.1 上构建。**
 
 
 ### 从外部打开（Deep Link）

@@ -9,6 +9,7 @@ import '../../../design_system/theme/mv2_theme.dart';
 import '../../../design_system/tokens/mv2_motion.dart';
 import '../../../design_system/tokens/mv2_spacing.dart';
 import '../../../ui/components/mv2_floating_tab_bar.dart';
+import '../../../ui/components/mv2_trailing_rail.dart';
 import '../../../ui/components/states/mv2_state_view.dart';
 import '../../../ui/utils/mv2_breakpoints.dart';
 import '../../auth/application/auth_controller.dart';
@@ -138,6 +139,15 @@ class _AppShellState extends ConsumerState<AppShell> {
       settingsProvider.select((AppSettings s) => s.splitRatio),
     );
 
+    // Unfolded Duo: the trailing safe-area strip (the sensor-bar side, where
+    // iOS parks the status bar and the Dynamic Island) hosts all chrome. The
+    // panes then stop reserving that inset — the rail already lives inside it —
+    // and the floating bottom bar steps aside, handing its height back to the
+    // content. Phones and iPads report no such strip and keep the old chrome.
+    final outerPadding = MediaQuery.paddingOf(context);
+    final railWidth = mv2UsesTrailingRail(context) ? outerPadding.right : 0.0;
+    final contentWidth = windowWidth - railWidth;
+
     // The left pane is always a fixed-width `SizedBox` — never swapped for an
     // `Expanded` on phones. A type change at this slot would reparent the
     // navigationShell and discard all four branches' navigator state when the
@@ -154,23 +164,24 @@ class _AppShellState extends ConsumerState<AppShell> {
       child: Stack(
         children: <Widget>[
           widget.navigationShell,
-          Positioned(
-            left: 0,
-            right: 0,
-            bottom: 0,
-            child: AnimatedSlide(
-              // Slide the whole padded bar (bar + safe area) below the
-              // viewport.
-              offset: barCollapsed ? const Offset(0, 1.2) : Offset.zero,
-              duration: Mv2Motion.sheet,
-              curve: Mv2Motion.standard,
-              child: Mv2FloatingTabBar(
-                current: _current,
-                onSelect: (tab) => _onSelect(context, tab),
-                notificationUnread: ref.watch(notificationUnreadProvider),
+          if (railWidth == 0)
+            Positioned(
+              left: 0,
+              right: 0,
+              bottom: 0,
+              child: AnimatedSlide(
+                // Slide the whole padded bar (bar + safe area) below the
+                // viewport.
+                offset: barCollapsed ? const Offset(0, 1.2) : Offset.zero,
+                duration: Mv2Motion.sheet,
+                curve: Mv2Motion.standard,
+                child: Mv2FloatingTabBar(
+                  current: _current,
+                  onSelect: (tab) => _onSelect(context, tab),
+                  notificationUnread: ref.watch(notificationUnreadProvider),
+                ),
               ),
             ),
-          ),
         ],
       ),
     );
@@ -179,25 +190,47 @@ class _AppShellState extends ConsumerState<AppShell> {
     // full-screen route (see `openTopic`). The split divider doubles as the
     // drag handle for the pane split; sizes live in the controller, and the
     // settings ratio is written once per gesture (on drag end).
+    final Widget shell = twoPane
+        ? MultiSplitViewTheme(
+            data: MultiSplitViewThemeData(
+              dividerThickness: paneDividerThickness,
+            ),
+            child: _buildTwoPaneSplit(
+              context,
+              splitRatio: splitRatio,
+              windowWidth: contentWidth,
+              railMode: railWidth > 0,
+              leftPane: leftPane,
+            ),
+          )
+        : Row(
+            children: <Widget>[
+              SizedBox(width: contentWidth, child: leftPane),
+            ],
+          );
+
     return ColoredBox(
       color: context.colors.background,
-      child: twoPane
-          ? MultiSplitViewTheme(
-              data: MultiSplitViewThemeData(
-                dividerThickness: paneDividerThickness,
-              ),
-              child: _buildTwoPaneSplit(
-                context,
-                splitRatio: splitRatio,
-                windowWidth: windowWidth,
-                leftPane: leftPane,
-              ),
-            )
-          : Row(
+      child: railWidth > 0
+          ? Row(
               children: <Widget>[
-                SizedBox(width: windowWidth, child: leftPane),
+                Expanded(child: shell),
+                SizedBox(
+                  width: railWidth,
+                  child: SafeArea(
+                    left: false,
+                    right: false,
+                    child: Mv2TrailingRail(
+                      current: _current,
+                      onSelect: (tab) => _onSelect(context, tab),
+                      notificationUnread: ref.watch(notificationUnreadProvider),
+                      onSearch: () => context.push('/feed/search'),
+                    ),
+                  ),
+                ),
               ],
-            ),
+            )
+          : shell,
     );
   }
 
@@ -210,6 +243,7 @@ class _AppShellState extends ConsumerState<AppShell> {
     BuildContext context, {
     required double splitRatio,
     required double windowWidth,
+    required bool railMode,
     required Widget leftPane,
   }) {
     final controller = _splitController;
@@ -263,13 +297,20 @@ class _AppShellState extends ConsumerState<AppShell> {
       // only: the left pane keeps the leading inset and the right pane the
       // trailing one, so the divider side of each pane is not double-padded
       // (which would make the content columns look narrower than the window).
+      // With the trailing rail the horizontal insets are already spent: the
+      // rail owns the trailing strip, and the leading side of the Duo is flush.
       builder: (context, area) {
         final isLeft = _splitController != null &&
             identical(area, _splitController!.getArea(0));
         final outer = MediaQuery.paddingOf(context);
-        final panePadding = isLeft
-            ? EdgeInsets.fromLTRB(outer.left, outer.top, 0, outer.bottom)
-            : EdgeInsets.fromLTRB(0, outer.top, outer.right, outer.bottom);
+        final EdgeInsets panePadding;
+        if (railMode) {
+          panePadding = EdgeInsets.fromLTRB(0, outer.top, 0, outer.bottom);
+        } else {
+          panePadding = isLeft
+              ? EdgeInsets.fromLTRB(outer.left, outer.top, 0, outer.bottom)
+              : EdgeInsets.fromLTRB(0, outer.top, outer.right, outer.bottom);
+        }
         return MediaQuery(
           data: MediaQuery.of(context)
               .copyWith(padding: panePadding, viewPadding: panePadding),
