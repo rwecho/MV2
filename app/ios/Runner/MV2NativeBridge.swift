@@ -75,8 +75,31 @@ final class MV2NativeBridge {
       pendingQuickAction = nil
       result(route)
 
+    case "horizontalSizeClass":
+      // Apple 折叠屏适配：普通 iPhone（含横屏）恒为 compact；iPhone Duo
+      // 展开内屏为 regular。这是 UIKit trait 而非宽度断点——Duo 展开 871pt
+      // 与 iPhone 横屏 874pt 几乎同宽，裸宽度无法区分，靠 size class 才能
+      // 让 Duo 展开进入双栏而不误伤手机横屏（Dart: mv2_breakpoints.dart）。
+      result(Self.currentHorizontalSizeClass)
+
     default:
       result(FlutterMethodNotImplemented)
+    }
+  }
+
+  /// `UIWindowScene.traitCollection.horizontalSizeClass` 归一化字符串:
+  /// "compact" / "regular" / "unspecified"。
+  static var currentHorizontalSizeClass: String {
+    guard
+      let scene = UIApplication.shared.connectedScenes
+        .compactMap({ $0 as? UIWindowScene })
+        .first,
+      let window = scene.windows.first(where: { $0.isKeyWindow })
+    else { return "unspecified" }
+    switch window.traitCollection.horizontalSizeClass {
+    case .regular: return "regular"
+    case .compact: return "compact"
+    default: return "unspecified"
     }
   }
 

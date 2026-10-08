@@ -48,6 +48,21 @@ class Mv2NativeBridge {
     });
   }
 
+  /// UIKit `horizontalSizeClass` ("compact" / "regular" / "unspecified").
+  ///
+  /// Apple 折叠屏适配信号：普通 iPhone（含横屏）恒为 compact，iPhone Duo
+  /// 展开内屏为 regular。非 iOS（Android / 桌面 / 测试）没有此 trait，
+  /// 通道缺失时返回 `null`，布局回退到纯宽度断点（现状不变）。
+  Future<String?> horizontalSizeClass() async {
+    try {
+      return await channel.invokeMethod<String>('horizontalSizeClass');
+    } on MissingPluginException {
+      return null;
+    } on PlatformException {
+      return null;
+    }
+  }
+
   Future<void> _invoke(String method, [Object? arguments]) async {
     try {
       await channel.invokeMethod<void>(method, arguments);

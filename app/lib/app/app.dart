@@ -10,6 +10,7 @@ import '../../features/auth/application/auth_controller.dart';
 import '../../features/settings/application/settings_controller.dart';
 import '../../ui/utils/mv2_breakpoints.dart';
 import '../../ui/primitives/mv2_shad_theme.dart';
+import '../../ui/utils/size_class_sync.dart';
 import 'router.dart';
 import 'session_cache_refresh.dart';
 
@@ -58,7 +59,9 @@ class Mv2App extends ConsumerWidget {
       // that launch.
       builder: (context, child) => Mv2ShadScope(
         child: Mv2DeepLinkListener(
-          child: child ?? const SizedBox.shrink(),
+          child: Mv2SizeClassSync(
+            child: child ?? const SizedBox.shrink(),
+          ),
         ),
       ),
     );
