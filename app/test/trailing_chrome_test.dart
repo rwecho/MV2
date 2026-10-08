@@ -151,6 +151,7 @@ void main() {
           debugFoldable: foldable == null
               ? null
               : Stream<FoldableData>.value(foldable),
+          debugFold: foldable,
         ),
       ),
     );

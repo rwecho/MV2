@@ -11,6 +11,7 @@ import '../../features/settings/application/settings_controller.dart';
 import '../../ui/utils/mv2_breakpoints.dart';
 import '../../ui/primitives/mv2_shad_theme.dart';
 
+import 'package:adaptive_platform_ui/adaptive_platform_ui.dart';
 import 'package:foldable/foldable.dart';
 
 import '../../ui/components/mv2_window_chrome.dart';
@@ -20,11 +21,15 @@ import 'session_cache_refresh.dart';
 
 /// Root widget: owns theming (Light/Dark + reading scale) and the router.
 class Mv2App extends ConsumerWidget {
-  const Mv2App({super.key, this.debugFoldable});
+  const Mv2App({super.key, this.debugFoldable, this.debugFold});
 
   /// Synthetic fold snapshots for tests: the platform channel that normally
   /// carries them does not exist in the test binding.
   final Stream<FoldableData>? debugFoldable;
+
+  /// Same snapshot for the fixed toolbar chrome, which reads the fold on its
+  /// own. Test-only, mirroring the package's own `debugFold` seam.
+  final FoldableData? debugFold;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -74,12 +79,19 @@ class Mv2App extends ConsumerWidget {
         builder: (context, child) => Mv2ShadScope(
           child: Mv2DeepLinkListener(
             child: Mv2SceneSync(
-              // Window chrome (the Duo's trailing toolbar + tab bar) lives above
-              // the router so a pushed topic keeps it on screen.
-              child: Mv2WindowChromeHost(
-                navigatorKey: rootNavigatorKey,
-                router: ref.watch(routerProvider),
-                child: child ?? const SizedBox.shrink(),
+              // Fixed toolbar chrome from `adaptive_platform_ui`: it lives
+              // above the navigator, owns the registry every AdaptiveScaffold
+              // publishes its app bar to, and draws the one persistent bar
+              // (plus the Duo's trailing capsule bar) instead of a bar per
+              // route. Pages migrate onto it one by one.
+              child: AdaptiveToolbarHost(
+                // ignore: invalid_use_of_visible_for_testing_member
+                debugFold: debugFold,
+                child: Mv2WindowChromeHost(
+                  navigatorKey: rootNavigatorKey,
+                  router: ref.watch(routerProvider),
+                  child: child ?? const SizedBox.shrink(),
+                ),
               ),
             ),
           ),
