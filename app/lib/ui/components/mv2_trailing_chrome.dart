@@ -34,7 +34,6 @@ class Mv2TrailingChrome extends ConsumerWidget {
     this.notificationUnread = 0,
     this.topInset = 0,
     this.bottomInset = 0,
-    this.stripWidth = duoStatusColumnWidth + 2 * duoStatusColumnLeading,
   });
 
   /// Currently selected shell destination.
@@ -52,10 +51,6 @@ class Mv2TrailingChrome extends ConsumerWidget {
   /// Safe-area inset at the bottom of the window.
   final double bottomInset;
 
-  /// Width of the strip this chrome lives in, so its contents can sit on the
-  /// system column's axis (see [mv2StripColumnInsets]).
-  final double stripWidth;
-
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final pageActions =
@@ -64,37 +59,29 @@ class Mv2TrailingChrome extends ConsumerWidget {
     return Padding(
       // Clear the system chrome first.
       padding: EdgeInsets.only(top: topInset, bottom: bottomInset),
-      child: Padding(
-        // Both sections sit on the *system* column's axis, not the strip's
-        // centre: measured island/glyphs span 16..58pt of the 84pt strip.
-        padding: mv2StripColumnInsets(stripWidth),
-        child: Column(
-          // Two distinct clusters, not one continuous bar (Apple's Duo mockups):
-          // the tab bar is pinned to the bottom, the toolbar sits right below
-          // the system's column and scrolls if a page offers more actions than
-          // the strip's height can show at once.
-          children: <Widget>[
-            Align(
-              alignment: Alignment.topCenter,
-              child: SingleChildScrollView(
-                child: _ToolbarSection(actions: pageActions),
-              ),
+      child: Column(
+        // Two distinct clusters, not one continuous bar (Apple's Duo mockups):
+        // the tab bar is pinned to the bottom, the toolbar sits right below
+        // the system's column and scrolls if a page offers more actions than
+        // the strip's height can show at once.
+        children: <Widget>[
+          Align(
+            alignment: Alignment.topCenter,
+            child: SingleChildScrollView(
+              child: _ToolbarSection(actions: pageActions),
             ),
-            // Centred in the space left below the toolbar, the way Apple's
-            // mockup floats this cluster instead of pinning it to the edge.
-            Expanded(
-              child: Center(
-                child: _Cluster(
-                  child: _TabBarSection(
-                    current: current,
-                    onSelect: onSelect,
-                    notificationUnread: notificationUnread,
-                  ),
-                ),
-              ),
+          ),
+          const Spacer(),
+          // Pinned to the bottom of the bar, above the bottom clearance —
+          // the arrangement the reference Duo bar uses.
+          _Cluster(
+            child: _TabBarSection(
+              current: current,
+              onSelect: onSelect,
+              notificationUnread: notificationUnread,
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
@@ -114,9 +101,9 @@ class _Cluster extends StatelessWidget {
       child: Mv2GlassSurface(
         borderRadius: Mv2Radius.nav,
         blur: 20,
-        padding: const EdgeInsets.symmetric(vertical: Mv2Spacing.x3),
+        padding: const EdgeInsets.symmetric(vertical: mv2DuoTabsInset),
         // Same width as the status column above and the toolbar buttons.
-        child: SizedBox(width: duoStatusColumnWidth, child: child),
+        child: SizedBox(width: mv2DuoCapsuleWidth, child: child),
       ),
     );
   }
@@ -198,7 +185,7 @@ class _CircleSurface extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: Mv2Spacing.x1),
+      padding: const EdgeInsets.symmetric(vertical: _actionGap / 2),
       child: Mv2GlassSurface(
         borderRadius: Mv2Radius.pill,
         blur: 20,
@@ -213,12 +200,14 @@ class _CircleSurface extends StatelessWidget {
   }
 }
 
-/// Toolbar button diameter: the system column's width, so a button lines up
-/// with the status column above it.
-const double _circleSize = duoStatusColumnWidth;
+/// Toolbar button diameter: the bar's capsule width.
+const double _circleSize = mv2DuoCapsuleWidth;
 
-/// 发布 accent disc, kept inside the column width.
-const double _publishSize = 28;
+/// Vertical space between two actions, so they sit on the reference pitch.
+const double _actionGap = mv2DuoActionPitch - mv2DuoCapsuleWidth;
+
+/// 发布 accent disc, kept inside the capsule width.
+const double _publishSize = 30;
 
 /// The strip's tab bar: the five shell destinations as icon tiles.
 ///
@@ -285,7 +274,7 @@ class _TabBarItem extends StatelessWidget {
         behavior: HitTestBehavior.opaque,
         onTap: onTap,
         child: SizedBox(
-          width: duoStatusColumnWidth,
+          width: mv2DuoCapsuleWidth,
           height: _tileSize,
           child: Stack(
             clipBehavior: Clip.none,
@@ -320,8 +309,8 @@ class _TabBarItem extends StatelessWidget {
   }
 }
 
-/// Height of one destination tile in the strip.
-const double _tileSize = 40;
+/// Height of one destination tile in the tab capsule.
+const double _tileSize = mv2DuoTabItemHeight;
 
 class _TabBarPublish extends StatelessWidget {
   const _TabBarPublish({required this.onTap});
@@ -338,7 +327,7 @@ class _TabBarPublish extends StatelessWidget {
         behavior: HitTestBehavior.opaque,
         onTap: onTap,
         child: SizedBox(
-          width: duoStatusColumnWidth,
+          width: mv2DuoCapsuleWidth,
           height: _tileSize,
           child: Center(
             child: Container(

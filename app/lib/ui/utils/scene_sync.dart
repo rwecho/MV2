@@ -1,4 +1,6 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:foldable/foldable.dart';
 
 import '../../core/native/mv2_native_bridge.dart';
 import '../utils/mv2_breakpoints.dart';
@@ -29,6 +31,10 @@ class _Mv2SceneSyncState extends State<Mv2SceneSync> {
   /// Last window size we queried for; `null` means "never synced".
   Size? _lastSize;
 
+  /// Last fold snapshot written to the log, so diagnostics stay one line per
+  /// change instead of one per frame.
+  String? _loggedFold;
+
   @override
   Widget build(BuildContext context) {
     final size = MediaQuery.sizeOf(context);
@@ -36,7 +42,29 @@ class _Mv2SceneSyncState extends State<Mv2SceneSync> {
       _lastSize = size;
       _sync();
     }
+    if (kDebugMode) _logFold(context);
     return widget.child;
+  }
+
+  /// Debug diagnostics: what UIKit reports about the fold, so the chrome's
+  /// geometry can be checked against the device rather than guessed.
+  void _logFold(BuildContext context) {
+    final data = DuoMediaQuery.maybeOf(context);
+    if (data == null) return;
+    final regions = data.regions
+        .map(
+          (ReservedRegion r) =>
+              '${r.kind.wireName}${r.bounds}${r.isActive ? '' : '(inactive)'}',
+        )
+        .join(' | ');
+    final line =
+        'MV2: fold status=${data.status.name} '
+        'angle=${data.angleDegrees?.toStringAsFixed(1)} '
+        'sizeClass=${data.horizontalSizeClass.name} '
+        'regions=[$regions]';
+    if (line == _loggedFold) return;
+    _loggedFold = line;
+    debugPrint(line);
   }
 
   Future<void> _sync() async {

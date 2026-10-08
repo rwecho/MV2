@@ -10,6 +10,9 @@ import '../../features/auth/application/auth_controller.dart';
 import '../../features/settings/application/settings_controller.dart';
 import '../../ui/utils/mv2_breakpoints.dart';
 import '../../ui/primitives/mv2_shad_theme.dart';
+
+import 'package:foldable/foldable.dart';
+
 import '../../ui/components/mv2_window_chrome.dart';
 import '../../ui/utils/scene_sync.dart';
 import 'router.dart';
@@ -17,7 +20,11 @@ import 'session_cache_refresh.dart';
 
 /// Root widget: owns theming (Light/Dark + reading scale) and the router.
 class Mv2App extends ConsumerWidget {
-  const Mv2App({super.key});
+  const Mv2App({super.key, this.debugFoldable});
+
+  /// Synthetic fold snapshots for tests: the platform channel that normally
+  /// carries them does not exist in the test binding.
+  final Stream<FoldableData>? debugFoldable;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -47,26 +54,33 @@ class Mv2App extends ConsumerWidget {
     // Firebase 就绪后重建一次,boot 阶段被丢弃的用户属性借此补齐。
     ref.watch(telemetryReadyProvider);
 
-    return MaterialApp.router(
-      title: 'MV2',
-      debugShowCheckedModeBanner: false,
-      theme: Mv2ThemeData.light(textScale: settings.fontSize.scale),
-      darkTheme: Mv2ThemeData.dark(textScale: settings.fontSize.scale),
-      themeMode: settings.themeMode,
-      routerConfig: ref.watch(routerProvider),
-      // The listener sits above the router, not inside the tab shell: a cold
-      // start straight into `/topic/123` (an `mv2://` link) never builds the
-      // shell, and push registration plus notification taps must still work on
-      // that launch.
-      builder: (context, child) => Mv2ShadScope(
-        child: Mv2DeepLinkListener(
-          child: Mv2SceneSync(
-            // Window chrome (the Duo's trailing toolbar + tab bar) lives above
-            // the router so a pushed topic keeps it on screen.
-            child: Mv2WindowChromeHost(
-              navigatorKey: rootNavigatorKey,
-              router: ref.watch(routerProvider),
-              child: child ?? const SizedBox.shrink(),
+    // Fold geometry (hinge posture, fold / camera reserved regions) bridged
+    // from UIKit; the trailing chrome reads it through [DuoMediaQuery]. The
+    // MediaQuery bridge stays off: publishing the fold would split every
+    // Material dialog and sheet (see the package README).
+    return FoldableProvider(
+      debugData: debugFoldable,
+      child: MaterialApp.router(
+        title: 'MV2',
+        debugShowCheckedModeBanner: false,
+        theme: Mv2ThemeData.light(textScale: settings.fontSize.scale),
+        darkTheme: Mv2ThemeData.dark(textScale: settings.fontSize.scale),
+        themeMode: settings.themeMode,
+        routerConfig: ref.watch(routerProvider),
+        // The listener sits above the router, not inside the tab shell: a cold
+        // start straight into `/topic/123` (an `mv2://` link) never builds the
+        // shell, and push registration plus notification taps must still work on
+        // that launch.
+        builder: (context, child) => Mv2ShadScope(
+          child: Mv2DeepLinkListener(
+            child: Mv2SceneSync(
+              // Window chrome (the Duo's trailing toolbar + tab bar) lives above
+              // the router so a pushed topic keeps it on screen.
+              child: Mv2WindowChromeHost(
+                navigatorKey: rootNavigatorKey,
+                router: ref.watch(routerProvider),
+                child: child ?? const SizedBox.shrink(),
+              ),
             ),
           ),
         ),

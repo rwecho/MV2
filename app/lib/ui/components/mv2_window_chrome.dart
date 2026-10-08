@@ -76,44 +76,65 @@ class _Mv2WindowChromeHostState extends ConsumerState<Mv2WindowChromeHost> {
   Widget build(BuildContext context) {
     final navigatorKey = widget.navigatorKey;
     final child = widget.child;
-    final padding = MediaQuery.paddingOf(context);
-    final stripWidth = mv2StripWidthFrom(padding);
-    if (stripWidth <= 0) {
-      return Mv2WindowChromeScope(
-        stripWidth: 0,
-        topInset: 0,
-        child: child,
-      );
+
+    final side = mv2DuoBarSideOf(context);
+    if (side == null) {
+      return Mv2WindowChromeScope(stripWidth: 0, topInset: 0, child: child);
     }
 
-    final topInset = mv2RailTopInset(context, stripWidth);
-    // The content must not reserve the strip again: it is a sibling now.
-    final contentMedia = MediaQuery.of(context).copyWith(
-      padding: EdgeInsets.only(top: padding.top, bottom: padding.bottom),
-      viewPadding: EdgeInsets.only(top: padding.top, bottom: padding.bottom),
-    );
+    final padding = MediaQuery.paddingOf(context);
+    final stripWidth = mv2DuoStripWidthOf(context);
+    final bandWidth = mv2DuoBandWidthOf(context);
+    final insets = mv2DuoBarInsetsOf(context);
     final actionContext = navigatorKey.currentContext ?? context;
+    final onRight = side == Mv2DuoBarSide.right;
+
+    // The bar overlays the content by the band's inward inset (12pt), exactly
+    // as the system's own controls do: the strip itself is subtracted from the
+    // content, the bezel inset is not.
+    final contentMedia = MediaQuery.of(context).copyWith(
+      padding: EdgeInsets.only(
+        top: padding.top,
+        bottom: padding.bottom,
+        left: onRight ? padding.left : 0,
+        right: onRight ? 0 : padding.right,
+      ),
+      viewPadding: EdgeInsets.only(
+        top: padding.top,
+        bottom: padding.bottom,
+        left: onRight ? padding.left : 0,
+        right: onRight ? 0 : padding.right,
+      ),
+    );
 
     return Mv2WindowChromeScope(
       stripWidth: stripWidth,
-      topInset: topInset,
+      topInset: insets.top,
       child: ColoredBox(
         color: context.colors.background,
-        child: Row(
+        child: Stack(
           children: <Widget>[
-            Expanded(
-              child: MediaQuery(data: contentMedia, child: child),
+            Positioned.fill(
+              child: Padding(
+                padding: onRight
+                    ? EdgeInsets.only(right: stripWidth)
+                    : EdgeInsets.only(left: stripWidth),
+                child: MediaQuery(data: contentMedia, child: child),
+              ),
             ),
-            SizedBox(
-              width: stripWidth,
+            Positioned(
+              top: 0,
+              bottom: 0,
+              width: bandWidth,
+              right: onRight ? 0 : null,
+              left: onRight ? null : 0,
               child: Mv2TrailingChrome(
                 current: ref.watch(shellTabProvider),
                 onSelect: (Mv2Tab tab) =>
                     selectShellTab(actionContext, ref, tab),
                 notificationUnread: ref.watch(notificationUnreadProvider),
-                topInset: topInset,
-                bottomInset: padding.bottom,
-                stripWidth: stripWidth,
+                topInset: insets.top,
+                bottomInset: insets.bottom,
               ),
             ),
           ],

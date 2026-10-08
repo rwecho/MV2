@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:foldable/foldable.dart';
 import 'package:mv2/app/app.dart';
 import 'package:mv2/core/data/v2ex_providers.dart';
 import 'package:mv2/design_system/effects/mv2_glass.dart';
@@ -67,10 +68,35 @@ void main() {
     mv2SceneGeometry = null;
   });
 
+  /// A synthetic fold snapshot: the platform channel that normally carries it
+  /// does not exist in the test binding.
+  FoldableData snapshot(List<ReservedRegion> regions) => FoldableData(
+    capabilities: const FoldableCapabilities(
+      supportLevel: FoldableSupportLevel.available,
+      isFoldable: true,
+      hingeApiPresent: true,
+      regionApiPresent: true,
+      angleUnitVerified: true,
+      strategy: 'test',
+    ),
+    status: HingeStatus.closed,
+    angleDegrees: 0,
+    regions: regions,
+    displayFeatures: const <DisplayFeature>[],
+  );
+
+  ReservedRegion occlusion(Rect bounds, {bool active = true}) =>
+      ReservedRegion(
+        kind: ReservedRegionKind.occlusion,
+        bounds: bounds,
+        isActive: active,
+      );
+
   Future<ProviderContainer> boot(
     WidgetTester tester,
     Size logicalSize, {
     EdgeInsets padding = EdgeInsets.zero,
+    FoldableData? foldable,
   }) async {
     const dpr = 3.0;
     SharedPreferences.setMockInitialValues(<String, Object>{});
@@ -119,7 +145,14 @@ void main() {
     );
     addTearDown(container.dispose);
     await tester.pumpWidget(
-      UncontrolledProviderScope(container: container, child: const Mv2App()),
+      UncontrolledProviderScope(
+        container: container,
+        child: Mv2App(
+          debugFoldable: foldable == null
+              ? null
+              : Stream<FoldableData>.value(foldable),
+        ),
+      ),
     );
     // Fixture providers resolve after ~250ms and the skeletons shimmer forever,
     // so pump in steps instead of settling.
@@ -166,11 +199,19 @@ void main() {
     expect(find.text('未选择主题'), findsOneWidget);
   });
 
-  testWidgets('rail starts below the system status column', (tester) async {
+  testWidgets('rail starts below the reported status cluster', (tester) async {
     nativeSizeClass = 'regular';
-    await boot(tester, unfoldedSize, padding: unfoldedPadding);
+    // The device reports its status cluster as an occlusion region inside the
+    // strip; that reading — not a measured constant — sets the top clearance.
+    await boot(
+      tester,
+      unfoldedSize,
+      padding: unfoldedPadding,
+      foldable: snapshot(<ReservedRegion>[
+        occlusion(const Rect.fromLTWH(867, 0, 84, statusColumnHeight)),
+      ]),
+    );
 
-    // The engine-reported obstruction (220) wins over the measured floor (96).
     expect(
       tester.widget<Mv2TrailingChrome>(find.byType(Mv2TrailingChrome)).topInset,
       statusColumnHeight,
@@ -206,8 +247,8 @@ void main() {
       greaterThanOrEqualTo(statusColumnHeight),
       reason: 'page actions must clear the system column',
     );
-    // The destinations float, centred in the space below the toolbar — Apple's
-    // mockup for this edge does not pin the tab bar to the window edge.
+    // The tab capsule is pinned to the bottom of the bar, above the bottom
+    // clearance — the arrangement the reference Duo bar uses.
     final destinations = tester.getRect(
       find.descendant(
         of: find.byType(Mv2TrailingChrome),
@@ -226,9 +267,14 @@ void main() {
       reason: 'tab bar sits below the toolbar',
     );
     expect(
-      destinations.center.dy,
-      closeTo((toolbar.bottom + unfoldedSize.height) / 2, 40),
-      reason: 'tab bar is centred in the space below the toolbar',
+      destinations.bottom,
+      lessThanOrEqualTo(unfoldedSize.height),
+      reason: 'tab bar stays inside the bar',
+    );
+    expect(
+      destinations.bottom,
+      greaterThan(unfoldedSize.height - 60),
+      reason: 'tab bar is pinned to the bottom of the bar',
     );
   });
 
@@ -238,13 +284,22 @@ void main() {
       statusBar: const Rect.fromLTWH(0, 0, 466, 54),
       safeArea: foldedPadding,
     );
-    await boot(tester, foldedSize, padding: foldedPadding);
+    await boot(
+      tester,
+      foldedSize,
+      padding: foldedPadding,
+      // Exactly what the device reports on the cover display.
+      foldable: snapshot(<ReservedRegion>[
+        occlusion(const Rect.fromLTRB(382, 0, 466, 170)),
+        occlusion(const Rect.fromLTRB(399.7, 29.3, 436.7, 66.3)),
+      ]),
+    );
 
     expect(find.byType(Mv2TrailingChrome), findsOneWidget);
     expect(find.byType(Mv2FloatingTabBar), findsNothing);
     expect(
       tester.widget<Mv2TrailingChrome>(find.byType(Mv2TrailingChrome)).topInset,
-      duoStatusColumnInset,
+      170,
     );
   });
 
@@ -293,31 +348,27 @@ void main() {
     expect(find.byIcon(Icons.more_horiz_rounded), findsOneWidget);
   });
 
-  testWidgets('toolbar and tab bar share the system column axis', (
-    tester,
-  ) async {
+  testWidgets('toolbar and tab bar sit on the system band axis', (tester) async {
     await boot(tester, foldedSize, padding: foldedPadding);
     final chrome = find.byType(Mv2TrailingChrome);
-    final chromeRect = tester.getRect(chrome);
 
-    // The device's own column sits 16pt into the strip and is 42pt wide; our
-    // chrome must land on that axis, not the strip's centre.
-    final columnLeft = chromeRect.left + duoStatusColumnLeading;
-    final columnCentre = columnLeft + duoStatusColumnWidth / 2;
-    expect(columnCentre, isNot(closeTo(chromeRect.center.dx, 1.0)));
+    // The band is the 84pt strip plus the 12pt bezel inset, so its centre is
+    // 466 - (84 + 12) / 2 = 418pt — the camera's own centre on this device.
+    final axis = foldedSize.width - (84 + mv2DuoBarBezelInset) / 2;
+    expect(axis, isNot(closeTo(foldedSize.width - 84 / 2, 1.0)));
 
     final discs = find.descendant(
       of: chrome,
       matching: find.byType(Mv2GlassSurface),
     );
-    // First disc is the toolbar button, last is the tab bar cluster.
+    // First disc is the toolbar button, last is the tab capsule.
     final button = tester.getRect(discs.first);
-    expect(button.width, closeTo(duoStatusColumnWidth, 0.5));
-    expect(button.center.dx, closeTo(columnCentre, 0.5));
+    expect(button.width, closeTo(mv2DuoCapsuleWidth, 0.5));
+    expect(button.center.dx, closeTo(axis, 0.5));
 
     final tabBar = tester.getRect(discs.last);
-    expect(tabBar.width, closeTo(duoStatusColumnWidth, 0.5));
-    expect(tabBar.center.dx, closeTo(columnCentre, 0.5));
+    expect(tabBar.width, closeTo(mv2DuoCapsuleWidth, 0.5));
+    expect(tabBar.center.dx, closeTo(axis, 0.5));
   });
 
   testWidgets('the toolbar follows the page', (tester) async {
@@ -427,6 +478,9 @@ void main() {
           data: MediaQueryData(
             size: size,
             padding: padding,
+            // The bar side is read from the *view* padding, exactly as the
+            // reference implementation does (it survives a SafeArea above).
+            viewPadding: padding,
             displayFeatures: features,
           ),
           child: Builder(
@@ -449,26 +503,31 @@ void main() {
       ),
     );
 
-    // Duo strip → strip + rail, and the rail clears the status column.
+    // Duo strip → strip + chrome, and the chrome clears the status cluster.
+    // The clearance now comes from the reported occlusion region (or the
+    // 170pt cluster fallback when nothing has arrived) rather than from
+    // `statusBarFrame`, which reports ~2pt on this device.
     expect(
       await probe(unfoldedSize, unfoldedPadding),
-      (84.0, true, statusColumnHeight),
+      (84.0, true, mv2DuoStatusClusterFallbackHeight),
     );
     // Symmetric insets (landscape iPhone) → no strip.
     expect(
       await probe(unfoldedSize, const EdgeInsets.symmetric(horizontal: 59)),
       (0.0, false, 0.0),
     );
-    // Too small to be the sensor-bar strip.
+    // A single side inset is what the system reserves, whatever its size
+    // (the reference DuoLayout accepts any; phones never report one).
     expect(
       await probe(unfoldedSize, const EdgeInsets.only(right: 34)),
-      (0.0, false, 0.0),
+      (34.0, true, mv2DuoStatusClusterFallbackHeight),
     );
-    // No native geometry yet → the measured system-column floor applies.
+    // No fold reading yet → the status-cluster fallback (the region is 170pt
+    // deep on this device) still keeps controls out of it.
     mv2SceneGeometry = null;
     expect(
       await probe(unfoldedSize, unfoldedPadding),
-      (84.0, true, duoStatusColumnInset),
+      (84.0, true, mv2DuoStatusClusterFallbackHeight),
     );
 
     // Once Flutter populates display features (flutter/flutter#193025) the
@@ -482,16 +541,7 @@ void main() {
     );
     expect(
       await probe(unfoldedSize, EdgeInsets.zero, features: const [strip]),
-      (84.0, true, duoStatusColumnInset),
-    );
-    const island = DisplayFeature(
-      bounds: Rect.fromLTWH(867, 0, 84, 180),
-      type: DisplayFeatureType.cutout,
-      state: DisplayFeatureState.unknown,
-    );
-    expect(
-      await probe(unfoldedSize, EdgeInsets.zero, features: const [strip, island]),
-      (84.0, true, 180.0),
+      (84.0, true, mv2DuoStatusClusterFallbackHeight),
     );
   });
 }

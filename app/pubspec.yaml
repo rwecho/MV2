@@ -80,6 +80,8 @@ dependencies:
   # 见 lib/features/pro/application/revenuecat_pro_backend.dart 与 README。
   purchases_flutter: ^10.0.0
   multi_split_view: ^3.6.2
+  foldable: ^1.0.5
+  adaptive_platform_ui: ^1.0.1
 dev_dependencies:
   flutter_test:
     sdk: flutter

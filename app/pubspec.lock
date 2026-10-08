@@ -17,6 +17,14 @@ packages:
       url: "https://pub.flutter-io.cn"
     source: hosted
     version: "1.3.77"
+  adaptive_platform_ui:
+    dependency: "direct main"
+    description:
+      name: adaptive_platform_ui
+      sha256: "87d68bd7b8de32768891cfc39a3dccbf0f539e4c6b714ada31d86e4d11b08822"
+      url: "https://pub.flutter-io.cn"
+    source: hosted
+    version: "1.0.1"
   analyzer:
     dependency: transitive
     description:
@@ -653,6 +661,14 @@ packages:
     description: flutter
     source: sdk
     version: "0.0.0"
+  foldable:
+    dependency: "direct main"
+    description:
+      name: foldable
+      sha256: c3f539ba3729716a5aacfcc4c3199d6ae0dee6e55f227d19ba25ef6fd96d804a
+      url: "https://pub.flutter-io.cn"
+    source: hosted
+    version: "1.0.5"
   freezed:
     dependency: "direct dev"
     description:

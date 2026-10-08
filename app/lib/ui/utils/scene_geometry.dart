@@ -2,6 +2,7 @@ import 'dart:math' as math;
 import 'dart:ui' show DisplayFeature;
 
 import 'package:flutter/widgets.dart';
+import 'package:foldable/foldable.dart';
 
 /// Window-level chrome scope.
 ///
@@ -49,47 +50,6 @@ double mv2StripWidthFrom(EdgeInsets padding) {
 /// they never reach the threshold.
 const double trailingRailMinInset = 60.0;
 
-/// Width of the Duo's own status column inside the trailing strip.
-///
-/// Measured on the folded cover display (466×678pt, strip x 382..466): the
-/// island / sensor block and the status glyphs span x 397.7..438.3pt, i.e.
-/// **42pt wide and 16pt in from the strip's leading edge**. The strip's own
-/// centre (424pt) is *not* that column's centre (418pt) — the app's toolbar and
-/// tab bar align to the column, so all three share one axis.
-const double duoStatusColumnWidth = 42.0;
-
-/// Distance from the strip's leading edge to that column.
-const double duoStatusColumnLeading = 16.0;
-
-/// Horizontal padding that puts the app's chrome exactly on the system
-/// column's axis.
-EdgeInsets mv2StripColumnInsets(double stripWidth) => EdgeInsets.only(
-  left: duoStatusColumnLeading,
-  right: (stripWidth - duoStatusColumnLeading - duoStatusColumnWidth).clamp(
-    0,
-    double.infinity,
-  ),
-);
-
-/// Height the Duo's system hardware covers at the top of the trailing strip,
-/// used until the platform reports the reserved region itself.
-///
-/// Measured from the system's own drawing inside the strip, per state:
-///
-/// * unfolded inner display: clock glyphs at y 34..46pt and status icons at
-///   57..88pt, island above them → 96pt cleared it;
-/// * folded cover display: a solid black system/hardware block (the island /
-///   sensor area, 46×60pt) spans y 84..144pt, so the same clearance put our
-///   search icon (116..138pt) underneath it.
-///
-/// 160pt covers both states with a small margin.
-///
-/// Fallback only: a `DisplayFeatureType.cutout` from the engine
-/// (flutter/flutter#193025) or a usable `statusBarFrame` wins when present.
-const double duoStatusColumnInset = 160.0;
-
-/// The window-scene geometry iOS reports (`mv2/native` → `uiGeometry`).
-@immutable
 class Mv2SceneGeometry {
   const Mv2SceneGeometry({
     required this.statusBarFrame,
@@ -150,32 +110,154 @@ class Mv2SceneGeometry {
 /// non-iOS platform. Callers must degrade to `MediaQuery` when it is null.
 Mv2SceneGeometry? mv2SceneGeometry;
 
-/// Width of the trailing sensor-bar strip, or 0 when the window has none.
+/// ---------------------------------------------------------------------------
+/// iPhone Duo control bar
+///
+/// Rules and numbers below are absorbed from `adaptive_platform_ui` (MIT),
+/// which builds the native-looking Duo bar on top of `foldable`'s reserved
+/// regions, then cross-checked against what this device reports. `foldable`
+/// gives us, on the cover display:
+///
+///   occlusion Rect.fromLTRB(382.0,   0.0, 466.0, 170.0)   // status cluster
+///   occlusion Rect.fromLTRB(399.7,  29.3, 436.7,  66.3)   // camera
+///
+/// The camera's centre is x = 418.2pt, which is also the centre of the band
+/// ([mv2DuoBarBezelInset] inward from the strip) — that is the axis the system
+/// draws its own controls on, so we lay ours out there too.
+/// ---------------------------------------------------------------------------
+
+/// Band = the system's strip plus this much *inward*, so the centred controls
+/// sit a few points off the bezel instead of hugging the display edge.
+const double mv2DuoBarBezelInset = 12.0;
+
+/// Strip width to assume while the system reports no side inset.
+const double mv2DuoBarFallbackStripWidth = 60.0;
+
+/// Clearance kept below the top edge while the system has not yet reported
+/// where its status cluster is; the cluster region is 170pt deep on the cover
+/// display, so nothing starts out underneath it.
+const double mv2DuoStatusClusterFallbackHeight = 170.0;
+
+/// Space the system leaves between the controls and a free window edge.
+const double mv2DuoBarEdgeMargin = 24.0;
+
+/// Space the system leaves between the controls and a reserved region.
+const double mv2DuoBarRegionGap = 11.0;
+
+/// Liquid Glass capsule geometry: width, pitch between toolbar actions, tab
+/// item height and the capsule's own inset.
+const double mv2DuoCapsuleWidth = 48.0;
+const double mv2DuoActionPitch = 52.0;
+const double mv2DuoTabItemHeight = 50.0;
+const double mv2DuoTabsInset = 6.0;
+
+/// Height of a tab capsule holding [count] destinations.
+double mv2DuoTabsHeight(int count) =>
+    mv2DuoTabsInset * 2 + count * mv2DuoTabItemHeight;
+
+/// The edge of the window the system reserves for its vertical controls.
+enum Mv2DuoBarSide { left, right }
+
+/// Which edge hosts the bar, or null where the system keeps horizontal bars.
+///
+/// Decided from what the system reserves rather than from a device or a width
+/// breakpoint: no top inset plus a single side inset. That strip is on the
+/// right on the inner display in one landscape rotation and on the cover
+/// display in portrait, and on the *left* in the other rotation; every other
+/// iPhone (top inset in portrait, symmetric sides in landscape) and iPad
+/// (no side inset) keeps the floating bar.
+Mv2DuoBarSide? mv2DuoBarSideOf(BuildContext context) {
+  final padding = MediaQuery.viewPaddingOf(context);
+  if (padding.top != 0) return null;
+  if (padding.right > 0 && padding.left == 0) return Mv2DuoBarSide.right;
+  if (padding.left > 0 && padding.right == 0) return Mv2DuoBarSide.left;
+  return null;
+}
+
+/// Width of the strip the system reserves on [mv2DuoBarSideOf]'s edge.
+double mv2DuoStripWidthOf(BuildContext context) {
+  final padding = MediaQuery.viewPaddingOf(context);
+  final side = mv2DuoBarSideOf(context);
+  final inset = side == Mv2DuoBarSide.left ? padding.left : padding.right;
+  return inset > 0 ? inset : mv2DuoBarFallbackStripWidth;
+}
+
+/// Width of the band the bar lays out in: strip plus [mv2DuoBarBezelInset].
+double mv2DuoBandWidthOf(BuildContext context) =>
+    mv2DuoStripWidthOf(context) + mv2DuoBarBezelInset;
+
+/// Free space to keep above and below the controls so they clear the camera and
+/// the status cluster wherever the current rotation puts them.
+///
+/// Only *occlusion* regions that really lie in this window's strip count: while
+/// the device folds, unfolds or rotates, a reading taken in the previous pose
+/// can still be around. Regions arrive a moment after launch and after a pose
+/// change, so an empty strip means "not reported yet" and the fallback applies
+/// rather than a control starting out underneath the cluster.
+({double top, double bottom}) mv2DuoBarInsetsOf(BuildContext context) {
+  final size = MediaQuery.sizeOf(context);
+  final strip = mv2DuoStripWidthOf(context);
+  final left = mv2DuoBarSideOf(context) == Mv2DuoBarSide.left;
+  final stripStart = left ? 0.0 : size.width - strip;
+  final stripEnd = left ? strip : size.width;
+  final regions =
+      DuoMediaQuery.maybeOf(context)?.regions ?? const <ReservedRegion>[];
+
+  final inStrip = regions.where(
+    (ReservedRegion r) =>
+        r.kind == ReservedRegionKind.occlusion &&
+        r.isActive &&
+        r.bounds.right > stripStart &&
+        r.bounds.left < stripEnd &&
+        r.bounds.right <= size.width + 1 &&
+        r.bounds.bottom <= size.height + 1,
+  );
+
+  double? top;
+  double? bottom;
+  for (final ReservedRegion region in inStrip) {
+    if (region.bounds.center.dy < size.height / 2) {
+      if (top == null || region.bounds.bottom > top) top = region.bounds.bottom;
+    } else {
+      final room = size.height - region.bounds.top + mv2DuoBarRegionGap;
+      if (bottom == null || room > bottom) bottom = room;
+    }
+  }
+
+  final unknown = inStrip.isEmpty;
+  return (
+    top:
+        top ??
+        (unknown ? mv2DuoStatusClusterFallbackHeight : mv2DuoBarEdgeMargin),
+    // The home indicator still has to stay clear on the cover display, where
+    // the safe area is 34pt against this 24pt margin.
+    bottom: math.max(
+      bottom ?? mv2DuoBarEdgeMargin,
+      MediaQuery.paddingOf(context).bottom,
+    ),
+  );
+}
+
+/// Width of the strip the system reserves for its own vertical chrome, or 0
+/// when the window has none.
 ///
 /// Both Duo states have it (folded cover display and unfolded inner display),
-/// which is why this does **not** look at the width class: the strip is the
-/// signal, and it is what the system reserves for its own chrome on that edge.
-///
-/// The engine-reported display feature wins when present (see
-/// [mv2TrailingDisplayFeature]); otherwise the safe-area inset decides, with the
-/// asymmetry test that keeps phones out.
+/// which is why this does **not** look at the width class. Sources, in order:
+/// the window-chrome scope (the host already carved the strip out), the side
+/// the system reserved ([mv2DuoBarSideOf], which also covers the rotation that
+/// puts the strip on the *left*), then an engine-reported display feature
+/// (Android foldables). Phones and iPads report none of these.
 double mv2TrailingStripWidth(BuildContext context) {
   // Window chrome host wins: it already subtracted the strip from the content.
   final scope = Mv2WindowChromeScope.maybeOf(context);
   if (scope != null) return scope.stripWidth;
+  // iPhone Duo: whatever edge the system reserved for its vertical bars.
+  if (mv2DuoBarSideOf(context) != null) return mv2DuoStripWidthOf(context);
+  // Android foldables do report display features; use them when present.
   final feature = mv2TrailingDisplayFeature(context);
-  if (feature != null) return feature.bounds.width;
-  return mv2StripWidthFrom(MediaQuery.paddingOf(context));
+  return feature?.bounds.width ?? 0;
 }
 
-/// The engine-reported reserved strip hugging the trailing edge, if any.
-///
-/// Flutter's channel for this is `MediaQuery.displayFeaturesOf` — the engine is
-/// meant to describe the Duo's reserved edge region as a `cutout`/`hinge`
-/// (flutter/flutter#193025). The engine in Flutter 3.47.3 reports an empty list
-/// on the Duo, so this returns `null` today and the safe-area fallback applies;
-/// once the engine populates it, the same call site picks up the official
-/// bounds with no further change.
 DisplayFeature? mv2TrailingDisplayFeature(BuildContext context) {
   final size = MediaQuery.sizeOf(context);
   for (final feature in MediaQuery.displayFeaturesOf(context)) {
@@ -193,42 +275,14 @@ DisplayFeature? mv2TrailingDisplayFeature(BuildContext context) {
 bool mv2UsesTrailingRail(BuildContext context) =>
     mv2TrailingStripWidth(context) > 0;
 
-/// Vertical inset the rail must keep clear so the system's own status column
-/// (Dynamic Island + status items, stacked along the trailing edge on the Duo)
-/// is not covered by our controls.
+/// Vertical inset the chrome must keep clear so the system's own status cluster
+/// (camera occlusion, clock and status items, stacked along that edge on the
+/// Duo) is not covered by our controls.
 ///
-/// Prefers an engine-reported obstruction that sits inside the strip and hugs
-/// the top; otherwise falls back to [duoStatusColumnInset], which was measured
-/// from the system's own drawing in that strip, and never goes below the media
-/// padding. (`UIStatusBarManager.statusBarFrame` is consulted too, but on the
-/// Duo it reports only ~2pt, so the measurement is what carries the layout.)
+/// Comes straight from the device: `foldable` reports the cluster as an
+/// occlusion region up to 170pt deep, so this no longer relies on a measured
+/// constant. See [mv2DuoBarInsetsOf] for the full rule and its fallbacks.
 double mv2RailTopInset(BuildContext context, double stripWidth) {
-  final mediaTop = MediaQuery.paddingOf(context).top;
-  if (stripWidth <= 0) return mediaTop;
-
-  final size = MediaQuery.sizeOf(context);
-  for (final feature in MediaQuery.displayFeaturesOf(context)) {
-    final bounds = feature.bounds;
-    final inStrip =
-        bounds.right >= size.width - 0.5 &&
-        bounds.width >= trailingRailMinInset;
-    // A partial-height obstruction at the very top of the strip is the island /
-    // status area — our controls start below it.
-    if (inStrip && bounds.top <= 0.5 && bounds.height < size.height / 2) {
-      return math.max(mediaTop, bounds.bottom);
-    }
-  }
-
-  var inset = math.max(mediaTop, duoStatusColumnInset);
-  final geometry = mv2SceneGeometry;
-  if (geometry != null) {
-    final frame = geometry.statusBarFrame;
-    // Only trust the frame when the system really draws that bar inside (or up
-    // to) our strip; a status bar that stops well before it is a different
-    // layout. (On the Duo it reports ~2pt, hence the measured floor above.)
-    if (frame.right >= size.width - stripWidth - 1) {
-      inset = math.max(inset, frame.bottom);
-    }
-  }
-  return inset;
+  if (stripWidth <= 0) return MediaQuery.paddingOf(context).top;
+  return mv2DuoBarInsetsOf(context).top;
 }
