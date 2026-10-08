@@ -1,24 +1,22 @@
 import 'dart:async';
 
+import 'package:adaptive_platform_ui/adaptive_platform_ui.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:multi_split_view/multi_split_view.dart';
 
 import '../../../design_system/theme/mv2_theme.dart';
-import '../../../design_system/tokens/mv2_motion.dart';
 import '../../../design_system/tokens/mv2_spacing.dart';
+import '../../../ui/components/adaptive/mv2_adaptive_destinations.dart';
 import '../../../ui/components/mv2_floating_tab_bar.dart';
 import '../../../ui/components/states/mv2_state_view.dart';
 import '../../../ui/utils/mv2_breakpoints.dart';
-import '../../../ui/utils/scene_geometry.dart';
 import '../../auth/application/auth_controller.dart';
 import '../../auth/domain/auth_session.dart';
 import '../../notifications/application/notifications_providers.dart';
 import '../../settings/application/settings_controller.dart';
 import '../../topic/presentation/topic_detail_page.dart';
-import '../application/shell_chrome.dart';
-import '../application/chrome_actions.dart';
 import '../application/shell_tabs.dart';
 import '../application/tablet_topic_pane.dart';
 
@@ -69,12 +67,14 @@ class _AppShellState extends ConsumerState<AppShell> {
     super.dispose();
   }
 
-  Mv2Tab get _current => switch (widget.navigationShell.currentIndex) {
-    0 => Mv2Tab.feed,
-    1 => Mv2Tab.nodes,
-    2 => Mv2Tab.notifications,
-    _ => Mv2Tab.profile,
-  };
+  /// Order of the bar's items (发布 is in the middle but is not a branch).
+  static const List<Mv2Tab> _barOrder = <Mv2Tab>[
+    Mv2Tab.feed,
+    Mv2Tab.nodes,
+    Mv2Tab.publish,
+    Mv2Tab.notifications,
+    Mv2Tab.profile,
+  ];
 
   void _onSelect(BuildContext context, Mv2Tab tab) {
     // Shared with the programmatic entries (header avatar) so both behave like
@@ -133,26 +133,10 @@ class _AppShellState extends ConsumerState<AppShell> {
       _revalidatedSession = true;
       unawaited(ref.read(authControllerProvider.notifier).refreshAccount());
     });
-    final barCollapsed = ref.watch(shellBarCollapsedProvider);
     final twoPane = mv2IsTwoPane(context);
     final splitRatio = ref.watch(
       settingsProvider.select((AppSettings s) => s.splitRatio),
     );
-
-    // iPhone Duo: the trailing strip (toolbar + tab bar) is rendered by
-    // [Mv2WindowChromeHost] above the router, so it survives pushed routes. The
-    // shell only needs to know whether that strip exists — then the floating
-    // bottom bar steps aside, because its tab bar lives in the strip instead.
-    final stripMode = mv2TrailingStripWidth(context) > 0;
-
-    // The strip's tab bar highlights the current branch; the shell owns that
-    // index, so publish it for the window chrome.
-    if (ref.read(shellTabProvider) != _current) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!mounted) return;
-        ref.read(shellTabProvider.notifier).select(_current);
-      });
-    }
 
     // The left pane is always a fixed-width `SizedBox` — never swapped for an
     // `Expanded` on phones. A type change at this slot would reparent the
@@ -167,61 +151,50 @@ class _AppShellState extends ConsumerState<AppShell> {
       // structure change at the breakpoint: rotation across 900pt keeps the
       // four branch navigators alive.
       key: _leftPaneKey,
-      child: Stack(
-        children: <Widget>[
-          widget.navigationShell,
-          if (!stripMode)
-            Positioned(
-              left: 0,
-              right: 0,
-              bottom: 0,
-              child: AnimatedSlide(
-                // Slide the whole padded bar (bar + safe area) below the
-                // viewport.
-                offset: barCollapsed ? const Offset(0, 1.2) : Offset.zero,
-                duration: Mv2Motion.sheet,
-                curve: Mv2Motion.standard,
-                child: Mv2FloatingTabBar(
-                  current: _current,
-                  onSelect: (tab) => _onSelect(context, tab),
-                  notificationUnread: ref.watch(notificationUnreadProvider),
-                ),
-              ),
-            ),
-        ],
-      ),
+      child: widget.navigationShell,
     );
 
     // Two-pane: opened topics render beside the lists instead of pushing a
     // full-screen route (see `openTopic`). The split divider doubles as the
     // drag handle for the pane split; sizes live in the controller, and the
     // settings ratio is written once per gesture (on drag end).
-    // The window chrome host already took the trailing strip out of this box,
-    // so lay the panes out against the *constraints* rather than the window
-    // size: `MediaQuery.sizeOf` still reports the full window.
-    return ColoredBox(
-      color: context.colors.background,
-      child: LayoutBuilder(
-        builder: (BuildContext context, BoxConstraints constraints) {
-          final layoutWidth = constraints.maxWidth;
-          return twoPane
-              ? MultiSplitViewTheme(
-                  data: MultiSplitViewThemeData(
-                    dividerThickness: paneDividerThickness,
-                  ),
-                  child: _buildTwoPaneSplit(
-                    context,
-                    splitRatio: splitRatio,
-                    windowWidth: layoutWidth,
-                    leftPane: leftPane,
-                  ),
-                )
-              : Row(
-                  children: <Widget>[
-                    SizedBox(width: layoutWidth, child: leftPane),
-                  ],
-                );
-        },
+    // Panes lay out against the *constraints*: on the Duo the system strip is
+    // still in the media padding, while the package's bar overlays its band.
+    return AdaptiveScaffold(
+      minimizeBehavior: TabBarMinimizeBehavior.automatic,
+      // Tab layouts keep the bar pinned while the keyboard is up.
+      resizeToAvoidBottomInset: false,
+      body: ColoredBox(
+        color: context.colors.background,
+        child: LayoutBuilder(
+          builder: (BuildContext context, BoxConstraints constraints) {
+            final layoutWidth = constraints.maxWidth;
+            return twoPane
+                ? MultiSplitViewTheme(
+                    data: MultiSplitViewThemeData(
+                      dividerThickness: paneDividerThickness,
+                    ),
+                    child: _buildTwoPaneSplit(
+                      context,
+                      splitRatio: splitRatio,
+                      windowWidth: layoutWidth,
+                      leftPane: leftPane,
+                    ),
+                  )
+                : Row(
+                    children: <Widget>[
+                      SizedBox(width: layoutWidth, child: leftPane),
+                    ],
+                  );
+          },
+        ),
+      ),
+      bottomNavigationBar: AdaptiveBottomNavigationBar(
+        selectedIndex: mv2BarIndexForBranch(widget.navigationShell.currentIndex),
+        onTap: (int index) => _onSelect(context, _barOrder[index]),
+        items: mv2AdaptiveDestinations(
+          notificationUnread: ref.watch(notificationUnreadProvider),
+        ),
       ),
     );
   }

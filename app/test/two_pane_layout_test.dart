@@ -12,7 +12,7 @@ import 'package:mv2/features/shell/application/tablet_topic_pane.dart';
 import 'package:mv2/features/shell/presentation/app_shell.dart';
 import 'package:mv2/features/topic/application/open_topic.dart';
 import 'package:mv2/features/topic/presentation/topic_detail_page.dart';
-import 'package:mv2/ui/components/mv2_floating_tab_bar.dart';
+
 import 'package:mv2/ui/components/topic_item.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -102,7 +102,7 @@ void main() {
     expect(route.settings.name, '/settings');
     // The shell below keeps its state mounted (offstage while covered).
     expect(
-      find.byType(Mv2FloatingTabBar, skipOffstage: false),
+      find.byType(NavigationBar, skipOffstage: false),
       findsOneWidget,
     );
   });

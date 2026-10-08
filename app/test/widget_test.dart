@@ -3,15 +3,17 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mv2/app/app.dart';
 import 'package:mv2/design_system/theme/mv2_theme.dart';
-import 'package:mv2/ui/components/mv2_floating_tab_bar.dart';
+import 'package:adaptive_platform_ui/adaptive_platform_ui.dart';
 
 void main() {
+  /// The bar is `adaptive_platform_ui`'s: on the test host (not iOS) it draws
+  /// a Material NavigationBar from the same destinations.
   Finder tab(String label) => find.descendant(
-    of: find.byType(Mv2FloatingTabBar),
+    of: find.byType(NavigationBar),
     matching: find.text(label),
   );
 
-  testWidgets('boots into the feed branch with the floating tab bar', (
+  testWidgets('boots into the feed branch with the adaptive tab bar', (
     tester,
   ) async {
     await tester.pumpWidget(const ProviderScope(child: Mv2App()));
@@ -21,7 +23,8 @@ void main() {
     await tester.pump(const Duration(milliseconds: 400));
     await tester.pump(const Duration(milliseconds: 400));
 
-    expect(find.byType(Mv2FloatingTabBar), findsOneWidget);
+    expect(find.byType(AdaptiveScaffold), findsOneWidget);
+    expect(find.byType(NavigationBar), findsOneWidget);
     for (final label in <String>['首页', '节点', '发布', '通知', '我的']) {
       expect(tab(label), findsOneWidget);
     }
