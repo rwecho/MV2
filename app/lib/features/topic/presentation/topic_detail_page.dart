@@ -334,8 +334,22 @@ class _TopicDetailPageState extends ConsumerState<TopicDetailPage> {
     final favorited = actions.favoritedOf(loaded?.favorited ?? false);
     final thanked = actions.thankedOf(loaded?.thanked ?? false);
 
+    // 标题随滚动**折叠**而不是隐藏:展开态是大字标题,向下滚收成工具条
+    // 小字(始终可见),向上滚再展开。
     return AdaptiveAppBar(
       title: loaded?.topic.title,
+      titleWidget: AnimatedDefaultTextStyle(
+        key: const ValueKey('mv2-topic-bar-title'),
+        duration: Mv2Motion.tab,
+        curve: Mv2Motion.standard,
+        style: (_collapsed
+                ? context.text.itemTitle
+                : context.text.pageTitle)
+            .copyWith(color: colors.textPrimary),
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        child: Text(loaded?.topic.title ?? ''),
+      ),
       leading: Mv2IconButton(
         icon: Icons.arrow_back_ios_new_rounded,
         onPressed: widget.inPane

@@ -5,6 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:mv2/core/data/v2ex_api.dart';
 import 'package:mv2/core/data/v2ex_providers.dart';
 import 'package:mv2/design_system/theme/mv2_theme.dart';
+import 'package:mv2/design_system/tokens/mv2_typography.dart';
 import 'package:mv2/features/topic/application/topic_providers.dart';
 import 'package:mv2/features/topic/presentation/topic_detail_page.dart';
 import 'package:mv2/shared/models/models.dart';
@@ -117,9 +118,18 @@ void main() {
         .topic
         .title;
 
-    // The title now lives in the fixed toolbar, which shows it from the start
-    // (the native bar minimises on its own) — the page no longer fades a copy
-    // in. The reply bar still slides away as the page is read.
+    // The title **collapses** rather than hides: page-title size at the top,
+    // shrinking to the bar size once read into, expanding back on the way up.
+    // It never disappears.
+    const titleKey = ValueKey<String>('mv2-topic-bar-title');
+    const theme = Mv2Typography.standard();
+    double titleFontSize() => tester
+        .widget<AnimatedDefaultTextStyle>(find.byKey(titleKey))
+        .style
+        .fontSize!;
+
+    final expanded = titleFontSize();
+    expect(expanded, theme.pageTitle.fontSize);
     expect(find.text(title), findsWidgets);
     expect(
       tester.widget<AnimatedSlide>(find.byType(AnimatedSlide)).offset,
@@ -131,6 +141,11 @@ void main() {
     await tester.pump(const Duration(milliseconds: 400));
 
     expect(
+      titleFontSize(),
+      theme.itemTitle.fontSize,
+      reason: 'reading down collapses the title',
+    );
+    expect(
       tester.widget<AnimatedSlide>(find.byType(AnimatedSlide)).offset,
       isNot(Offset.zero),
     );
@@ -139,6 +154,7 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 400));
 
+    expect(titleFontSize(), expanded, reason: 'scrolling back expands it');
     expect(
       tester.widget<AnimatedSlide>(find.byType(AnimatedSlide)).offset,
       Offset.zero,
