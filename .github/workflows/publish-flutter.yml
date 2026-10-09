@@ -190,7 +190,9 @@ jobs:
     # - 若配置了 secret XCODE_27_XIP_URL（Apple 签名的 Xcode 27.1 RC .xip 的
     #   私有下载地址），则先用 xcodes 从本地 .xip 安装 27.1 并切换——
     #   SDK 27.1 才带 iPhone Duo 的 App Resizability 资格。
-    runs-on: macos-26
+    # 仓库 Variable `IOS_RUNNER_LABEL` 可覆盖:设为 `xcode-27` 即用
+    # Xcode 27.1 预览 runner(见 actions/runner-images#14404);默认 macos-26。
+    runs-on: ${{ vars.IOS_RUNNER_LABEL || 'macos-26' }}
     needs: version
     env:
       XCODE_27_XIP_URL: ${{ secrets.XCODE_27_XIP_URL }}
@@ -211,10 +213,19 @@ jobs:
           sudo xcodebuild -license accept
           xcodebuild -version
 
-      - uses: maxim-lobanov/setup-xcode@v1
-        if: env.XCODE_27_XIP_URL == ''
-        with:
-          xcode-version: '26.6.0'
+      - name: Select Xcode
+        run: |
+          set -euo pipefail
+          # xip 路径已装 27.1;xcode-27 镜像预装 27.1/27.2。其余镜像 26.6.0。
+          if [ -n "${XCODE_27_XIP_URL:-}" ] || [[ "$(sw_vers -productVersion)" == 27.* ]]; then
+            echo "Selecting Xcode 27.1"
+            sudo xcode-select -s /Applications/Xcode_27.1.0.app ||
+              sudo xcode-select -s /Applications/Xcode_27.1.app
+          else
+            echo "Selecting Xcode 26.6.0"
+            sudo xcode-select -s /Applications/Xcode_26.6.0.app
+          fi
+          xcodebuild -version
 
       - uses: subosito/flutter-action@v2
         with:
