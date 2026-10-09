@@ -335,8 +335,7 @@ class _TopicDetailPageState extends ConsumerState<TopicDetailPage> {
     final thanked = actions.thankedOf(loaded?.thanked ?? false);
 
     return AdaptiveAppBar(
-      // 标题随滚动折叠:向下滚隐藏(返回按钮保留),向上滚出现。
-      title: _collapsed ? null : loaded?.topic.title,
+      title: loaded?.topic.title,
       leading: Mv2IconButton(
         icon: Icons.arrow_back_ios_new_rounded,
         onPressed: widget.inPane

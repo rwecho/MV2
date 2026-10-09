@@ -6,7 +6,6 @@ import 'package:mv2/core/data/v2ex_api.dart';
 import 'package:mv2/core/data/v2ex_providers.dart';
 import 'package:mv2/design_system/theme/mv2_theme.dart';
 import 'package:mv2/features/topic/application/topic_providers.dart';
-import 'package:adaptive_platform_ui/adaptive_platform_ui.dart';
 import 'package:mv2/features/topic/presentation/topic_detail_page.dart';
 import 'package:mv2/shared/models/models.dart';
 import 'package:mv2/shared/models/topic_detail.dart';
@@ -118,14 +117,10 @@ void main() {
         .topic
         .title;
 
-    // The title lives in the fixed toolbar and **collapses with scroll**:
-    // reading down hides it (the back affordance stays), scrolling back
-    // restores it. The reply bar slides away with the same state.
-    String? barTitle() => tester
-        .widget<AdaptiveScaffold>(find.byType(AdaptiveScaffold))
-        .appBar
-        ?.title;
-    expect(barTitle(), title);
+    // The title now lives in the fixed toolbar, which shows it from the start
+    // (the native bar minimises on its own) — the page no longer fades a copy
+    // in. The reply bar still slides away as the page is read.
+    expect(find.text(title), findsWidgets);
     expect(
       tester.widget<AnimatedSlide>(find.byType(AnimatedSlide)).offset,
       Offset.zero,
@@ -135,7 +130,6 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 400));
 
-    expect(barTitle(), isNull, reason: 'reading down hides the title');
     expect(
       tester.widget<AnimatedSlide>(find.byType(AnimatedSlide)).offset,
       isNot(Offset.zero),
@@ -145,7 +139,6 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 400));
 
-    expect(barTitle(), title, reason: 'scrolling back restores the title');
     expect(
       tester.widget<AnimatedSlide>(find.byType(AnimatedSlide)).offset,
       Offset.zero,
