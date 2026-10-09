@@ -190,9 +190,10 @@ jobs:
     # - 若配置了 secret XCODE_27_XIP_URL（Apple 签名的 Xcode 27.1 RC .xip 的
     #   私有下载地址），则先用 xcodes 从本地 .xip 安装 27.1 并切换——
     #   SDK 27.1 才带 iPhone Duo 的 App Resizability 资格。
-    # 仓库 Variable `IOS_RUNNER_LABEL` 可覆盖:设为 `xcode-27` 即用
-    # Xcode 27.1 预览 runner(见 actions/runner-images#14404);默认 macos-26。
-    runs-on: ${{ vars.IOS_RUNNER_LABEL || 'macos-26' }}
+    # Xcode 27.1 预览 runner(actions/runner-images#14404):预装
+    # Xcode 27.1(27A9269,与本机 RC 同版本),SDK 27.1 才带 iPhone Duo 的
+    # App Resizability 资格。预览池高峰可能排队;排队过久可临时换回 macos-26。
+    runs-on: xcode-27
     needs: version
     env:
       XCODE_27_XIP_URL: ${{ secrets.XCODE_27_XIP_URL }}
