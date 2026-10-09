@@ -151,10 +151,15 @@ GET `/signin` 得到 18081 → 47098 → 75285）。所以手里缓存的 token 
 - **安全区不对称**：Duo 折叠外屏（`466×678`）与展开内屏（`951×669`）都是**尾侧 `84pt`、首侧 `0`**
   （屏下摄像头/传感器条那一侧；折叠态另有底部 `34pt`）。右侧留白偏大是硬件要求，
   不要用负 padding 把内容顶进该区域。
-- **`foldable` 的真机读数**（debug 构建会在状态变化时打一行 `MV2: fold …`）：
-  折叠外屏 `status=closed angle=0.0 sizeClass=compact`，
-  `occlusion(382,0,466,170)`（系统状态区，深 170pt）与 `occlusion(399.7,29.3,436.7,66.3)`（摄像头，
-  中心 x=418.2pt）——后者正是包在竖带里排布胶囊的中轴。
+- **`foldable` 的真机读数**（debug 构建在状态变化时打一行 `MV2: fold …`，两态都实测过）：
+  - 折叠外屏 `466×678`：`status=closed angle=0.0 sizeClass=compact`，
+    `occlusion(382,0,466,170)`（系统状态区，深 170pt）与 `occlusion(399.7,29.3,436.7,66.3)`
+    （摄像头，中心 x=418.2pt，正是包排布胶囊的中轴）。
+  - 展开内屏 `951×669`：`status=fullyOpen angle=180.0 sizeClass=regular`，
+    `division(455.5,0,495.5,669)`（40pt 折痕）与 `occlusion(867,0,951,120)`
+    （尾侧 84pt 条里系统状态列深 120pt）。
+  - 实机验收：折叠外屏（工具条胶囊在上、tab 胶囊在下）、展开内屏（同上，且让位到 120pt）、
+    手机 iPhone 17（iOS 27 原生底部 tab bar）三态都截图核对过。
   包的 `MediaQuery.displayFeatures` 桥接**保持关闭**：一旦发布折痕，Material 的弹窗/抽屉会被
   `DisplayFeatureSubScreen` 限制到半屏。
 - **构建 SDK 必须 27.1**：用 iOS **27.0** SDK 构建的包在 Duo 上会被系统判为「未适配」，
