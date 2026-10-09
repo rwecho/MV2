@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:typed_data';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -101,6 +102,22 @@ void main() {
     await tester.pumpAndSettle();
     return api;
   }
+
+  testWidgets('the form keeps a Material ancestor on the iOS 26+ path', (
+    tester,
+  ) async {
+    // adaptive_platform_ui's iOS 26+ scaffold is a CupertinoPageScaffold,
+    // which provides no Material ancestor — the login TextFields crashed on
+    // device with "No Material widget found" while the macOS test host took
+    // the Material branch and never saw it. Force the iOS branch so this
+    // stays covered.
+    debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
+    await pumpLogin(tester);
+    expect(tester.takeException(), isNull);
+    expect(find.byType(TextField), findsWidgets);
+    debugDefaultTargetPlatformOverride = null;
+  });
+
 
   Future<void> fillAndSubmit(WidgetTester tester) async {
     final fields = find.byType(TextField);

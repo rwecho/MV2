@@ -107,7 +107,12 @@ class Mv2PageScaffold extends ConsumerWidget {
         children: <Widget>[
           SafeArea(
             bottom: false,
-            child: Align(
+            // adaptive_platform_ui's iOS 26 scaffold is a
+            // CupertinoPageScaffold, which provides no Material ancestor —
+            // Material widgets on these pages (TextField et al.) need one.
+            child: Material(
+              type: MaterialType.transparency,
+              child: Align(
               alignment: Alignment.topCenter,
               child: ConstrainedBox(
                 constraints: BoxConstraints(maxWidth: contentWidth.maxWidth),
@@ -123,6 +128,7 @@ class Mv2PageScaffold extends ConsumerWidget {
                   ),
                 ),
               ),
+            ),
             ),
           ),
           // Page-level bottom bar (the composer's action row). The shell's own
