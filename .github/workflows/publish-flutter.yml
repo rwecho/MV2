@@ -183,20 +183,46 @@ jobs:
   build-ios:
     if: inputs.platforms == '' || inputs.platforms == 'all' || contains(inputs.platforms, 'ios')
     name: iOS → TestFlight
-    # 稳定镜像 macos-26 + Xcode 26.6.0(通用池,容量稳定)。
-    # 注意:26.6 SDK 构建的包在 iPhone Duo 上会 letterbox(无 Duo 资格);
-    # 如需 Duo 资格,可临时切回 `runs-on: xcode-27` 预览 runner(预装 27.1)。
-    runs-on: macos-26
+    # Runner 现状(actions/runner-images,#14404):
+    #   27.0 = 27A266a(稳定) / 27.1 = 27A9269(Beta,预装) /
+    #   27.1 RC = 27A9275(未预装) / 27.2 = 27B5019j(Beta)
+    # Apple 自 2026-10-05 起接受 27.1 RC 提交审核。发布必须用 RC(27A9275),
+    # 绝不退回预装的 Beta——下面的校验会在 Build ID 不符时直接失败。
+    runs-on: xcode-27
     needs: version
+    env:
+      XCODE_271_RC_XIP_URL: ${{ secrets.XCODE_271_RC_XIP_URL }}
     defaults:
       run:
         working-directory: app
     steps:
       - uses: actions/checkout@v4
 
-      - uses: maxim-lobanov/setup-xcode@v1
-        with:
-          xcode-version: '26.6.0'
+      - name: Install Xcode 27.1 RC (27A9275)
+        env:
+          XIP_URL: ${{ secrets.XCODE_271_RC_XIP_URL }}
+        run: |
+          set -euo pipefail
+          if [ -z "${XIP_URL:-}" ]; then
+            echo "::error::secret XCODE_271_RC_XIP_URL 未配置——拒绝用预装 Beta(27A9269)出正式包"
+            exit 1
+          fi
+          curl -fL --retry 3 -o /tmp/Xcode_27.1_RC.xip "$XIP_URL"
+          brew install xcodes
+          xcodes install 27.1 --path /tmp/Xcode_27.1_RC.xip
+          sudo xcodes select 27.1
+          sudo xcodebuild -license accept
+
+      - name: Select and verify Xcode 27.1 RC
+        run: |
+          set -euo pipefail
+          xcodebuild -version
+          BUILD=$(xcodebuild -version | awk '/Build version/ {print $3}')
+          if [ "$BUILD" != "27A9275" ]; then
+            echo "::error::Expected Xcode 27.1 RC build 27A9275, got $BUILD"
+            exit 1
+          fi
+          xcrun --sdk iphoneos --show-sdk-version
 
       - uses: subosito/flutter-action@v2
         with:
