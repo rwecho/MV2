@@ -1,3 +1,5 @@
-• New: encode selected text as Base64 when posting or replying — share contact info without letting scrapers grab it; tap a Base64 string in a topic to decode and copy it
-• New: share a topic as a beautifully formatted long image, perfect for chat groups
+• New: iPhone Duo support — unfold for two-column reading, fold for a side toolbar with favorite/thank/compose
+• New: iOS 26 Liquid Glass toolbar and tab bar, auto-collapsing as you scroll
+• New: share a topic as a formatted long image for chat groups
+• New: one-tap Base64 encoding for contact info, with in-topic decode & copy
 • Stability and performance improvements
