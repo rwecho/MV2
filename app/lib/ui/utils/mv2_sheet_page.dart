@@ -3,11 +3,16 @@ import 'package:go_router/go_router.dart';
 
 import '../../design_system/theme/mv2_theme.dart';
 import '../../design_system/tokens/mv2_motion.dart';
+import '../../design_system/tokens/mv2_spacing.dart';
 import 'mv2_breakpoints.dart';
 
 /// Max width of a secondary page's card on wide viewports; phones never see
 /// it (below the window width).
-const double sheetMaxWidth = 760.0;
+///
+/// Follows the same widths the pages and the modal sheets use
+/// ([Mv2Spacing.maxSheetWidth]): the unfolded Duo's 951pt inner display then
+/// fills the card edge to edge instead of floating a 760pt island in it.
+const double sheetMaxWidth = Mv2Spacing.maxSheetWidth;
 
 /// Locations presented as a floating card on wide viewports (see
 /// [mv2SheetPage]). Topic detail is deliberately absent — it stays a
