@@ -183,11 +183,10 @@ jobs:
   build-ios:
     if: inputs.platforms == '' || inputs.platforms == 'all' || contains(inputs.platforms, 'ios')
     name: iOS → TestFlight
-    # 跑在 xcode-27 预览 runner(actions/runner-images#14404)上:预装
-    # Xcode 27.1(27A9269,与本机 RC 同版本)——SDK 27.1 才带 iPhone Duo 的
-    # App Resizability 资格。预览池高峰可能排队;排队过久可临时换回 macos-26
-    # + Xcode 26.6.0(该构建在 Duo 上会 letterbox)。
-    runs-on: xcode-27
+    # 稳定镜像 macos-26 + Xcode 26.6.0(通用池,容量稳定)。
+    # 注意:26.6 SDK 构建的包在 iPhone Duo 上会 letterbox(无 Duo 资格);
+    # 如需 Duo 资格,可临时切回 `runs-on: xcode-27` 预览 runner(预装 27.1)。
+    runs-on: macos-26
     needs: version
     defaults:
       run:
@@ -195,12 +194,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Select Xcode 27.1
-        run: |
-          set -euo pipefail
-          sudo xcode-select -s /Applications/Xcode_27.1.0.app ||
-            sudo xcode-select -s /Applications/Xcode_27.1.app
-          xcodebuild -version
+      - uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: '26.6.0'
 
       - uses: subosito/flutter-action@v2
         with:
