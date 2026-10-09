@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mv2/app/app.dart';
+import 'package:mv2/design_system/tokens/mv2_typography.dart';
+import 'package:mv2/ui/components/mv2_tab_strip.dart';
 import 'package:mv2/core/data/home_tab.dart';
 import 'package:mv2/core/data/v2ex_providers.dart';
 import 'package:mv2/core/errors/failures.dart';
@@ -112,26 +114,39 @@ void main() {
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
 
+    const titleKey = ValueKey<String>('mv2-feed-bar-title');
+    double titleFontSize() => tester
+        .widget<AnimatedDefaultTextStyle>(find.byKey(titleKey))
+        .style
+        .fontSize!;
+
     final container = await boot(tester);
     expect(container.read(shellBarCollapsedProvider), isFalse);
+    expect(find.byType(Mv2TabStrip), findsOneWidget);
+    expect(titleFontSize(), Mv2Typography.standard().sectionTitle.fontSize);
 
-    // Scroll toward the end of the list — the state flips.
+    // Scroll toward the end of the list — the title collapses to the bar size
+    // (it never hides) and the shared collapse state flips.
     await tester.drag(find.byType(PageView), const Offset(0, -160));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 400));
 
-    // The title and its actions belong to `adaptive_platform_ui`'s fixed
-    // toolbar now, so nothing is swapped out of the body; the native toolbar
-    // minimises on its own. Only the shared collapse state follows the scroll.
     expect(container.read(shellBarCollapsedProvider), isTrue);
-    expect(find.text('R2'), findsOneWidget);
+    expect(
+      titleFontSize(),
+      Mv2Typography.standard().itemTitle.fontSize,
+      reason: 'reading down collapses the title',
+    );
+    // 头部收缩:标签条收起,把垂直空间让给列表。
+    expect(find.byType(Mv2TabStrip), findsNothing);
 
-    // Scroll back — state returns.
+    // Scroll back — the title expands again.
     await tester.drag(find.byType(PageView), const Offset(0, 200));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 400));
 
     expect(container.read(shellBarCollapsedProvider), isFalse);
+    expect(titleFontSize(), Mv2Typography.standard().sectionTitle.fontSize);
   });
 
   testWidgets('pulling down refreshes the active tab', (tester) async {

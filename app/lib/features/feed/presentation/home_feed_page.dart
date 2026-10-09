@@ -7,6 +7,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../core/data/home_tab.dart';
 import '../../../core/telemetry/mv2_analytics.dart';
+import '../../../design_system/theme/mv2_theme.dart';
 import '../../../design_system/tokens/mv2_motion.dart';
 import '../../../design_system/tokens/mv2_spacing.dart';
 import '../../../ui/components/mv2_error_feedback.dart';
@@ -70,7 +71,7 @@ class _HomeFeedPageState extends ConsumerState<HomeFeedPage> {
   bool _onScrollNotification(ScrollNotification notification) {
     final collapsed = mv2CollapseFromScroll(notification);
     if (collapsed != null && collapsed != _barCollapsed) {
-      _barCollapsed = collapsed;
+      setState(() => _barCollapsed = collapsed);
       ref.read(shellBarCollapsedProvider.notifier).set(collapsed);
     }
     return false;
@@ -106,11 +107,47 @@ class _HomeFeedPageState extends ConsumerState<HomeFeedPage> {
     // them in the trailing capsule bar) instead of scrolling away with the
     // list. The manual collapse is therefore gone — the native toolbar
     // minimises on its own.
+    // 头部整体收缩:向下滚动时,内容整体上移、穿进玻璃工具条之下,
+    // 标签条与列表获得其空间;向上滚动恢复完整让位。
+    final topInset = _barCollapsed
+        ? MediaQuery.paddingOf(context).top + 8.0
+        : mv2ChromeTopInset(context);
+
     return AdaptiveScaffold(
       resizeToAvoidBottomInset: false,
       appBar: AdaptiveAppBar(
-        title: 'MV2',
-        subtitle: 'Wake Up to V2EX',
+        // 标题随滚动**折叠**:展开态大字+副标题,下滚收成工具条小字(标题
+        // 始终可见,不消失),上滚再展开。
+        titleWidget: AnimatedSize(
+          duration: Mv2Motion.tab,
+          curve: Mv2Motion.standard,
+          alignment: Alignment.bottomLeft,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              AnimatedDefaultTextStyle(
+                key: const ValueKey<String>('mv2-feed-bar-title'),
+                duration: Mv2Motion.tab,
+                curve: Mv2Motion.standard,
+                // 展开态用 sectionTitle(20):band 的标题区只有 44pt,
+                // pageTitle(28)+副标题会溢出。
+                style: (_barCollapsed
+                        ? context.text.itemTitle
+                        : context.text.sectionTitle)
+                    .copyWith(color: context.colors.textPrimary),
+                child: const Text('MV2'),
+              ),
+              if (!_barCollapsed)
+                Text(
+                  'Wake Up to V2EX',
+                  style: context.text.metadata.copyWith(
+                    color: context.colors.textSecondary,
+                  ),
+                ),
+            ],
+          ),
+        ),
         actions: <AdaptiveAppBarAction>[
           AdaptiveAppBarAction(
             iosSymbol: 'magnifyingglass',
@@ -130,13 +167,29 @@ class _HomeFeedPageState extends ConsumerState<HomeFeedPage> {
         children: <Widget>[
           // The fixed toolbar draws over the page; the pinned tab strip sits
           // below it instead of underneath.
-          SizedBox(height: mv2ChromeTopInset(context)),
-          Mv2TabStrip(
-            labels: <String>[for (final tab in HomeTab.values) tab.label],
-            selectedIndex: tab.index,
-            onChanged: _onTabSelected,
+          AnimatedContainer(
+            duration: Mv2Motion.tab,
+            curve: Mv2Motion.standard,
+            height: topInset,
+            width: double.infinity,
           ),
-          const SizedBox(height: Mv2Spacing.x3),
+          // 头部收缩:向下滚动时标签条收起,把垂直空间让给下面的列表;
+          // 向上滚动再展开。
+          AnimatedSize(
+            duration: Mv2Motion.tab,
+            curve: Mv2Motion.standard,
+            alignment: Alignment.topCenter,
+            child: _barCollapsed
+                ? const SizedBox(width: double.infinity)
+                : Mv2TabStrip(
+                    labels: <String>[
+                      for (final tab in HomeTab.values) tab.label,
+                    ],
+                    selectedIndex: tab.index,
+                    onChanged: _onTabSelected,
+                  ),
+          ),
+          if (!_barCollapsed) const SizedBox(height: Mv2Spacing.x3),
           Expanded(
             child: NotificationListener<ScrollNotification>(
               onNotification: _onScrollNotification,
