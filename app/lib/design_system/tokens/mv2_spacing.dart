@@ -22,6 +22,14 @@ abstract final class Mv2Spacing {
   /// Content column cap on tablets (`docs/04` §6).
   static const double maxContentWidth = 600;
 
+  /// Widest a modal sheet may get.
+  ///
+  /// Material 3 caps modal bottom sheets at 640pt on wide windows
+  /// (`_BottomSheetDefaultsM3`), which left them floating in the middle of the
+  /// unfolded Duo's 951pt inner display. Sheets follow the same widths the
+  /// pages use instead — full width up to the 宽 content width.
+  static const double maxSheetWidth = 1200;
+
   /// Minimum interactive target (`docs/04` §9).
   static const double minTapTarget = 48;
 

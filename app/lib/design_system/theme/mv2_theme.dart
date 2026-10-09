@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../tokens/mv2_spacing.dart';
+
 import '../tokens/mv2_colors.dart';
 import '../tokens/mv2_typography.dart';
 
@@ -142,6 +144,11 @@ abstract final class Mv2ThemeData {
       bottomSheetTheme: BottomSheetThemeData(
         backgroundColor: colors.elevatedSurface,
         surfaceTintColor: Colors.transparent,
+        // Material 3's own default (640pt) would leave a sheet floating in the
+        // middle of the unfolded Duo; this keeps them as wide as the pages.
+        constraints: const BoxConstraints(
+          maxWidth: Mv2Spacing.maxSheetWidth,
+        ),
         shape: const RoundedRectangleBorder(
           borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
         ),
