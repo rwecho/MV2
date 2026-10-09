@@ -1,5 +1,7 @@
 import 'dart:async';
+import 'dart:io' show Platform;
 
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -115,6 +117,18 @@ class _PaywallPageState extends ConsumerState<PaywallPage> {
   }
 }
 
+/// 当前平台的商店名（App Store 审核禁止付费墙出现其他平台字样）。
+String _storeName() {
+  if (kIsWeb) return '应用商店';
+  try {
+    if (Platform.isIOS) return 'App Store';
+    if (Platform.isAndroid) return 'Google Play';
+  } on UnsupportedError {
+    // 非 IO 平台（测试环境等）。
+  }
+  return '应用商店';
+}
+
 class _Body extends StatelessWidget {
   const _Body({
     required this.state,
@@ -212,7 +226,8 @@ class _Body extends StatelessWidget {
           Mv2TextButton(label: '恢复购买', enabled: !busy, onPressed: onRestore),
           const SizedBox(height: Mv2Spacing.x5),
           Text(
-            '通过 App Store / Google Play 结算，购买绑定你的商店账号，'
+            // 审核要求（3.1.1）：付费墙只能提当前平台的商店，不得罗列其他平台。
+            '通过 ${_storeName()} 结算，购买绑定你的商店账号，'
             '换机或重装后可在本页恢复。',
             textAlign: TextAlign.center,
             style: context.text.metadata.copyWith(
