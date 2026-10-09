@@ -31,7 +31,6 @@ import '../../../ui/components/states/mv2_state_view.dart';
 import '../../../ui/components/topic_action_bar.dart';
 import '../../../ui/mv2_haptics.dart';
 import '../../../ui/primitives/mv2_avatar.dart';
-import '../../../ui/primitives/mv2_buttons.dart';
 import '../../../ui/primitives/mv2_chips.dart';
 import '../../blocked/application/blocked_content.dart';
 import '../../blocked/application/blocked_users_controller.dart';
@@ -39,7 +38,6 @@ import '../../composer/presentation/composer_sheets.dart';
 import '../../nodes/application/open_node.dart';
 import '../../reader/application/open_external_url.dart';
 import '../../settings/application/settings_controller.dart';
-import '../../shell/application/tablet_topic_pane.dart';
 import '../application/topic_actions.dart';
 import '../application/topic_providers.dart';
 import 'topic_share_image.dart';
@@ -334,19 +332,11 @@ class _TopicDetailPageState extends ConsumerState<TopicDetailPage> {
     final favorited = actions.favoritedOf(loaded?.favorited ?? false);
     final thanked = actions.thankedOf(loaded?.thanked ?? false);
 
+    // No custom `leading`: the chrome draws its own back affordance only when
+    // the page brings none, and its layout reserves space for it — a custom
+    // one made the title overlap the back button on the phone.
     return AdaptiveAppBar(
       title: loaded?.topic.title,
-      leading: Mv2IconButton(
-        icon: Icons.arrow_back_ios_new_rounded,
-        onPressed: widget.inPane
-            // Dismiss the tablet detail pane (no pushed route to pop).
-            ? () => ref.read(tabletTopicPaneProvider.notifier).close()
-            // As the stack root (cold-started notification / deep link) there
-            // is nothing to pop — go up to the feed instead.
-            : () => (ModalRoute.of(context)?.canPop ?? false)
-                  ? context.pop()
-                  : context.go('/feed'),
-      ),
       actions: <AdaptiveAppBarAction>[
         AdaptiveAppBarAction(
           iosSymbol: favorited ? 'star.fill' : 'star',

@@ -44,9 +44,7 @@ void main() {
     return container;
   }
 
-  testWidgets('tablet: tapping a topic fills the detail pane, back empties it', (
-    tester,
-  ) async {
+  testWidgets('tablet: tapping a topic fills the detail pane', (tester) async {
     final container = await boot(tester, const Size(1200, 900));
 
     // Two-pane starts with the empty right pane.
@@ -58,17 +56,18 @@ void main() {
     await tester.pump(const Duration(milliseconds: 400));
 
     // The selection went to the pane — no route was pushed — and the empty
-    // state made way for the topic.
+    // state made way for the topic, whose article renders inside the pane
+    // (the pane has no back affordance; switching tabs or picking another
+    // topic is how it changes).
     final selection = container.read(tabletTopicPaneProvider);
     expect(selection, isNotNull);
     expect(find.text('未选择主题'), findsNothing);
     expect(find.byType(TopicDetailPage), findsOneWidget);
-
-    // The pane's back affordance closes it instead of popping a route.
-    await tester.tap(find.byIcon(Icons.arrow_back_ios_new_rounded));
-    await tester.pump(const Duration(milliseconds: 400));
-    expect(container.read(tabletTopicPaneProvider), isNull);
-    expect(find.text('未选择主题'), findsOneWidget);
+    final paneTexts = find.descendant(
+      of: find.byType(TopicDetailPage),
+      matching: find.byType(Text),
+    );
+    expect(paneTexts, findsWidgets);
   });
 
   testWidgets('phone: tapping a topic still pushes the full-screen route', (
