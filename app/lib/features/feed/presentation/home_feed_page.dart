@@ -118,40 +118,21 @@ class _HomeFeedPageState extends ConsumerState<HomeFeedPage> {
       appBar: AdaptiveAppBar(
         // 标题随滚动**折叠**:展开态大字+副标题,下滚收成工具条小字(标题
         // 始终可见,不消失),上滚再展开。
-        titleWidget: Padding(
-          // The band spans from the window top; on phones the system status
-          // bar occupies its upper part, so the title must start below it.
-          // On the Duo the top inset is 0 and the band padding applies.
-          padding: EdgeInsets.only(top: MediaQuery.paddingOf(context).top),
-          child: AnimatedSize(
+        // 标题随滚动折叠(28→16 再展开),不带副标题;去掉包会裁剪的
+        // 状态栏 padding——带内标题区本就定位在状态栏之下。
+        titleWidget: AnimatedSize(
           duration: Mv2Motion.tab,
           curve: Mv2Motion.standard,
           alignment: Alignment.bottomLeft,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: <Widget>[
-              AnimatedDefaultTextStyle(
-                key: const ValueKey<String>('mv2-feed-bar-title'),
-                duration: Mv2Motion.tab,
-                curve: Mv2Motion.standard,
-                // 展开态用 sectionTitle(20):band 的标题区只有 44pt,
-                // pageTitle(28)+副标题会溢出。
-                style: (_barCollapsed
-                        ? context.text.itemTitle
-                        : context.text.sectionTitle)
-                    .copyWith(color: context.colors.textPrimary),
-                child: const Text('MV2'),
-              ),
-              if (!_barCollapsed)
-                Text(
-                  'Wake Up to V2EX',
-                  style: context.text.metadata.copyWith(
-                    color: context.colors.textSecondary,
-                  ),
-                ),
-            ],
-          ),
+          child: AnimatedDefaultTextStyle(
+            key: const ValueKey<String>('mv2-feed-bar-title'),
+            duration: Mv2Motion.tab,
+            curve: Mv2Motion.standard,
+            style: (_barCollapsed
+                    ? context.text.itemTitle
+                    : context.text.sectionTitle)
+                .copyWith(color: context.colors.textPrimary),
+            child: const Text('MV2'),
           ),
         ),
         actions: <AdaptiveAppBarAction>[

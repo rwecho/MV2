@@ -30,9 +30,9 @@ void main() {
       expect(tab(label), findsOneWidget);
     }
 
-    // Feed header comes from Mv2PageHeader.
-    expect(find.text('MV2'), findsOneWidget);
-    expect(find.text('Wake Up to V2EX'), findsOneWidget);
+    // Feed header: the title is published to the fixed toolbar (the
+    // subtitle was dropped).
+    expect(find.text('MV2'), findsWidgets);
   });
 
   testWidgets('tapping the 节点 destination switches branches', (tester) async {

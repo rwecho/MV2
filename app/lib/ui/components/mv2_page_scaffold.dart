@@ -1,4 +1,5 @@
 import 'package:adaptive_platform_ui/adaptive_platform_ui.dart';
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -71,37 +72,37 @@ class Mv2PageScaffold extends ConsumerWidget {
     final headerWidget = header;
     final pageHeader = headerWidget is Mv2PageHeader ? headerWidget : null;
     final explicitAppBar = appBar;
+    final effectiveAppBar = explicitAppBar ??
+        (pageHeader == null
+            ? null
+            : AdaptiveAppBar(
+                title: pageHeader.title,
+                subtitle: pageHeader.subtitle,
+                actions: <AdaptiveAppBarAction>[
+                  for (final Widget action in pageHeader.actions)
+                    if (action is Mv2IconButton)
+                      AdaptiveAppBarAction(
+                        iosSymbol: mv2SfSymbolFor(action.icon),
+                        icon: action.icon,
+                        iconWidget: Icon(action.icon),
+                        label: action.tooltip ?? pageHeader.title,
+                        onPressed: action.onPressed ?? () {},
+                      )
+                    else
+                      // Custom header widgets (the account avatar, a draft
+                      // status label) ride along as an item so nothing the page
+                      // put in its header disappears.
+                      AdaptiveAppBarAction(
+                        iconWidget: action,
+                        label: '',
+                        onPressed: () {},
+                      ),
+                ],
+              ));
 
     return AdaptiveScaffold(
       resizeToAvoidBottomInset: resizeToAvoidBottomInset,
-      appBar:
-          explicitAppBar ??
-          (pageHeader == null
-              ? null
-              : AdaptiveAppBar(
-                  title: pageHeader.title,
-                  subtitle: pageHeader.subtitle,
-                  actions: <AdaptiveAppBarAction>[
-                    for (final Widget action in pageHeader.actions)
-                      if (action is Mv2IconButton)
-                        AdaptiveAppBarAction(
-                          iosSymbol: mv2SfSymbolFor(action.icon),
-                          icon: action.icon,
-                          iconWidget: Icon(action.icon),
-                          label: action.tooltip ?? pageHeader.title,
-                          onPressed: action.onPressed ?? () {},
-                        )
-                      else
-                        // Custom header widgets (the account avatar, a draft
-                        // status label) ride along as an item so nothing the page
-                        // put in its header disappears.
-                        AdaptiveAppBarAction(
-                          iconWidget: action,
-                          label: '',
-                          onPressed: () {},
-                        ),
-                  ],
-                )),
+      appBar: _collapsedForLegacyIOS(effectiveAppBar),
       body: Stack(
         children: <Widget>[
           SafeArea(
@@ -132,6 +133,47 @@ class Mv2PageScaffold extends ConsumerWidget {
       ),
     );
   }
+}
+
+/// On iOS 25 and below (no fixed chrome, no native overflow) a bar full of
+/// buttons reads as clutter: collapse everything into one ellipsis button
+/// whose menu (an action sheet on these versions) re-offers every action.
+/// iOS 26+ keeps the per-item buttons — the native toolbar and the Duo's
+/// trailing capsule bar are designed for them.
+AdaptiveAppBar? _collapsedForLegacyIOS(AdaptiveAppBar? bar) {
+  if (bar == null) return null;
+  if (!PlatformInfo.isIOS || PlatformInfo.isIOS26OrHigher()) return bar;
+  final actions = bar.actions;
+  if (actions == null || actions.length <= 1) return bar;
+  return AdaptiveAppBar(
+    title: bar.title,
+    subtitle: bar.subtitle,
+    titleWidget: bar.titleWidget,
+    actions: <AdaptiveAppBarAction>[
+      AdaptiveAppBarAction(
+        icon: Icons.more_horiz,
+        label: '更多',
+        iconWidget: AdaptivePopupMenuButton.icon<int>(
+          icon: CupertinoIcons.ellipsis,
+          size: 38,
+          items: <AdaptivePopupMenuItem<int>>[
+            for (var i = 0; i < actions.length; i++)
+              AdaptivePopupMenuItem<int>(
+                value: i,
+                label: actions[i].effectiveLabel ?? '',
+                icon: actions[i].icon,
+              ),
+          ],
+          onSelected: (index, _) {
+            if (index >= 0 && index < actions.length) {
+              actions[index].onPressed();
+            }
+          },
+        ),
+        onPressed: () {},
+      ),
+    ],
+  );
 }
 
 /// Slim strip shown while anonymous content is served from the disk cache.
