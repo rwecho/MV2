@@ -1,4 +1,6 @@
 import 'package:adaptive_platform_ui/adaptive_platform_ui.dart';
+
+import '../../../ui/components/adaptive/mv2_adaptive_destinations.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -126,6 +128,9 @@ class _HomeFeedPageState extends ConsumerState<HomeFeedPage> {
       ),
       body: Column(
         children: <Widget>[
+          // The fixed toolbar draws over the page; the pinned tab strip sits
+          // below it instead of underneath.
+          SizedBox(height: mv2ChromeTopInset(context)),
           Mv2TabStrip(
             labels: <String>[for (final tab in HomeTab.values) tab.label],
             selectedIndex: tab.index,

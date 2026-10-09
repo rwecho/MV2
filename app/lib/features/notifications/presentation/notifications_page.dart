@@ -1,3 +1,4 @@
+import 'package:adaptive_platform_ui/adaptive_platform_ui.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -7,7 +8,7 @@ import '../../../design_system/tokens/mv2_radius.dart';
 import '../../../design_system/tokens/mv2_spacing.dart';
 import '../../../shared/models/models.dart';
 import '../../../ui/components/mv2_error_feedback.dart';
-import '../../../ui/components/mv2_page_header.dart';
+import '../../../ui/components/adaptive/mv2_adaptive_destinations.dart';
 import '../../../ui/components/mv2_page_scaffold.dart';
 import '../../../ui/components/mv2_refreshable.dart';
 import '../../../ui/components/mv2_segmented_tabs.dart';
@@ -46,19 +47,23 @@ class _NotificationsPageState extends ConsumerState<NotificationsPage> {
       if (next != null && next != previous) mv2ShowError(context, next);
     });
 
+    // The fixed toolbar hosts the title and the account item, so the page
+    // body keeps only the segmented tabs — below the chrome, not under it.
     return Mv2PageScaffold(
-      header: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: <Widget>[
-          Mv2PageHeader(
-            title: '通知',
-            subtitle: '与优秀的开发者社区',
-            actions: <Widget>[
-              // No search affordance: V2EX has no notifications search and the
-              // app has no route for one — the button used to be a dead end.
-              const Mv2AccountAvatar(),
-            ],
+      appBar: AdaptiveAppBar(
+        title: '通知',
+        subtitle: '与优秀的开发者社区',
+        actions: <AdaptiveAppBarAction>[
+          AdaptiveAppBarAction(
+            iconWidget: const Mv2AccountAvatar(),
+            label: '账号',
+            onPressed: () {},
           ),
+        ],
+      ),
+      child: Column(
+        children: <Widget>[
+          SizedBox(height: mv2ChromeTopInset(context)),
           Padding(
             padding: const EdgeInsets.only(bottom: Mv2Spacing.x2),
             child: Mv2SegmentedTabs(
@@ -68,9 +73,8 @@ class _NotificationsPageState extends ConsumerState<NotificationsPage> {
               padded: true,
             ),
           ),
-        ],
-      ),
-      child: NotificationListener<ScrollNotification>(
+          Expanded(
+            child: NotificationListener<ScrollNotification>(
         onNotification: (notification) {
           // Load the next page once the list is within ~400px of the bottom;
           // the controller de-duplicates concurrent/duplicate calls.
@@ -93,9 +97,12 @@ class _NotificationsPageState extends ConsumerState<NotificationsPage> {
             children: <Widget>[_body(state)],
           ),
         ),
-      ),
-    );
-  }
+          ),
+        ),
+      ],
+    ),
+  );
+}
 
   Widget _body(NotificationsState state) {
     if (state.isLoading) return const _NotificationsLoadingList();

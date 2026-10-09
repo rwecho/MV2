@@ -1,3 +1,13 @@
+// The chrome's own layout constants: the host draws its bar over the content
+// (iOS 26 Liquid Glass), so pinned page content has to keep clear of it. The
+// package does not export these, and re-implementing the heights would drift.
+import 'package:adaptive_platform_ui/src/toolbar/duo_vertical_bar.dart'
+    show kDuoTitleBandHeight;
+import 'package:adaptive_platform_ui/src/toolbar/hosted_top_toolbar.dart'
+    show kHostedToolbarHeight;
+import 'package:adaptive_platform_ui/src/toolbar/toolbar_chrome_scope.dart'
+    show ToolbarChromeScope;
+
 import 'package:adaptive_platform_ui/adaptive_platform_ui.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
@@ -126,4 +136,20 @@ String? mv2SfSymbolFor(IconData icon) {
   if (icon == Icons.favorite_border_rounded) return 'heart';
   if (icon == Icons.favorite_rounded) return 'heart.fill';
   return null;
+}
+
+/// Top inset pinned page content must keep so it sits **below** the fixed
+/// toolbar chrome instead of underneath it.
+///
+/// The host draws its bar over the page (that is the iOS 26 look: lists scroll
+/// beneath the translucent bar), so scrolling content is fine — but a pinned
+/// control (the feed's tab strip, 通知's segmented tabs) would be covered by
+/// it, as the unfolded Duo screenshot showed.
+double mv2ChromeTopInset(BuildContext context) {
+  final scope = ToolbarChromeScope.maybeOf(context);
+  if (scope == null || !scope.hostsToolbar) return 0;
+  // The Duo shows the title alone in a band at the top; other iOS 26+ devices
+  // draw the toolbar beneath the status bar.
+  if (scope.hostsDuoControls) return kDuoTitleBandHeight;
+  return kHostedToolbarHeight + MediaQuery.paddingOf(context).top;
 }
