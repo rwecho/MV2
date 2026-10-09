@@ -82,6 +82,13 @@ dependencies:
   multi_split_view: ^3.6.2
   foldable: ^1.0.5
   adaptive_platform_ui: ^1.0.1
+dependency_overrides:
+  # Vendored 1.0.2 with one local patch (tab-bar ownership for pages living
+  # directly in the tabs' own route, e.g. the two-pane detail pane on the
+  # unfolded Duo). See ../docs/vendor-patches.md. Drop this override once
+  # upstream ships the fix.
+  adaptive_platform_ui:
+    path: ../vendor/adaptive_platform_ui
 dev_dependencies:
   flutter_test:
     sdk: flutter

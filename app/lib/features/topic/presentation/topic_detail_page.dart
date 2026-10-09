@@ -1,6 +1,8 @@
 import 'dart:async';
 
 import 'package:adaptive_platform_ui/adaptive_platform_ui.dart';
+import 'package:adaptive_platform_ui/src/toolbar/toolbar_chrome_scope.dart'
+        show ToolbarChromeScope;
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart' show Clipboard, ClipboardData;
@@ -335,8 +337,23 @@ class _TopicDetailPageState extends ConsumerState<TopicDetailPage> {
     // No custom `leading`: the chrome draws its own back affordance only when
     // the page brings none, and its layout reserves space for it — a custom
     // one made the title overlap the back button on the phone.
+    // 标题走 titleWidget:包会把原生标题隐藏、把它**居中**;两侧留白避开
+    // 返回钮与操作,长标题截断。手机工具条只留 收藏 + ⋯(感谢在文章操作条
+    // 里,不重复);Duo 尾条有空间,保留 收藏 / 感谢 / ⋯ 三个。
+    final inDuoBar =
+        ToolbarChromeScope.maybeOf(context)?.hostsDuoControls ?? false;
     return AdaptiveAppBar(
       title: loaded?.topic.title,
+      titleWidget: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 96),
+        child: Text(
+          loaded?.topic.title ?? '',
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          textAlign: TextAlign.center,
+          style: context.text.itemTitle.copyWith(color: colors.textPrimary),
+        ),
+      ),
       actions: <AdaptiveAppBarAction>[
         AdaptiveAppBarAction(
           iosSymbol: favorited ? 'star.fill' : 'star',
@@ -350,20 +367,21 @@ class _TopicDetailPageState extends ConsumerState<TopicDetailPage> {
               ? () {}
               : () => mv2TopicFavoriteFromChrome(context, ref, widget.topicId),
         ),
-        AdaptiveAppBarAction(
-          iosSymbol: thanked ? 'heart.fill' : 'heart',
-          icon: thanked
-              ? Icons.favorite_rounded
-              : Icons.favorite_border_rounded,
-          iconWidget: Icon(
-            thanked ? Icons.favorite_rounded : Icons.favorite_border_rounded,
-            color: thanked ? colors.accent : null,
+        if (inDuoBar)
+          AdaptiveAppBarAction(
+            iosSymbol: thanked ? 'heart.fill' : 'heart',
+            icon: thanked
+                ? Icons.favorite_rounded
+                : Icons.favorite_border_rounded,
+            iconWidget: Icon(
+              thanked ? Icons.favorite_rounded : Icons.favorite_border_rounded,
+              color: thanked ? colors.accent : null,
+            ),
+            label: '感谢',
+            onPressed: loaded == null
+                ? () {}
+                : () => mv2TopicThankFromChrome(context, ref, widget.topicId),
           ),
-          label: '感谢',
-          onPressed: loaded == null
-              ? () {}
-              : () => mv2TopicThankFromChrome(context, ref, widget.topicId),
-        ),
         AdaptiveAppBarAction(
           iosSymbol: 'ellipsis',
           icon: Icons.more_horiz_rounded,

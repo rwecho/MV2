@@ -6,6 +6,8 @@ import 'package:flutter_test/flutter_test.dart';
 // purpose rather than re-implementing the rule and testing the copy.
 import 'package:adaptive_platform_ui/src/toolbar/duo_vertical_bar.dart'
     show DuoLayout;
+import 'package:adaptive_platform_ui/src/platform/system_vertical_bar.dart'
+    show SystemVerticalBarEdge;
 import 'package:mv2/ui/components/adaptive/mv2_adaptive_destinations.dart';
 
 /// The five destinations we hand to `adaptive_platform_ui`, and the rules that
@@ -116,13 +118,16 @@ void main() {
     });
 
     test('the strip is the inset the system reserved', () {
-      expect(
-        DuoLayout.stripWidth(const EdgeInsets.only(right: 84)),
-        84,
+      // 1.0.2 models the pose instead of exposing bare statics; `none` keeps
+      // the decision on the insets alone, like on 1.0.1.
+      final pose = DuoLayout.resolvePose(
+        const EdgeInsets.only(right: 84),
+        SystemVerticalBarEdge.none,
       );
+      expect(pose!.stripWidth, 84);
       // The band extends 12pt inward of the strip, so the centred capsules
       // sit a few points off the bezel (the package's own bezel inset).
-      expect(DuoLayout.bandWidth(const EdgeInsets.only(right: 84)), 96);
+      expect(pose.bandWidth, 96);
     });
   });
 
