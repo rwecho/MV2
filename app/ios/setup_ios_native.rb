@@ -176,56 +176,68 @@ end
 # `firebase-ios-sdk` comes in through Swift Package Manager, so the uploader
 # lives in the SourcePackages checkout rather than PODS_ROOT.
 #
-# The phase must stay **synchronous**. Crashlytics' own `run` wrapper validates
-# synchronously but then backgrounds the real upload, and that backgrounded
-# uploader deadlocks in firebase-ios-sdk 12.x (NSOperationQueue waitUntilFinished,
-# no sockets open) instead of uploading — which is how released builds ended up as
-# "missing (required)" in Crashlytics without anybody noticing.
-# `upload-symbols -bp` (build-phase mode) deadlocks the same way, so this uses
-# plain CLI mode: synchronous, exits non-zero on failure, and identical to the
-# invocation the CI step uses.
+# The phase must stay **synchronous**. Crashlytics' own `run` wrapper — and
+# `upload-symbols -bp` — deadlock in firebase-ios-sdk 12.x (NSOperationQueue
+# waitUntilFinished with no sockets open) instead of uploading, which is how
+# released builds reached Crashlytics with missing symbols. Plain CLI mode is
+# synchronous and actually completes.
+#
+# Deliberately best-effort: the uploader's location depends on the build's
+# DerivedData layout, and the CI release step uploads and verifies every UUID
+# anyway, so a path mismatch here must not block a release.
 #
 # Deliberately declares **no input paths**: the official recipe lists files
 # inside `Runner.app`, which is the same shape that produced the "Cycle inside
 # Runner" error above.
 CRASHLYTICS_UPLOAD_SYMBOLS_SCRIPT = <<~'SH'
-  # Crashlytics symbols: synchronous, and a failure fails the build.
+  # Crashlytics symbols: upload synchronously at archive time.
   #
-  # Do NOT use Crashlytics' "run" wrapper or `upload-symbols -bp` here: both go
-  # through the build-phase path, which in firebase-ios-sdk 12.x deadlocks
-  # (NSOperationQueue waitUntilFinished, no sockets open) instead of uploading.
-  # That is why released builds reached Crashlytics with missing symbols: the
-  # backgrounded uploader simply hung forever and nobody noticed.
+  # Do NOT call Crashlytics' "run" wrapper (or `upload-symbols -bp`): in
+  # firebase-ios-sdk 12.x both deadlock in the build-phase path
+  # (NSOperationQueue waitUntilFinished, no sockets open) instead of uploading,
+  # which is why released builds reached Crashlytics with missing symbols.
+  # CLI mode below is synchronous and actually completes.
   #
-  # CLI mode (below) is synchronous, returns non-zero on failure, and is the same
-  # invocation the CI step uses. `--` before the path is required, otherwise
-  # upload-symbols reports "No dSYM paths provided".
+  # Deliberately best-effort: the uploader's location depends on the build's
+  # DerivedData layout, and the CI release step uploads and verifies every UUID
+  # anyway - a path mismatch here must not block a release. Failures are reported
+  # as warnings instead.
   if [ "$CONFIGURATION" != "Release" ]; then
     echo "Crashlytics: skipping dSYM upload for $CONFIGURATION (Release only)"
     exit 0
   fi
-  SPM_ROOT="${BUILD_DIR%/Build/*}/SourcePackages"
   UPLOAD_SYMBOLS=""
-  for p in \
-    "$SPM_ROOT/checkouts/firebase-ios-sdk/Crashlytics/upload-symbols" \
-    "$SPM_ROOT/packages/firebase-ios-sdk/Crashlytics/upload-symbols" \
-    "${PODS_ROOT}/FirebaseCrashlytics/upload-symbols"; do
-    if [ -x "$p" ]; then UPLOAD_SYMBOLS="$p"; break; fi
+  for root in \
+    "${BUILD_DIR%/Build/*}/SourcePackages" \
+    "$SRCROOT/../build/ios/SourcePackages" \
+    "${PODS_ROOT}" \
+    "$HOME/Library/Developer/Xcode/DerivedData"/Runner-*/SourcePackages; do
+    [ -d "$root" ] || continue
+    for p in \
+      "$root/checkouts/firebase-ios-sdk/Crashlytics/upload-symbols" \
+      "$root/packages/firebase-ios-sdk/Crashlytics/upload-symbols" \
+      "$root/FirebaseCrashlytics/upload-symbols"; do
+      if [ -x "$p" ]; then UPLOAD_SYMBOLS="$p"; break; fi
+    done
+    if [ -z "$UPLOAD_SYMBOLS" ]; then
+      UPLOAD_SYMBOLS="$(find "$root" -maxdepth 6 -name upload-symbols -type f 2>/dev/null | head -n 1)"
+    fi
+    [ -n "$UPLOAD_SYMBOLS" ] && break
   done
-  if [ -z "$UPLOAD_SYMBOLS" ]; then
-    UPLOAD_SYMBOLS="$(find "$SPM_ROOT" -maxdepth 5 -name upload-symbols -type f 2>/dev/null | head -n 1)"
-  fi
   if [ ! -x "$UPLOAD_SYMBOLS" ]; then
-    echo "error: Crashlytics upload-symbols not found under $SPM_ROOT - refusing to ship a Release build without symbols"
-    exit 1
+    echo "warning: Crashlytics upload-symbols not found (BUILD_DIR/SRCROOT/DerivedData) - skipping at archive time; the CI release step uploads and verifies the dSYMs"
+    exit 0
   fi
   GSP="$SRCROOT/Runner/GoogleService-Info.plist"
   if [ ! -f "$GSP" ]; then
-    echo "error: $GSP not found - refusing to ship a Release build without symbols"
-    exit 1
+    echo "warning: $GSP not found - skipping dSYM upload at archive time"
+    exit 0
   fi
-  echo "Crashlytics: uploading $DWARF_DSYM_FOLDER_PATH synchronously"
-  "$UPLOAD_SYMBOLS" -gsp "$GSP" -p ios -- "$DWARF_DSYM_FOLDER_PATH"
+  echo "Crashlytics: uploading $DWARF_DSYM_FOLDER_PATH synchronously with $UPLOAD_SYMBOLS"
+  if ! "$UPLOAD_SYMBOLS" -gsp "$GSP" -p ios -- "$DWARF_DSYM_FOLDER_PATH"; then
+    echo "warning: Crashlytics dSYM upload failed at archive time - the CI release step uploads and verifies again"
+  fi
+  exit 0
 SH
 
 crashlytics = host.build_phases.find do |phase|
