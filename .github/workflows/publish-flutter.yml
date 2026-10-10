@@ -183,46 +183,86 @@ jobs:
   build-ios:
     if: inputs.platforms == '' || inputs.platforms == 'all' || contains(inputs.platforms, 'ios')
     name: iOS → TestFlight
-    # Runner 现状(actions/runner-images,#14404):
-    #   27.0 = 27A266a(稳定) / 27.1 = 27A9269(Beta,预装) /
-    #   27.1 RC = 27A9275(未预装) / 27.2 = 27B5019j(Beta)
-    # Apple 自 2026-10-05 起接受 27.1 RC 提交审核。发布必须用 RC(27A9275),
-    # 绝不退回预装的 Beta——下面的校验会在 Build ID 不符时直接失败。
+    # Runner 现状(actions/runner-images#14404、#14850、PR #14877):
+    #   27.0 GA = 27A266a(已预装, 镜像默认) / 27.1 = 27A9269(预装的是 Beta) /
+    #   27.1 RC = 27A9275(PR #14877 已合并且计划在下一次镜像 rollout 时带上)。
+    # 不再用 secret + 自托管 .xip 安装 RC（那是空 secret 就整体挂掉的外部依赖）。
+    # 改为按 build 号在镜像里选：有 27A9275 就用它，否则用 27.0 GA(27A266a)，
+    # 只找到 Beta 就直接失败——绝不悄悄用 Beta 出正式包。等镜像带上 RC 后，
+    # 这里会自动切过去，不需要改代码。
     runs-on: xcode-27
     needs: version
-    env:
-      XCODE_271_RC_XIP_URL: ${{ secrets.XCODE_271_RC_XIP_URL }}
     defaults:
       run:
         working-directory: app
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install Xcode 27.1 RC (27A9275)
-        env:
-          XIP_URL: ${{ secrets.XCODE_271_RC_XIP_URL }}
+      - name: Select Xcode (prefer 27.1 RC, else 27.0 GA, never Beta)
         run: |
           set -euo pipefail
-          if [ -z "${XIP_URL:-}" ]; then
-            echo "::error::secret XCODE_271_RC_XIP_URL 未配置——拒绝用预装 Beta(27A9269)出正式包"
-            exit 1
-          fi
-          curl -fL --retry 3 -o /tmp/Xcode_27.1_RC.xip "$XIP_URL"
-          brew install xcodes
-          xcodes install 27.1 --path /tmp/Xcode_27.1_RC.xip
-          sudo xcodes select 27.1
-          sudo xcodebuild -license accept
+          PREFERRED=27A9275   # Xcode 27.1 RC
+          FALLBACK=27A266a    # Xcode 27.0 GA
 
-      - name: Select and verify Xcode 27.1 RC
-        run: |
-          set -euo pipefail
-          xcodebuild -version
-          BUILD=$(xcodebuild -version | awk '/Build version/ {print $3}')
-          if [ "$BUILD" != "27A9275" ]; then
-            echo "::error::Expected Xcode 27.1 RC build 27A9275, got $BUILD"
+          # 每个 Xcode 的 build 号读 Contents/version.plist，不依赖 xcode-select，
+          # 也不用被选中的那个 Xcode 去跑命令（免得受 license 状态影响）。
+          list_xcodes() {
+            local app build short
+            for app in /Applications/Xcode*.app; do
+              [ -e "$app/Contents/version.plist" ] || continue
+              short="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' \
+                "$app/Contents/version.plist" 2>/dev/null || true)"
+              build="$(/usr/libexec/PlistBuddy -c 'Print :ProductBuildVersion' \
+                "$app/Contents/version.plist" 2>/dev/null || true)"
+              printf '%s\t%s\t%s\n' "$app" "$short" "$build"
+            done
+          }
+
+          echo "installed Xcodes:"
+          list_xcodes | while IFS="$(printf '\t')" read -r app short build; do
+            printf '  %-52s %-8s %s\n' "$app" "${short:-?}" "${build:-?}"
+          done
+
+          RC_APP=""; GA_APP=""
+          while IFS="$(printf '\t')" read -r app short build; do
+            case "$build" in
+              "$PREFERRED") [ -n "$RC_APP" ] || RC_APP="$app" ;;
+              "$FALLBACK")  [ -n "$GA_APP" ] || GA_APP="$app" ;;
+            esac
+          done < <(list_xcodes)
+
+          if [ -n "$RC_APP" ]; then
+            CHOSEN="$RC_APP"; WANT_BUILD="$PREFERRED"; LABEL="Xcode 27.1 RC"
+          elif [ -n "$GA_APP" ]; then
+            CHOSEN="$GA_APP"; WANT_BUILD="$FALLBACK"; LABEL="Xcode 27.0 GA"
+            echo "::notice::镜像还没带 27.1 RC($PREFERRED)，本次用 27.0 GA($FALLBACK) 出包"
+          else
+            echo "::error::镜像里既没有 27.1 RC($PREFERRED) 也没有 27.0 GA($FALLBACK)——拒绝用 Beta 出正式包"
             exit 1
           fi
-          xcrun --sdk iphoneos --show-sdk-version
+
+          sudo xcode-select -s "$CHOSEN/Contents/Developer"
+          sudo xcodebuild -license accept >/dev/null 2>&1 || true
+
+          # 断言选中的这个 app 确实报出期望的 build，别把 Beta/别的版本混出去。
+          ACTUAL="$(DEVELOPER_DIR="$CHOSEN/Contents/Developer" xcodebuild -version \
+            | awk '/Build version/ {print $3}')"
+          if [ "$ACTUAL" != "$WANT_BUILD" ]; then
+            echo "::error::$CHOSEN 报的 build 是 $ACTUAL，期望 $WANT_BUILD"
+            exit 1
+          fi
+
+          SDK="$(xcrun --sdk iphoneos --show-sdk-version)"
+          echo "selected: $LABEL ($ACTUAL) at $CHOSEN"
+          xcodebuild -version
+          echo "iPhoneOS SDK: $SDK"
+          {
+            echo "### iOS toolchain"
+            echo ""
+            echo "| Xcode | Build | Path | iPhoneOS SDK |"
+            echo "| --- | --- | --- | --- |"
+            echo "| $LABEL | $ACTUAL | \`$CHOSEN\` | $SDK |"
+          } >> "${GITHUB_STEP_SUMMARY:-/dev/null}"
 
       - uses: subosito/flutter-action@v2
         with:
@@ -272,6 +312,213 @@ jobs:
           fi
           echo "Found IPA: $IPA_PATH"
           echo "path=${{ github.workspace }}/app/$IPA_PATH" >> "$GITHUB_OUTPUT"
+
+      # ------------------------------------------------------------ dSYM
+      # Xcode 把 dSYM 生成为 Runner.xcarchive/dSYMs，但 archive 会随 runner 一起
+      # 销毁。原本符号上传只依赖工程里的 "Upload Crashlytics Symbols" Run Script：
+      # uploader 找不到时它 warning + exit 0，而 Flutter 成功路径会吞掉 xcodebuild
+      # 输出——失败完全不可见（2.2.12 的符号就是这么没有保证的）。
+      # 下面三步把它变成 CI 里显式、同步、会失败的契约：先核对 dSYM 与真正打进
+      # IPA 的二进制 UUID 一致，再留一份 artifact 兜底，最后同步上传 Crashlytics
+      # 并逐个 UUID 在日志里确认（客户端已提交；服务端是否入库仍只能在
+      # Crashlytics 控制台侧确认）。
+      # 任何一步失败都会挡住后面的 TestFlight 上传，避免再发布一个没有符号的包。
+      - name: Verify dSYMs match the built binaries
+        run: |
+          set -euo pipefail
+          ARCHIVE=build/ios/archive/Runner.xcarchive
+          APP="$ARCHIVE/Products/Applications/Runner.app"
+          test -d "$ARCHIVE/dSYMs" || {
+            echo "::error::$ARCHIVE/dSYMs 不存在——archive 没有带符号"
+            exit 1
+          }
+
+          check() {
+            local bin="$1" dsym="$2" buuid duuid
+            test -e "$bin" || { echo "::error::缺少二进制 $bin"; exit 1; }
+            test -d "$dsym" || { echo "::error::缺少 $dsym"; exit 1; }
+            buuid="$(dwarfdump --uuid "$bin" | awk '{print $2}' | sort -u | tr '\n' ' ')"
+            duuid="$(dwarfdump --uuid "$dsym" | awk '{print $2}' | sort -u | tr '\n' ' ')"
+            test -n "$duuid" || { echo "::error::$dsym 里读不到 UUID"; exit 1; }
+            test "$buuid" = "$duuid" || {
+              echo "::error::UUID 对不上：$dsym ($duuid) vs $bin ($buuid)"
+              exit 1
+            }
+            echo "OK  $dsym  ->  $duuid"
+          }
+
+          check "$APP/Runner" "$ARCHIVE/dSYMs/Runner.app.dSYM"
+          check "$APP/PlugIns/MV2Widget.appex/MV2Widget" "$ARCHIVE/dSYMs/MV2Widget.appex.dSYM"
+
+          # Dart 栈要靠 App.framework 的 dSYM 才能符号化：archive 里有就核对，没有只
+          # 告警——上传步骤还会去构建产物里找一次，两边都没有才会失败。
+          if [ -e "$APP/Frameworks/App.framework/App" ] &&
+             [ -d "$ARCHIVE/dSYMs/App.framework.dSYM" ]; then
+            check "$APP/Frameworks/App.framework/App" "$ARCHIVE/dSYMs/App.framework.dSYM"
+          else
+            echo "::warning::archive 里没有 App.framework.dSYM——见 Upload dSYMs to Crashlytics 的进一步核对"
+          fi
+          ls -la "$ARCHIVE/dSYMs"
+
+      - name: Save dSYMs as artifact
+        uses: actions/upload-artifact@v4
+        with:
+          # path 相对仓库根目录（不受 defaults.run.working-directory 影响，
+          # 与上面的 android-bundle 一致）。除了 archive 里的 dSYM，还要带上构建
+          # 产物里的 *.framework.dSYM——Flutter 的 App.framework 可能不在 archive
+          # 里，而它正是 Dart 栈符号化的关键，兜底副本不能漏。
+          name: ios-dsyms-${{ needs.version.outputs.display_version }}-${{ needs.version.outputs.build_version }}
+          path: |
+            app/build/ios/archive/Runner.xcarchive/dSYMs
+            app/build/ios/Release-iphoneos/*.framework.dSYM
+            app/build/ios/iphoneos/*.framework.dSYM
+            app/build/ios/Build/Products/Release-iphoneos/*.framework.dSYM
+          if-no-files-found: error
+          retention-days: 90
+
+      - name: Upload dSYMs to Crashlytics
+        run: |
+          set -euo pipefail
+          ARCHIVE=build/ios/archive/Runner.xcarchive
+          APP="$ARCHIVE/Products/Applications/Runner.app"
+          LOG=/tmp/upload-symbols.log
+
+          # firebase-ios-sdk 经 SPM 引入（CI 日志里的 "Xcode is fetching Swift
+          # Package Manager dependencies"），upload-symbols 落在 SourcePackages
+          # 的 checkout 里；若日后迁回 CocoaPods，则相对 app/ 是 ios/Pods/…
+          UPLOAD_SYMBOLS=""
+          for candidate in \
+            build/ios/SourcePackages/checkouts/firebase-ios-sdk/Crashlytics/upload-symbols \
+            "$HOME"/Library/Developer/Xcode/DerivedData/Runner-*/SourcePackages/checkouts/firebase-ios-sdk/Crashlytics/upload-symbols \
+            ios/Pods/FirebaseCrashlytics/upload-symbols; do
+            if [ -x "$candidate" ]; then
+              UPLOAD_SYMBOLS="$candidate"
+              break
+            fi
+          done
+          if [ -z "$UPLOAD_SYMBOLS" ]; then
+            echo "::error::找不到 Crashlytics 的 upload-symbols——dSYM 没有进 Firebase，先修 CI 再发布"
+            find build/ios ios/Pods "$HOME/Library/Developer/Xcode/DerivedData" \
+              -maxdepth 7 -name upload-symbols 2>/dev/null | head || true
+            exit 1
+          fi
+          echo "using: $UPLOAD_SYMBOLS"
+
+          # 上传日志只能证明"客户端提交成功"，证明不了"进了我们这个 Firebase app"：
+          # 换成别的 GoogleService-Info.plist，工具照样逐 UUID 报成功。所以把目标
+          # app 钉在这里，plist 被换错/轮换时直接失败，而不是绿着发布没符号的包。
+          PLIST=ios/Runner/GoogleService-Info.plist
+          EXPECTED_APP_ID=1:861040628994:ios:582e7a57717fc30d5f9e1b
+          ACTUAL_APP_ID="$(/usr/libexec/PlistBuddy -c 'Print :GOOGLE_APP_ID' "$PLIST" 2>/dev/null || true)"
+          if [ "$ACTUAL_APP_ID" != "$EXPECTED_APP_ID" ]; then
+            echo "::error::$PLIST 的 GOOGLE_APP_ID='$ACTUAL_APP_ID'，期望 '$EXPECTED_APP_ID'——符号会进错项目"
+            exit 1
+          fi
+          echo "target Firebase app: $ACTUAL_APP_ID"
+
+          # 上传 archive 的 dSYMs（app + 扩展 + 框架），再补上构建产物里可能没被
+          # 归档的 *.framework.dSYM——Flutter 的 App.framework 就属于这一类。
+          shopt -s nullglob
+          DSYM_PATHS=("$ARCHIVE/dSYMs")
+          for dir in build/ios/Release-iphoneos build/ios/iphoneos \
+            build/ios/Build/Products/Release-iphoneos \
+            "$HOME"/Library/Developer/Xcode/DerivedData/Runner-*/Build/Products/Release-iphoneos; do
+            for candidate in "$dir"/*.framework.dSYM "$dir"/*.app.dSYM "$dir"/*.appex.dSYM; do
+              DSYM_PATHS+=("$candidate")
+            done
+          done
+          printf 'upload paths:\n'
+          printf '  %s\n' "${DSYM_PATHS[@]}"
+
+          # Dart 栈只有靠 App.framework 的 dSYM 才能符号化。archive 和构建产物里
+          # 都找不到就直接失败——"CI 绿了但 Dart 崩溃看不懂"正是要防的那类问题。
+          if [ -e "$APP/Frameworks/App.framework/App" ]; then
+            dart_dsym=0
+            for path in "${DSYM_PATHS[@]}"; do
+              case "$path" in
+                */App.framework.dSYM) dart_dsym=1 ;;
+                *) for candidate in "$path"/App.framework.dSYM; do
+                     [ -d "$candidate" ] && dart_dsym=1
+                   done ;;
+              esac
+            done
+            if [ "$dart_dsym" -eq 0 ]; then
+              echo "::error::archive 和构建产物里都没有 App.framework.dSYM——Dart 栈无法符号化"
+              exit 1
+            fi
+          fi
+
+          # CLI 同步上传，这里有两个实测过的坑：
+          #   1. paths 前必须有 `--`。否则路径会被当成未知参数吞掉，报
+          #      "error: No dSYM paths provided" 却什么也不传；
+          #   2. 它**即使 dSYM 缺失/损坏也返回 0**（只打 warning），所以退出码
+          #      不足以证明符号进了 Crashlytics，下面还要逐个 UUID 核对日志。
+          # 独立 TMPDIR：工程里的 Run Script 阶段是后台上传，两者都会写
+          # $TMPDIR/arm64-<uuid>.csym，共用 TMPDIR 有互相删文件的风险。
+          SPEW_TMP="$(mktemp -d)"
+          set +e
+          TMPDIR="$SPEW_TMP" "$UPLOAD_SYMBOLS" \
+            -gsp ios/Runner/GoogleService-Info.plist \
+            -p ios -- "${DSYM_PATHS[@]}" 2>&1 | tee "$LOG"
+          rc=${PIPESTATUS[0]}
+          set -e
+          rm -rf "$SPEW_TMP"
+          if [ "$rc" -ne 0 ]; then
+            echo "::error::upload-symbols 失败（exit $rc）"
+            tail -30 "$LOG"
+            exit 1
+          fi
+
+          # 某个 dSYM 只有在日志里留下带它 UUID 的结果行，才算真的提交了：
+          # "Successfully submitted symbols ... UUID <32位小写、不带横线>"，
+          # 另外 "Already uploaded this dSYM" / "Skipping upload of cSYM" 也说明
+          # 服务端已有这份符号（工程里的 Run Script 可能已经先传过一遍）。
+          # 用单个 awk 而不是 `grep | grep -q`：后者在 pipefail 下会因为下游
+          # 提前退出、上游吃 SIGPIPE(141) 而把成功的 UUID 判成失败。
+          verify_uploaded() {
+            local dsym="$1" uuids uuid norm
+            uuids="$( { dwarfdump --uuid "$dsym" 2>/dev/null || true; } | awk '{print $2}')"
+            if [ -z "$uuids" ]; then
+              echo "::error::$dsym 读不到 UUID（dSYM 不完整）"
+              missing=1
+              return
+            fi
+            while read -r uuid; do
+              [ -n "$uuid" ] || continue
+              norm=$(printf '%s' "$uuid" | tr 'A-Z' 'a-z' | tr -d '-')
+              if ! awk -v u="$norm" '
+                { l = tolower($0) }
+                index(l, u) && (index(l, "successfully") || index(l, "already uploaded") || index(l, "skipping upload")) { ok = 1 }
+                END { exit(ok ? 0 : 1) }
+              ' "$LOG"; then
+                echo "::error::$dsym 的 UUID $uuid 没有出现在上传日志里"
+                missing=1
+              fi
+            done <<< "$uuids"
+          }
+
+          missing=0
+          checked=0
+          for path in "${DSYM_PATHS[@]}"; do
+            case "$path" in
+              *.dSYM) checked=$((checked + 1)); verify_uploaded "$path" ;;
+              *) for dsym in "$path"/*.dSYM; do
+                   [ -d "$dsym" ] || continue
+                   checked=$((checked + 1))
+                   verify_uploaded "$dsym"
+                 done ;;
+            esac
+          done
+          if [ "$missing" -ne 0 ]; then
+            echo "----- $LOG (tail) -----"
+            tail -30 "$LOG"
+            exit 1
+          fi
+          if [ "$checked" -eq 0 ]; then
+            echo "::error::没有任何 dSYM 被上传——符号没有进 Crashlytics"
+            exit 1
+          fi
+          echo "dSYMs uploaded to Crashlytics: ${{ needs.version.outputs.display_version }} ($checked dSYMs verified in log)"
 
       - name: Upload to TestFlight
         uses: apple-actions/upload-testflight-build@v1
