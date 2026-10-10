@@ -176,19 +176,70 @@ end
 # `firebase-ios-sdk` comes in through Swift Package Manager, so the uploader
 # lives in the SourcePackages checkout rather than PODS_ROOT.
 #
+# The phase must stay **synchronous**. Crashlytics' own `run` wrapper validates
+# synchronously but then backgrounds the real upload, and that backgrounded
+# uploader deadlocks in firebase-ios-sdk 12.x (NSOperationQueue waitUntilFinished,
+# no sockets open) instead of uploading — which is how released builds ended up as
+# "missing (required)" in Crashlytics without anybody noticing.
+# `upload-symbols -bp` (build-phase mode) deadlocks the same way, so this uses
+# plain CLI mode: synchronous, exits non-zero on failure, and identical to the
+# invocation the CI step uses.
+#
 # Deliberately declares **no input paths**: the official recipe lists files
 # inside `Runner.app`, which is the same shape that produced the "Cycle inside
-# Runner" error above. The script is cheap when there is nothing to upload.
-unless host.build_phases.any? do |phase|
+# Runner" error above.
+CRASHLYTICS_UPLOAD_SYMBOLS_SCRIPT = <<~'SH'
+  # Crashlytics symbols: synchronous, and a failure fails the build.
+  #
+  # Do NOT use Crashlytics' "run" wrapper or `upload-symbols -bp` here: both go
+  # through the build-phase path, which in firebase-ios-sdk 12.x deadlocks
+  # (NSOperationQueue waitUntilFinished, no sockets open) instead of uploading.
+  # That is why released builds reached Crashlytics with missing symbols: the
+  # backgrounded uploader simply hung forever and nobody noticed.
+  #
+  # CLI mode (below) is synchronous, returns non-zero on failure, and is the same
+  # invocation the CI step uses. `--` before the path is required, otherwise
+  # upload-symbols reports "No dSYM paths provided".
+  if [ "$CONFIGURATION" != "Release" ]; then
+    echo "Crashlytics: skipping dSYM upload for $CONFIGURATION (Release only)"
+    exit 0
+  fi
+  SPM_ROOT="${BUILD_DIR%/Build/*}/SourcePackages"
+  UPLOAD_SYMBOLS=""
+  for p in \
+    "$SPM_ROOT/checkouts/firebase-ios-sdk/Crashlytics/upload-symbols" \
+    "$SPM_ROOT/packages/firebase-ios-sdk/Crashlytics/upload-symbols" \
+    "${PODS_ROOT}/FirebaseCrashlytics/upload-symbols"; do
+    if [ -x "$p" ]; then UPLOAD_SYMBOLS="$p"; break; fi
+  done
+  if [ -z "$UPLOAD_SYMBOLS" ]; then
+    UPLOAD_SYMBOLS="$(find "$SPM_ROOT" -maxdepth 5 -name upload-symbols -type f 2>/dev/null | head -n 1)"
+  fi
+  if [ ! -x "$UPLOAD_SYMBOLS" ]; then
+    echo "error: Crashlytics upload-symbols not found under $SPM_ROOT - refusing to ship a Release build without symbols"
+    exit 1
+  fi
+  GSP="$SRCROOT/Runner/GoogleService-Info.plist"
+  if [ ! -f "$GSP" ]; then
+    echo "error: $GSP not found - refusing to ship a Release build without symbols"
+    exit 1
+  fi
+  echo "Crashlytics: uploading $DWARF_DSYM_FOLDER_PATH synchronously"
+  "$UPLOAD_SYMBOLS" -gsp "$GSP" -p ios -- "$DWARF_DSYM_FOLDER_PATH"
+SH
+
+crashlytics = host.build_phases.find do |phase|
   phase.is_a?(Xcodeproj::Project::Object::PBXShellScriptBuildPhase) &&
     phase.name == 'Upload Crashlytics Symbols'
 end
+if crashlytics.nil?
   crashlytics = host.new_shell_script_build_phase('Upload Crashlytics Symbols')
-  crashlytics.shell_script =
-    '"${BUILD_DIR%/Build/*}/SourcePackages/checkouts/firebase-ios-sdk/Crashlytics/run"'
-  crashlytics.show_env_vars_in_log = '0'
   puts 'added the Crashlytics dSYM upload phase'
+else
+  puts 'updated the Crashlytics dSYM upload phase'
 end
+crashlytics.shell_script = CRASHLYTICS_UPLOAD_SYMBOLS_SCRIPT
+crashlytics.show_env_vars_in_log = '0'
 
 # Xcode's new build system otherwise reports
 #   "Cycle inside Runner; building could produce unreliable results"
