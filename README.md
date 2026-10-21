@@ -1,184 +1,73 @@
-# MV2
+<div align="center">
 
-> **A modern V2EX client.**
->
-> Flutter · iOS · Android · Open Source
+<img src="docs/images/readme-hero.png" alt="MV2 — 好话题，值得展开聊" width="100%" />
 
-**MV2** is a modern, open-source third-party client for the V2EX community. The current app is built with **Flutter** and focuses on a fast, native-feeling mobile experience with a consistent design system across iOS and Android.
+# MV2 · 你的 V2EX，随手打开
 
-The name **MV2** represents the product brand rather than a framework name. The visual identity uses a red/blue dual-choice motif; internally, we think of it as **Matrix for V2EX** — a compact identity for a different way into V2EX.
+把社区装进口袋：刷到好话题，读完讨论，也随时加入对话。
 
-> MV2 is an independent third-party project and is not affiliated with or endorsed by V2EX.
+[立即体验](https://github.com/rwecho/V2ex.Maui2/releases) · [项目主页](https://rwecho.github.io/V2ex.Maui2/) · [隐私政策](https://rwecho.github.io/V2ex.Maui2/privacy.html)
 
----
+**iOS · Android · 开源**
 
-## ✨ Highlights
-
-- **Modern V2EX browsing** — home tabs, nodes, topic feeds and topic details.
-- **Account experience** — sign in, account state, notifications and member pages.
-- **Topic interaction** — reply, quote, thank, ignore and other V2EX-native interactions where supported.
-- **Publishing** — create topics with node selection, Markdown preview and local draft persistence.
-- **Native mobile UX** — haptics, modal sheets, pull-to-refresh, collapsible navigation and deep links.
-- **Dark & light themes** — one consistent MV2 design system across platforms.
-- **Offline-friendly development** — fixture-backed development mode plus the real V2EX site parser.
-- **Notifications & widgets** — Firebase-backed notification infrastructure and native iOS widget support.
+</div>
 
 ---
 
-## 🧱 Tech Stack
+## V2EX 的讨论，适合认真读
 
-### App
+MV2 是一款为手机重新设计的 V2EX 社区客户端。熟悉的主题与回复，在更清楚、更顺手的阅读体验里展开；看到想聊的话题，也能直接回复或发起讨论。
 
-- **Flutter / Dart** — cross-platform application framework.
-- **Riverpod** — application and feature state management.
-- **go_router** — navigation and deep-link routing.
-- **Dio** — HTTP networking.
-- **Drift / SQLite** — local cache and persistence.
-- **SharedPreferences / Secure Storage** — lightweight local settings and sensitive session state.
-- **Firebase** — notification and app-service integrations used by the mobile client.
+<table>
+  <tr>
+    <td width="50%"><img src="distribution/app-store/creative-assets/exports/mv2-iphone-duo-screenshot-design-2853x2007.png" alt="MV2 在 iPhone 与 iPhone Duo 上的社区浏览界面" width="100%" /></td>
+    <td width="50%"><img src="distribution/app-store/creative-assets/exports/mv2-duo-01-dual-column-2853x2007.png" alt="展开设备上的双栏阅读：左侧浏览主题，右侧阅读讨论" width="100%" /></td>
+  </tr>
+  <tr>
+    <td align="center"><strong>随时打开，接着逛</strong><br/>首页话题、社区节点与主题详情都在手边。</td>
+    <td align="center"><strong>一边发现，一边深入</strong><br/>在宽屏设备上同时浏览主题与完整讨论。</td>
+  </tr>
+</table>
 
-### Backend / Services
+## 从看见，到参与
 
-- **Cloudflare Workers** — lightweight service endpoints and push-related infrastructure.
-- **V2EX** — content and account interactions come from V2EX APIs and web endpoints.
+不只是读帖子。登录后可以回复、引用、感谢、收藏，也可以选择节点发布新主题；想稍后再看，就把内容留在自己的列表里。
 
----
+<table>
+  <tr>
+    <td width="50%"><img src="distribution/app-store/creative-assets/exports/mv2-duo-02-content-organized-2853x2007.png" alt="个人内容整理页面，包含我的主题、回复、收藏和稍后阅读" width="100%" /></td>
+    <td width="50%"><img src="distribution/app-store/creative-assets/exports/mv2-duo-03-start-a-discussion-2853x2007.png" alt="在主题页阅读内容并参与回复" width="100%" /></td>
+  </tr>
+  <tr>
+    <td align="center"><strong>喜欢的内容，方便找回</strong><br/>主题、回复、收藏与稍后阅读各有归处。</td>
+    <td align="center"><strong>读到一半，也能加入讨论</strong><br/>从主题详情直接回复，让想法跟上阅读。</td>
+  </tr>
+</table>
 
-## 📁 Repository Structure
+## 为日常阅读打磨
 
-```text
-.
-├── app/                    # Flutter application
-│   ├── lib/                # Dart source
-│   ├── android/            # Android host project
-│   ├── ios/                # iOS host project + MV2 widget integration
-│   ├── assets/             # Fixtures and bundled resources
-│   └── branding/           # MV2 logo and generated platform assets
-├── cloudflare/             # Cloudflare Worker services
-├── designs/                # Product/UI design references
-├── docs/                   # Privacy, deletion and project documentation
-└── .github/workflows/      # CI/CD for App Store / Google Play
-```
+- **按兴趣逛社区**：在不同主题流与节点之间切换，发现新的讨论。
+- **阅读更专注**：简洁的页面、深浅色主题与顺手的导航，让注意力留在内容上。
+- **讨论不缺席**：查看通知、回复他人，也可发布自己的主题。
+- **适配不同屏幕**：手机上轻松浏览；在 iPhone Duo 等展开屏幕上，列表与正文并排呈现。
+- **开源，欢迎一起改进**：查看代码、提出想法或参与贡献。
 
-For implementation details, see [`app/README.md`](app/README.md).
+> MV2 是独立的第三方客户端，与 V2EX 无隶属或官方背书关系。登录及社区互动由 V2EX 服务支持。
 
----
+## 下载与了解
 
-## 🚀 Development
+- **应用下载**：[GitHub Releases](https://github.com/rwecho/V2ex.Maui2/releases)
+- **项目主页**：[MV2](https://rwecho.github.io/V2ex.Maui2/)
+- **隐私政策**：[查看隐私说明](https://rwecho.github.io/V2ex.Maui2/privacy.html)
+- **数据删除**：[查看数据删除说明](https://rwecho.github.io/V2ex.Maui2/deletion.html)
+- **问题与建议**：[GitHub Issues](https://github.com/rwecho/V2ex.Maui2/issues)
+- **联系**：[rwecho@live.com](mailto:rwecho@live.com)
 
-### Requirements
+## 想参与项目？
 
-- Flutter stable
-- Dart (included with Flutter)
-- Xcode for iOS builds
-- Android Studio / Android SDK for Android builds
-
-### Run locally
-
-```bash
-cd app
-flutter pub get
-flutter run
-```
-
-By default, MV2 can use bundled fixture pages for deterministic development. To run against the real V2EX site:
-
-```bash
-cd app
-flutter run --dart-define=MV2_FIXTURES=false
-```
-
-### Quality checks
-
-```bash
-cd app
-flutter analyze
-flutter test
-```
-
-### Release builds
-
-```bash
-cd app
-flutter build appbundle
-flutter build ipa
-```
-
-Release CI is defined in `.github/workflows/publish-flutter.yml`. Pushing a `v*` tag triggers the store publishing workflow.
-
-#### Cutting a release
-
-The published version comes from the tag, but the binary is built from
-`app/pubspec.yaml`. Those two must agree: the workflow fails the run when the tag
-and the pubspec version differ, instead of shipping a package whose store version
-and in-app version disagree.
-
-```bash
-# 1. bump the version in app/pubspec.yaml (patch for a small release)
-#      version: 1.2.36+1002036000
-#    the +N build suffix must stay ahead of the last uploaded versionCode
-# 2. commit it
-git add app/pubspec.yaml
-git commit -m "release: v1.2.36"
-# 3. tag and push — the tag push is what starts TestFlight + Play internal
-git tag -a v1.2.36 -m "MV2 v1.2.36"
-git push origin HEAD
-git push origin v1.2.36
-```
-
-Manual runs are also available from the Actions tab (`workflow_dispatch`); leaving
-the version input empty falls back to the version in `app/pubspec.yaml`.
-
-The workflow derives the store build number with the legacy MV2 rule
-(`printf "%d%03d%03d", MAJOR, MINOR, PATCH` + the workflow run number), so each
-segment must stay below 1000 — the run fails loudly if a version segment would
-overflow that scheme.
+欢迎提交问题、建议和代码。开发运行方式、构建与发布流程请看 [`app/README.md`](app/README.md)。
 
 ---
 
-## 📱 Application Identity
+MV2 使用 Flutter 构建，支持 iOS 与 Android。项目遵循 [MIT License](LICENSE)。
 
-The published application keeps the existing package / bundle identifiers for upgrade compatibility with previous MV2 releases.
-
-For example, identifiers containing `v2ex.maui` are **legacy application identifiers**, not a statement about the current framework. They must not be casually renamed because changing them would create a different application in App Store / Google Play rather than update the existing one.
-
-The current product implementation is Flutter.
-
----
-
-## 🎨 Brand
-
-**Product name:** MV2  
-**Positioning:** A modern V2EX client  
-**Internal brand idea:** Matrix for V2EX
-
-The MV2 mark is built around two symmetrical red and blue capsule forms. Brand source files and generation notes live in [`app/branding/`](app/branding/).
-
----
-
-## 🔐 Privacy & Legal
-
-- [Privacy Policy](https://rwecho.github.io/V2ex.Maui2/privacy.html)
-- [Data Deletion](https://rwecho.github.io/V2ex.Maui2/deletion.html)
-
-MV2 is a third-party client. V2EX content, accounts and platform behavior remain subject to V2EX's own terms and policies.
-
----
-
-## 🙏 Credits
-
-- [V2EX](https://www.v2ex.com/)
-- [Flutter](https://flutter.dev/)
-- The open-source packages and projects used by MV2
-
----
-
-## 📧 Contact
-
-- Email: [rwecho@live.com](mailto:rwecho@live.com)
-
----
-
-## License
-
-This project is licensed under the [MIT License](LICENSE).
