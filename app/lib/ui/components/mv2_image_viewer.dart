@@ -1,8 +1,11 @@
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:flutter_cache_manager/flutter_cache_manager.dart';
 
 import '../../design_system/theme/mv2_theme.dart';
 import '../../design_system/tokens/mv2_spacing.dart';
+import '../utils/media_presentation.dart';
 
 /// Opens the MV2 full-screen image browser.
 ///
@@ -12,30 +15,36 @@ Future<void> showMv2ImageViewer(
   BuildContext context, {
   required List<String> images,
   int initialIndex = 0,
-}) {
+}) async {
   final gallery = images
       .where((url) => url.trim().isNotEmpty)
       .toList(growable: false);
-  if (gallery.isEmpty) return Future<void>.value();
+  if (gallery.isEmpty) return;
 
   final index = initialIndex < 0
       ? 0
       : (initialIndex >= gallery.length ? gallery.length - 1 : initialIndex);
 
-  return Navigator.of(context, rootNavigator: true).push<void>(
-    PageRouteBuilder<void>(
-      // Not opaque: the page behind shows through while the viewer is dragged
-      // down, and the fade owns the transition.
-      opaque: false,
-      barrierColor: Colors.transparent,
-      transitionDuration: const Duration(milliseconds: 200),
-      reverseTransitionDuration: const Duration(milliseconds: 160),
-      pageBuilder: (context, animation, secondaryAnimation) =>
-          Mv2ImageViewer(images: gallery, initialIndex: index),
-      transitionsBuilder: (context, animation, secondaryAnimation, child) =>
-          FadeTransition(opacity: animation, child: child),
-    ),
+  final navigator = Navigator.of(context, rootNavigator: true);
+  final releaseChrome = Mv2MediaPresentation.acquire();
+  final route = PageRouteBuilder<void>(
+    // Not opaque: the page behind shows through while the viewer is dragged
+    // down, and the fade owns the transition.
+    opaque: false,
+    barrierColor: Colors.transparent,
+    transitionDuration: const Duration(milliseconds: 200),
+    reverseTransitionDuration: const Duration(milliseconds: 160),
+    pageBuilder: (context, animation, secondaryAnimation) =>
+        Mv2ImageViewer(images: gallery, initialIndex: index),
+    transitionsBuilder: (context, animation, secondaryAnimation, child) =>
+        FadeTransition(opacity: animation, child: child),
   );
+  try {
+    await navigator.push<void>(route);
+    await route.completed;
+  } finally {
+    releaseChrome();
+  }
 }
 
 /// Full-screen image browser (`docs/06` → 图片浏览).
@@ -71,6 +80,31 @@ class _Mv2ImageViewerState extends State<Mv2ImageViewer> {
   double _drag = 0;
   bool _zoomed = false;
   bool _chromeVisible = true;
+  bool _saving = false;
+
+  Future<void> _saveImage() async {
+    if (_saving) return;
+    final url = widget.images[_index];
+    setState(() => _saving = true);
+    String message;
+    try {
+      final file = await DefaultCacheManager().getSingleFile(url);
+      await const MethodChannel('mv2/media')
+          .invokeMethod<void>('saveImage', {'path': file.path});
+      message = '已保存到相册';
+    } on PlatformException catch (error) {
+      message = error.code == 'photo_permission_denied'
+          ? '请在系统设置中允许保存照片后重试'
+          : '保存失败，请稍后重试';
+    } catch (_) {
+      message = '图片下载失败，请检查网络后重试';
+    }
+    if (!mounted) return;
+    setState(() => _saving = false);
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(SnackBar(content: Text(message)));
+  }
 
   @override
   void dispose() {
@@ -131,8 +165,7 @@ class _Mv2ImageViewerState extends State<Mv2ImageViewer> {
                   }),
                   itemBuilder: (context, index) => _ZoomableImage(
                     url: widget.images[index],
-                    onZoomChanged: (value) =>
-                        setState(() => _zoomed = value),
+                    onZoomChanged: (value) => setState(() => _zoomed = value),
                     onTap: _toggleChrome,
                   ),
                 ),
@@ -143,6 +176,8 @@ class _Mv2ImageViewerState extends State<Mv2ImageViewer> {
               index: _index,
               total: total,
               onClose: () => Navigator.of(context).maybePop(),
+              saving: _saving,
+              onSave: _saveImage,
             ),
           ],
         ),
@@ -180,8 +215,7 @@ class _ZoomableImageState extends State<_ZoomableImage> {
     super.dispose();
   }
 
-  bool get _isZoomed =>
-      _controller.value.getMaxScaleOnAxis() > _zoomEpsilon;
+  bool get _isZoomed => _controller.value.getMaxScaleOnAxis() > _zoomEpsilon;
 
   void _handleDoubleTap() {
     final next = _isZoomed
@@ -245,12 +279,16 @@ class _ViewerChrome extends StatelessWidget {
     required this.index,
     required this.total,
     required this.onClose,
+    required this.onSave,
+    required this.saving,
   });
 
   final bool visible;
   final int index;
   final int total;
   final VoidCallback onClose;
+  final VoidCallback onSave;
+  final bool saving;
 
   @override
   Widget build(BuildContext context) {
@@ -262,6 +300,30 @@ class _ViewerChrome extends StatelessWidget {
         child: SafeArea(
           child: Stack(
             children: <Widget>[
+              Align(
+                alignment: Alignment.bottomRight,
+                child: Padding(
+                  padding: const EdgeInsets.all(Mv2Spacing.x4),
+                  child: FilledButton.icon(
+                    onPressed: saving ? null : onSave,
+                    icon: saving
+                        ? const SizedBox(
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: Colors.white,
+                            ),
+                          )
+                        : const Icon(Icons.download_rounded),
+                    label: Text(saving ? '保存中…' : '保存到相册'),
+                    style: FilledButton.styleFrom(
+                      backgroundColor: Colors.white24,
+                      foregroundColor: Colors.white,
+                    ),
+                  ),
+                ),
+              ),
               Align(
                 alignment: Alignment.topLeft,
                 child: Padding(
@@ -314,7 +376,11 @@ class _BrokenImage extends StatelessWidget {
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: <Widget>[
-        const Icon(Icons.broken_image_outlined, size: 40, color: Colors.white54),
+        const Icon(
+          Icons.broken_image_outlined,
+          size: 40,
+          color: Colors.white54,
+        ),
         const SizedBox(height: Mv2Spacing.x2),
         Text(
           '图片加载失败',

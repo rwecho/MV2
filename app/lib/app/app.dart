@@ -18,6 +18,7 @@ import '../ui/utils/scene_sync.dart';
 import 'router.dart';
 import 'session_cache_refresh.dart';
 import '../features/pro/application/pro_controller.dart';
+import '../ui/utils/media_presentation.dart';
 
 /// Root widget: owns theming (Light/Dark + reading scale) and the router.
 class Mv2App extends ConsumerWidget {
@@ -85,10 +86,15 @@ class Mv2App extends ConsumerWidget {
               // publishes its app bar to, and draws the one persistent bar
               // (plus the Duo's trailing capsule bar) instead of a bar per
               // route. Pages migrate onto it one by one.
-              child: AdaptiveToolbarHost(
-                // ignore: invalid_use_of_visible_for_testing_member
-                debugFold: debugFold,
+              child: ValueListenableBuilder<int>(
+                valueListenable: Mv2MediaPresentation.depth,
                 child: child ?? const SizedBox.shrink(),
+                builder: (context, depth, navigator) => AdaptiveToolbarHost(
+                  chromeHidden: depth > 0,
+                  // ignore: invalid_use_of_visible_for_testing_member
+                  debugFold: debugFold,
+                  child: navigator!,
+                ),
               ),
             ),
           ),

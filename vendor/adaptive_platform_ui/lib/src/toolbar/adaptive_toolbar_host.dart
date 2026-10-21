@@ -28,12 +28,15 @@ class AdaptiveToolbarHost extends StatefulWidget {
   const AdaptiveToolbarHost({
     super.key,
     required this.child,
+    this.chromeHidden = false,
     @visibleForTesting this.debugFold,
     @visibleForTesting this.debugVerticalBarEdge,
   });
 
   /// The navigator (or whatever the app's `builder` receives).
   final Widget child;
+  /// Full-screen media owns the entire view, including the Duo side band.
+  final bool chromeHidden;
 
   /// Replaces the platform's fold readings (the reserved regions) and the
   /// iOS 26 check, so the chrome can be exercised in widget tests anywhere.
@@ -108,6 +111,8 @@ class _AdaptiveToolbarHostState extends State<AdaptiveToolbarHost>
     final fold = widget.debugFold ?? _fold;
     // The fixed chrome only exists where pages use the native iOS 26
     // toolbar; elsewhere pages keep their own Cupertino / Material bars.
+    // Media hides only the painted controls. Keep the layout contract stable
+    // so the covered route does not reflow during opening or dismissal.
     final hostsToolbar =
         widget.debugFold != null || PlatformInfo.isIOS26OrHigher();
     final edge =
@@ -149,9 +154,9 @@ class _AdaptiveToolbarHostState extends State<AdaptiveToolbarHost>
               // element tree whenever the pose changes (moving between Split
               // View panes), and rebuild every route.
               _BarInset(pose: pose, child: widget.child),
-              if (hostsToolbar)
+              if (hostsToolbar && !widget.chromeHidden)
                 HostedTopToolbar(blend: _blend, titleOnly: pose != null),
-              if (pose != null)
+              if (pose != null && !widget.chromeHidden)
                 // The bar sits on whichever edge the pose names: the right in
                 // most poses, the left in the leading Split View pane.
                 Positioned(

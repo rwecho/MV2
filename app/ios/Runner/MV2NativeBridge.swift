@@ -3,6 +3,8 @@ import UIKit
 import WebKit
 import WidgetKit
 import LinkPresentation
+import Photos
+import ImageIO
 
 /// Native half of the MV2 ↔ iOS integration.
 ///
@@ -244,6 +246,44 @@ private final class MV2AppShareItem: NSObject, UIActivityItemSource {
       metadata.imageProvider = NSItemProvider(object: image)
     }
     return metadata
+  }
+}
+
+final class MV2MediaBridge {
+  static let shared = MV2MediaBridge()
+  private var channel: FlutterMethodChannel?
+
+  func configure(messenger: FlutterBinaryMessenger) {
+    let channel = FlutterMethodChannel(name: "mv2/media", binaryMessenger: messenger)
+    channel.setMethodCallHandler { call, result in
+      guard call.method == "saveImage" else { result(FlutterMethodNotImplemented); return }
+      guard let args = call.arguments as? [String: Any],
+        let path = args["path"] as? String,
+        let source = CGImageSourceCreateWithURL(URL(fileURLWithPath: path) as CFURL, nil),
+        let type = CGImageSourceGetType(source)
+      else { result(FlutterError(code: "invalid_image", message: "Invalid image file", details: nil)); return }
+
+      PHPhotoLibrary.requestAuthorization(for: .addOnly) { status in
+        guard status == .authorized || status == .limited else {
+          DispatchQueue.main.async {
+            result(FlutterError(code: "photo_permission_denied", message: "Photo access denied", details: nil))
+          }
+          return
+        }
+        PHPhotoLibrary.shared().performChanges({
+          let request = PHAssetCreationRequest.forAsset()
+          let options = PHAssetResourceCreationOptions()
+          options.uniformTypeIdentifier = type as String
+          request.addResource(with: .photo, fileURL: URL(fileURLWithPath: path), options: options)
+        }) { success, error in
+          DispatchQueue.main.async {
+            if success { result(nil) }
+            else { result(FlutterError(code: "save_failed", message: error?.localizedDescription ?? "Save failed", details: nil)) }
+          }
+        }
+      }
+    }
+    self.channel = channel
   }
 }
 

@@ -16,6 +16,7 @@ import UIKit
     MV2NativeBridge.shared.configure(
       messenger: engineBridge.applicationRegistrar.messenger()
     )
+    MV2MediaBridge.shared.configure(messenger: engineBridge.applicationRegistrar.messenger())
     // Cookie harvest for the in-app-WebView Google OAuth login.
     WebCookieBridge.shared.configure(
       messenger: engineBridge.applicationRegistrar.messenger()

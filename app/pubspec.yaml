@@ -26,7 +26,7 @@ publish_to: 'none' # Remove this line if you wish to publish to pub.dev
 # fails the build on a mismatch instead of shipping a mislabelled binary.
 # Verify against the live versionCode in Play Console / App Store Connect before
 # uploading and raise the `+N` if the old run number was 4 digits or more.
-version: 2.2.17+2002017000
+version: 2.2.18+2002018000
 
 environment:
   sdk: ^3.13.3
@@ -61,6 +61,7 @@ dependencies:
   drift: ^2.35.0
   drift_flutter: ^0.3.1
   path_provider: ^2.1.6
+  flutter_cache_manager: ^3.4.1
   freezed_annotation: ^3.1.0
   json_annotation: ^4.12.0
   url_launcher: ^6.3.2

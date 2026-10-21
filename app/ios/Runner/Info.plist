@@ -45,6 +45,8 @@
 	<string>拍照并插入到回复或主题里（会匿名上传到 Imgur）。</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>选择要插入到回复或主题里的图片（会匿名上传到 Imgur）。</string>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>将你选择的图片保存到系统相册。</string>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>

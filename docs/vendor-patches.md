@@ -31,3 +31,12 @@ Duo 展开态（双栏）下，点开 topic 会让右栏详情页成为 chrome �
    （diff `lib/src/toolbar/toolbar_registry.dart` 即可定位）。
 
 回归测试：`app/test/tab_bar_owner_test.dart`。
+
+## Full-screen media chrome suppression
+
+`AdaptiveToolbarHost.chromeHidden` hides the hosted top/side toolbars and
+preserves the Duo content inset while a full-screen image route is presented,
+so the covered page does not reflow when opening or closing the viewer.
+MV2 reference-counts media presentations and restores the chrome after the
+route's dismissal transition completes. Preserve this option when upgrading
+the vendored package; ordinary routes keep the default `false` behavior.

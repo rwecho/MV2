@@ -7,6 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:foldable/foldable.dart';
 import 'package:mv2/app/app.dart';
+import 'package:mv2/ui/components/mv2_image_viewer.dart';
 import 'package:mv2/ui/utils/mv2_breakpoints.dart';
 import 'package:mv2/ui/utils/scene_geometry.dart';
 import 'package:mv2/core/data/v2ex_providers.dart';
@@ -198,4 +199,41 @@ void main() {
     expect(find.text('MV2'), findsWidgets);
   });
 
+  testWidgets(
+    'image viewer hides Duo toolbars and restores them after dismissal',
+    (tester) async {
+      await boot(
+        tester,
+        foldedSize,
+        padding: foldedPadding,
+        foldable: coverDisplay(),
+      );
+      final bar = find.byWidgetPredicate(
+        (widget) => widget.runtimeType.toString() == 'HostedDuoBar',
+      );
+      expect(bar, findsOneWidget);
+      final context = tester.element(find.byType(AdaptiveScaffold).last);
+      final originalPadding = MediaQuery.viewPaddingOf(context);
+      final closed = showMv2ImageViewer(
+        context,
+        images: ['https://cdn.v2ex.com/test.png'],
+      );
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+      expect(bar, findsNothing);
+      expect(MediaQuery.viewPaddingOf(context), originalPadding);
+      expect(
+        tester.getSize(find.byType(Mv2ImageViewer)).width,
+        foldedSize.width,
+      );
+      expect(find.text('保存到相册'), findsOneWidget);
+      await tester.tap(find.byTooltip('关闭'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+      await closed;
+      await tester.pump();
+      expect(bar, findsOneWidget);
+      expect(MediaQuery.viewPaddingOf(context), originalPadding);
+    },
+  );
 }
