@@ -75,34 +75,35 @@ class _NotificationsPageState extends ConsumerState<NotificationsPage> {
           ),
           Expanded(
             child: NotificationListener<ScrollNotification>(
-        onNotification: (notification) {
-          // Load the next page once the list is within ~400px of the bottom;
-          // the controller de-duplicates concurrent/duplicate calls.
-          if (notification.metrics.extentAfter < 400) {
-            ref.read(notificationsControllerProvider.notifier).loadMore();
-          }
-          return false;
-        },
-        child: Mv2Refreshable(
-          onRefresh: () =>
-              ref.read(notificationsControllerProvider.notifier).refresh(),
-          child: ListView(
-            physics: const AlwaysScrollableScrollPhysics(),
-            padding: EdgeInsets.fromLTRB(
-              Mv2Spacing.pageNarrow,
-              Mv2Spacing.x4,
-              Mv2Spacing.pageNarrow,
-              Mv2PageScaffold.bottomContentInset(context),
+              onNotification: (notification) {
+                // Load the next page once the list is within ~400px of the bottom;
+                // the controller de-duplicates concurrent/duplicate calls.
+                if (notification.metrics.extentAfter < 400) {
+                  ref.read(notificationsControllerProvider.notifier).loadMore();
+                }
+                return false;
+              },
+              child: Mv2Refreshable(
+                onRefresh: () => ref
+                    .read(notificationsControllerProvider.notifier)
+                    .refresh(),
+                child: ListView(
+                  physics: const AlwaysScrollableScrollPhysics(),
+                  padding: EdgeInsets.fromLTRB(
+                    Mv2Spacing.pageNarrow,
+                    Mv2Spacing.x4,
+                    Mv2Spacing.pageNarrow,
+                    Mv2PageScaffold.bottomContentInset(context),
+                  ),
+                  children: <Widget>[_body(state)],
+                ),
+              ),
             ),
-            children: <Widget>[_body(state)],
           ),
-        ),
-          ),
-        ),
-      ],
-    ),
-  );
-}
+        ],
+      ),
+    );
+  }
 
   Widget _body(NotificationsState state) {
     if (state.isLoading) return const _NotificationsLoadingList();
@@ -130,10 +131,38 @@ class _NotificationsPageState extends ConsumerState<NotificationsPage> {
       return const Mv2StateView(kind: Mv2StateKind.empty, title: '暂无通知');
     }
 
+    final groups = <V2NotificationGroup>[
+      for (final group in state.groups)
+        V2NotificationGroup(
+          title: group.title,
+          items: group.items
+              .where(
+                (item) => switch (_tabIndex) {
+                  1 => item.kind == NotificationKind.reply,
+                  2 => item.kind == NotificationKind.mention,
+                  _ => true,
+                },
+              )
+              .toList(),
+        ),
+    ].where((group) => group.items.isNotEmpty).toList();
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: <Widget>[
-        _NotificationGroups(groups: state.groups),
+        if (groups.isNotEmpty) _NotificationGroups(groups: groups),
+        if (groups.isEmpty)
+          Mv2StateView(
+            kind: Mv2StateKind.empty,
+            title: _tabIndex == 1 ? '暂无回复通知' : '暂无 @我 通知',
+            description: state.hasMore ? '已加载的通知中没有此类型，可以继续查看更早通知。' : null,
+          ),
+        if (state.hasMore && !state.isLoadingMore)
+          TextButton(
+            onPressed: () =>
+                ref.read(notificationsControllerProvider.notifier).loadMore(),
+            child: const Text('加载更早通知'),
+          ),
         if (state.isLoadingMore) ...<Widget>[
           const SizedBox(height: Mv2Spacing.x4),
           const Center(child: Mv2SkeletonBox(width: 120, height: 12)),
@@ -175,7 +204,12 @@ class _NotificationGroups extends StatelessWidget {
             // The `a.topic-link` href supplies the destination topic.
             onTap: topicId == null
                 ? null
-                : () => openTopic(context, topicId, source: 'notifications'),
+                : () => openTopic(
+                    context,
+                    topicId,
+                    initialTitle: item.sourceTitle,
+                    source: 'notifications',
+                  ),
           ),
         );
       }

@@ -110,9 +110,7 @@ class _LoginPageState extends ConsumerState<LoginPage> {
         setState(() {
           _loadingForm = false;
           _formUnavailable = true;
-          _errors = <String>[
-            'V2EX 没有返回可用的登录表单（页面结构可能已变更），请稍后重试。',
-          ];
+          _errors = <String>['V2EX 没有返回可用的登录表单（页面结构可能已变更），请稍后重试。'];
         });
         return;
       }
@@ -418,10 +416,11 @@ class _LoginPageState extends ConsumerState<LoginPage> {
           context,
           icon: 'assets/auth/google.png',
           label: 'Sign in with Google',
-          onTap: () {
-            // 与 login_open 一样单点记录：两个入口都从这一处进入。
+          onTap: () async {
             Mv2Analytics.logLoginMethodSelect(method: 'google');
-            context.push('/login/google');
+            final success = await context.push<bool>('/login/google');
+            if (!mounted || !context.mounted || success != true) return;
+            context.pop();
           },
         ),
         if (kShowSolanaLogin) ...<Widget>[

@@ -8,7 +8,6 @@ import '../../../core/data/v2ex_providers.dart';
 import '../../../core/errors/failures.dart';
 import '../../../core/telemetry/mv2_analytics.dart';
 import '../../../core/text/base64_text.dart';
-import '../../../design_system/effects/mv2_glass.dart';
 import '../../../design_system/theme/mv2_theme.dart';
 import '../../../design_system/tokens/mv2_radius.dart';
 import '../../../design_system/tokens/mv2_spacing.dart';
@@ -20,9 +19,7 @@ import '../../../ui/components/mv2_page_header.dart';
 import '../../../ui/components/mv2_page_scaffold.dart';
 import '../../../ui/components/states/mv2_state_view.dart';
 import '../../../ui/mv2_haptics.dart';
-import '../../../ui/primitives/mv2_avatar.dart';
 import '../../../ui/primitives/mv2_buttons.dart';
-import '../../../ui/primitives/mv2_chips.dart';
 import '../../auth/application/auth_controller.dart';
 import '../../settings/application/settings_controller.dart';
 import '../../topic/application/topic_providers.dart';
@@ -32,8 +29,7 @@ import 'composer_image_button.dart';
 
 /// Reply composer (`designs/03-reply-composer.png`).
 ///
-/// The quoted topic stays pinned in the scroll body while the footer is fixed
-/// above the keyboard inset.
+/// Compact reply context, a flexible editor, and a keyboard-adjacent toolbar.
 class ReplyComposerPage extends ConsumerStatefulWidget {
   const ReplyComposerPage({
     super.key,
@@ -82,10 +78,11 @@ class _ReplyComposerPageState extends ConsumerState<ReplyComposerPage> {
   /// Parsed `div.problem li` messages from the last rejected submit.
   List<String> _errors = const <String>[];
 
-  /// Whether the quoted topic card shows its full body. The composer
-  /// auto-collapses it once the reply grows past a few lines, handing the
-  /// vertical space back to the editor (Polish/Reddit composer behavior).
-  bool _quoteExpanded = true;
+  /// Context expansion is controlled by the reader, never by typing.
+  bool _quoteExpanded = false;
+  Timer? _savedTimer;
+  String _draftStatus = '';
+  int _draftRevision = 0;
 
   String get _draftKey => DraftStore.topicKey(widget.topicId);
 
@@ -106,10 +103,11 @@ class _ReplyComposerPageState extends ConsumerState<ReplyComposerPage> {
   @override
   void dispose() {
     _draftTimer?.cancel();
+    _savedTimer?.cancel();
     // Flush text typed in the last debounce window; a submitted reply must not
     // be resurrected as a draft.
     final pending = _controller.text;
-    if (!_submitted && pending.trim().isNotEmpty) {
+    if (!_submitted) {
       unawaited(_draftStore.write(_draftKey, pending));
     }
     _controller.removeListener(_onTextChanged);
@@ -128,7 +126,12 @@ class _ReplyComposerPageState extends ConsumerState<ReplyComposerPage> {
     final saved = await _draftStore.read(_draftKey);
     if (!mounted) return;
     if (saved != null && saved.isNotEmpty) {
-      if (_controller.text.isEmpty) _controller.text = saved;
+      if (_controller.text.isEmpty) {
+        _controller.value = TextEditingValue(
+          text: saved,
+          selection: TextSelection.collapsed(offset: saved.length),
+        );
+      }
       Mv2Analytics.logDraftAction(composer: 'reply', action: 'restored');
       return;
     }
@@ -143,17 +146,25 @@ class _ReplyComposerPageState extends ConsumerState<ReplyComposerPage> {
   void _onTextChanged() {
     // Rebuilds the 发送 enabled state and restarts the debounce.
     setState(() {});
-    // Long replies reclaim the quote card's vertical space: collapse it once,
-    // on the transition past three lines, so the editor keeps the room.
-    if (_quoteExpanded && _controller.text.split('\n').length > 3) {
-      _quoteExpanded = false;
-    }
+    _savedTimer?.cancel();
+    _draftStatus = '';
+    final revision = ++_draftRevision;
     _draftTimer?.cancel();
-    _draftTimer = Timer(const Duration(milliseconds: 500), () {
-      final text = _controller.text;
-      if (text.trim().isEmpty) return;
-      unawaited(_draftStore.write(_draftKey, text));
-      Mv2Analytics.logDraftAction(composer: 'reply', action: 'saved');
+    _draftTimer = Timer(const Duration(milliseconds: 500), () async {
+      try {
+        await _draftStore.write(_draftKey, _controller.text);
+        if (!mounted || _submitted || revision != _draftRevision) return;
+        setState(
+          () => _draftStatus = _controller.text.trim().isEmpty ? '' : '已保存',
+        );
+        _savedTimer = Timer(const Duration(seconds: 2), () {
+          if (mounted) setState(() => _draftStatus = '');
+        });
+      } catch (_) {
+        if (mounted && revision == _draftRevision) {
+          setState(() => _draftStatus = '草稿保存失败');
+        }
+      }
     });
   }
 
@@ -176,9 +187,8 @@ class _ReplyComposerPageState extends ConsumerState<ReplyComposerPage> {
   void _encodeBase64() {
     final selection = _controller.selection;
     if (!selection.isValid || selection.isCollapsed) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('先选中要编码的文字，再点 Base64')),
-      );
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text('先选中要编码的文字，再点 Base64')));
       return;
     }
     _controller.value = Base64Text.encodeSelection(_controller.value);
@@ -346,20 +356,10 @@ class _ReplyComposerPageState extends ConsumerState<ReplyComposerPage> {
         once.isNotEmpty &&
         !_sending &&
         _controller.text.trim().isNotEmpty;
-    final bottomInset = MediaQuery.viewPaddingOf(context).bottom;
-    // The editor must never grow unbounded: with `maxLines: null` a newline
-    // makes the field taller instead of scrolling internally, and Flutter then
-    // never scrolls the outer ListView to follow the caret (the new text ends
-    // up under the keyboard). Capping the height keeps the framework's native
-    // caret bring-into-view working — the field scrolls inside itself.
-    final maxEditorHeight = MediaQuery.sizeOf(context).height * 0.45;
-    // Once the reply is more than a few lines, the pinned quote is reference
-    // material, not writing space — it collapses to a one-line summary (see
-    // `_onTextChanged`; a manual re-expand is respected until the next growth).
 
     return Mv2PageScaffold(
       header: Mv2SecondaryHeader(
-        title: '回复主题',
+        title: '回复',
         leadingIcon: Icons.close_rounded,
         onBack: () => Navigator.of(context).maybePop(),
         actions: <Widget>[
@@ -371,96 +371,92 @@ class _ReplyComposerPageState extends ConsumerState<ReplyComposerPage> {
           ),
         ],
       ),
-      bottomBar: Column(
-        mainAxisSize: MainAxisSize.min,
+      child: Column(
         children: <Widget>[
-          if (_emojiOpen) ComposerEmojiPanel(onSelect: _insertAtCursor),
-          _ComposerToolbar(
-            onInsertImage: _insertAtCursor,
-            emojiOpen: _emojiOpen,
-            onToggleEmoji: _toggleEmoji,
-            onBase64: _encodeBase64,
-          ),
-          _ComposerFooter(draftSaved: _controller.text.trim().isNotEmpty),
-        ],
-      ),
-      child: ListView(
-        padding: EdgeInsets.fromLTRB(
-          Mv2Spacing.pageNarrow,
-          Mv2Spacing.x3,
-          Mv2Spacing.pageNarrow,
-          // Clears the pinned toolbar + footer overlay.
-          Mv2Spacing.x8 + 96 + bottomInset,
-        ),
-        children: <Widget>[
-          // 引用卡：loaded → real card; loading → placeholder; failure →
-          // the standard error state with retry, never a stand-in topic.
-          if (topic != null)
-            _quoteExpanded
-                ? _QuotedTopicCard(topic: topic)
-                : _QuotedTopicSummary(
-                    topic: topic,
-                    onToggle: () =>
-                        setState(() => _quoteExpanded = !_quoteExpanded),
-                  )
-          else if (detail.hasError)
-            Mv2StateView(
-              kind: Mv2StateKind.error,
-              compact: true,
-              description: mv2DescribeError(detail.error!),
-              actionLabel: '重试',
-              onAction: () => ref.invalidate(
-                topicDetailProvider(TopicDetailArgs(widget.topicId)),
+          Flexible(
+            flex: 0,
+            child: ConstrainedBox(
+              constraints: BoxConstraints(
+                maxHeight: MediaQuery.sizeOf(context).height * 0.22,
               ),
-            )
-          else
-            const _QuotedTopicSkeleton(),
-          if (quotedReply != null) ...<Widget>[
-            const SizedBox(height: Mv2Spacing.x3),
-            _QuoteBlock(reply: quotedReply),
-          ],
-          const SizedBox(height: Mv2Spacing.x3),
-          Mv2Surface(
-            padding: const EdgeInsets.all(Mv2Spacing.x4),
-            shadowed: false,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: <Widget>[
-                if (_errors.isNotEmpty) ...<Widget>[
-                  _ComposerErrorBanner(errors: _errors),
-                  const SizedBox(height: Mv2Spacing.x3),
-                ],
-                ConstrainedBox(
-                  constraints: BoxConstraints(maxHeight: maxEditorHeight),
-                  child: TextField(
-                    controller: _controller,
-                    focusNode: _focusNode,
-                    // The keyboard is the point of the sheet: open it
-                    // immediately.
-                    autofocus: true,
-                    maxLines: null,
-                    minLines: 10,
-                    keyboardType: TextInputType.multiline,
-                    textAlignVertical: TextAlignVertical.top,
-                    cursorColor: colors.accent,
-                    style: context.text.body.copyWith(
-                      color: colors.textPrimary,
-                    ),
-                    decoration: InputDecoration(
-                      isDense: true,
-                      filled: false,
-                      border: InputBorder.none,
-                      enabledBorder: InputBorder.none,
-                      focusedBorder: InputBorder.none,
-                      contentPadding: EdgeInsets.zero,
-                      hintText: '写下你的回复...',
-                      hintStyle: context.text.body.copyWith(
-                        color: colors.textTertiary,
-                      ),
-                    ),
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 20,
+                  vertical: 8,
+                ),
+                child: topic != null
+                    ? _ReplyContext(
+                        topic: topic,
+                        reply: quotedReply,
+                        expanded: _quoteExpanded,
+                        onToggle: () =>
+                            setState(() => _quoteExpanded = !_quoteExpanded),
+                      )
+                    : detail.hasError
+                    ? Mv2StateView(
+                        kind: Mv2StateKind.error,
+                        compact: true,
+                        description: mv2DescribeError(detail.error!),
+                        actionLabel: '重试',
+                        onAction: () => ref.invalidate(
+                          topicDetailProvider(TopicDetailArgs(widget.topicId)),
+                        ),
+                      )
+                    : const LinearProgressIndicator(minHeight: 1),
+              ),
+            ),
+          ),
+          Divider(height: 1, color: colors.divider),
+          if (_errors.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 8, 20, 0),
+              child: _ComposerErrorBanner(errors: _errors),
+            ),
+          Expanded(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(20, 16, 20, 12),
+              child: TextField(
+                controller: _controller,
+                focusNode: _focusNode,
+                autofocus: true,
+                expands: true,
+                maxLines: null,
+                minLines: null,
+                keyboardType: TextInputType.multiline,
+                textAlignVertical: TextAlignVertical.top,
+                cursorColor: colors.accent,
+                style: context.text.body.copyWith(color: colors.textPrimary),
+                decoration: InputDecoration(
+                  filled: false,
+                  border: InputBorder.none,
+                  enabledBorder: InputBorder.none,
+                  focusedBorder: InputBorder.none,
+                  contentPadding: EdgeInsets.zero,
+                  hintText: '写下你的回复…',
+                  hintStyle: context.text.body.copyWith(
+                    color: colors.textTertiary,
                   ),
                 ),
-              ],
+              ),
+            ),
+          ),
+          if (_emojiOpen)
+            ConstrainedBox(
+              constraints: BoxConstraints(
+                maxHeight: MediaQuery.sizeOf(context).height * 0.28,
+              ),
+              child: SingleChildScrollView(
+                child: ComposerEmojiPanel(onSelect: _insertAtCursor),
+              ),
+            ),
+          SafeArea(
+            top: false,
+            child: _ComposerToolbar(
+              onInsertImage: _insertAtCursor,
+              emojiOpen: _emojiOpen,
+              onToggleEmoji: _toggleEmoji,
+              onBase64: _encodeBase64,
+              draftStatus: _draftStatus,
             ),
           ),
         ],
@@ -505,322 +501,172 @@ class _ComposerErrorBanner extends StatelessWidget {
   }
 }
 
-/// The topic being replied to, quoted at the top of the composer.
-/// Loading placeholder matching [_QuotedTopicCard] metrics.
-class _QuotedTopicSkeleton extends StatelessWidget {
-  const _QuotedTopicSkeleton();
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = context.colors;
-
-    return Mv2Surface(
-      padding: const EdgeInsets.all(Mv2Spacing.x4),
-      shadowed: false,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: <Widget>[
-          Container(
-            width: 72,
-            height: 16,
-            decoration: BoxDecoration(
-              color: colors.divider,
-              borderRadius: Mv2Radius.allSm,
-            ),
-          ),
-          const SizedBox(height: Mv2Spacing.x2),
-          Container(
-            width: double.infinity,
-            height: 18,
-            decoration: BoxDecoration(
-              color: colors.divider,
-              borderRadius: Mv2Radius.allSm,
-            ),
-          ),
-          const SizedBox(height: Mv2Spacing.x2),
-          FractionallySizedBox(
-            widthFactor: 0.6,
-            child: Container(
-              height: 14,
-              decoration: BoxDecoration(
-                color: colors.divider,
-                borderRadius: Mv2Radius.allSm,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-/// One-line collapsed form of the quoted topic. Tap to expand the full card
-/// again; the composer auto-collapses it while the reply is long.
-class _QuotedTopicSummary extends StatelessWidget {
-  const _QuotedTopicSummary({required this.topic, required this.onToggle});
-
+/// Compact context stays stable while typing; expansion is always explicit.
+class _ReplyContext extends StatelessWidget {
+  const _ReplyContext({
+    required this.topic,
+    required this.reply,
+    required this.expanded,
+    required this.onToggle,
+  });
   final V2Topic topic;
+  final V2Reply? reply;
+  final bool expanded;
   final VoidCallback onToggle;
 
   @override
   Widget build(BuildContext context) {
-    final colors = context.colors;
-
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onTap: onToggle,
-      child: Mv2Surface(
-        padding: const EdgeInsets.symmetric(
-          horizontal: Mv2Spacing.x3,
-          vertical: Mv2Spacing.x2,
-        ),
-        shadowed: false,
-        child: Row(
-          children: <Widget>[
-            Mv2NodeBadge(node: topic.node),
-            const SizedBox(width: Mv2Spacing.x2),
-            Expanded(
-              child: Text(
-                topic.title,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: context.text.bodySmall.copyWith(
-                  color: colors.textSecondary,
-                ),
-              ),
-            ),
-            Icon(
-              Icons.keyboard_arrow_down_rounded,
-              size: 18,
-              color: colors.textTertiary,
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _QuotedTopicCard extends StatelessWidget {
-  const _QuotedTopicCard({required this.topic});
-
-  final V2Topic topic;
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = context.colors;
-    final excerpt = topic.excerpt;
-
-    return Mv2Surface(
-      padding: const EdgeInsets.all(Mv2Spacing.x4),
-      shadowed: false,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: <Widget>[
-          Mv2NodeBadge(node: topic.node),
-          const SizedBox(height: Mv2Spacing.x2),
-          Text(
-            topic.title,
-            style: context.text.topicTitle.copyWith(color: colors.textPrimary),
-          ),
-          if (excerpt != null) ...<Widget>[
-            const SizedBox(height: Mv2Spacing.x2),
-            Text(
-              excerpt,
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-              style: context.text.bodySmall.copyWith(
-                color: colors.textSecondary,
-              ),
-            ),
-          ],
-          const SizedBox(height: Mv2Spacing.x3),
-          Row(
-            children: <Widget>[
-              Mv2Avatar(user: topic.author, size: 20),
-              const SizedBox(width: Mv2Spacing.x2),
-              Text(
-                '${topic.author.username} · ${topic.createdAtLabel}',
-                style: context.text.metadata.copyWith(
-                  color: colors.textTertiary,
-                ),
-              ),
-              const Spacer(),
-              Icon(
-                Icons.mode_comment_outlined,
-                size: 14,
-                color: colors.textTertiary,
-              ),
-              const SizedBox(width: Mv2Spacing.x1),
-              Text(
-                '${topic.replyCount}',
-                style: context.text.metadata.copyWith(
-                  color: colors.textTertiary,
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-/// Accent-soft quote of the referenced floor (`floor` query parameter).
-class _QuoteBlock extends StatelessWidget {
-  const _QuoteBlock({required this.reply});
-
-  /// The reply the composer is quoting, resolved from the topic detail.
-  final V2Reply reply;
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = context.colors;
-    final content = reply.content.trim();
-
-    return ClipRRect(
-      borderRadius: Mv2Radius.allMd,
-      child: ColoredBox(
-        color: colors.accentSoft,
-        child: IntrinsicHeight(
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: <Widget>[
-              Container(width: 3, color: colors.accent),
-              Expanded(
-                child: Padding(
-                  padding: const EdgeInsets.all(Mv2Spacing.x3),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: <Widget>[
-                      Text(
-                        '回复 @${reply.author.username}',
-                        style: context.text.bodyStrong.copyWith(
-                          color: colors.accent,
-                        ),
-                      ),
-                      if (content.isNotEmpty) ...<Widget>[
-                        const SizedBox(height: Mv2Spacing.x2),
-                        Text(
-                          content,
-                          maxLines: 4,
-                          overflow: TextOverflow.ellipsis,
-                          style: context.text.bodySmall.copyWith(
-                            color: colors.textSecondary,
-                          ),
-                        ),
-                      ],
-                    ],
+    final target = reply;
+    final excerpt = target?.content.trim() ?? topic.excerpt?.trim() ?? '';
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        InkWell(
+          onTap: onToggle,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 6),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    target == null
+                        ? '回复主题 · ${topic.title}'
+                        : '回复 @${target.author.username}',
+                    maxLines: expanded ? null : 1,
+                    overflow: expanded ? null : TextOverflow.ellipsis,
+                    style: context.text.bodySmall.copyWith(
+                      color: context.colors.textSecondary,
+                    ),
                   ),
                 ),
-              ),
-            ],
+                if (target != null)
+                  Text(
+                    ' · #${target.floor}',
+                    style: context.text.metadata.copyWith(
+                      color: context.colors.textTertiary,
+                    ),
+                  ),
+                Icon(
+                  expanded
+                      ? Icons.keyboard_arrow_up_rounded
+                      : Icons.keyboard_arrow_down_rounded,
+                  size: 20,
+                  color: context.colors.textTertiary,
+                ),
+              ],
+            ),
           ),
         ),
-      ),
+        if (excerpt.isNotEmpty && (target != null || expanded))
+          Padding(
+            padding: const EdgeInsets.only(bottom: 6),
+            child: Text(
+              excerpt,
+              maxLines: expanded ? null : 2,
+              overflow: expanded ? null : TextOverflow.ellipsis,
+              style: context.text.bodySmall.copyWith(
+                color: context.colors.textSecondary,
+              ),
+            ),
+          ),
+        if (expanded && excerpt.isEmpty && target == null)
+          Text(
+            '收起编辑器可查看主题全文',
+            style: context.text.metadata.copyWith(
+              color: context.colors.textTertiary,
+            ),
+          ),
+      ],
     );
   }
 }
 
-/// Pinned toolbar directly above the footer (`designs/03-reply-composer.png`).
-///
-/// Image + emoji + base64: V2EX is Markdown by default, and the old 引用/
-/// 预览/Markdown buttons were stubs. 表情 opens V2EX Polish's emoji library;
-/// Base64 encodes the selected text (contact-info anti-crawler convention).
 class _ComposerToolbar extends StatelessWidget {
   const _ComposerToolbar({
     required this.onInsertImage,
     required this.emojiOpen,
     required this.onToggleEmoji,
     required this.onBase64,
+    required this.draftStatus,
   });
-
   final ValueChanged<String> onInsertImage;
   final bool emojiOpen;
   final VoidCallback onToggleEmoji;
   final VoidCallback onBase64;
+  final String draftStatus;
 
   @override
   Widget build(BuildContext context) {
-    final colors = context.colors;
-
-    return ColoredBox(
-      color: colors.background,
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: <Widget>[
-          Container(height: 1, color: colors.divider),
-          Padding(
-            padding: const EdgeInsets.symmetric(vertical: Mv2Spacing.x1),
-            child: Row(
-              children: <Widget>[
-                ComposerImageButton(onInsert: onInsertImage),
-                Mv2ToolbarButton(
-                  label: '表情',
-                  icon: Icons.sentiment_satisfied_alt_outlined,
-                  active: emojiOpen,
-                  onPressed: onToggleEmoji,
-                ),
-                Mv2ToolbarButton(
-                  label: '编码',
-                  leadingText: '64',
-                  onPressed: onBase64,
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-/// Pinned footer: Markdown hint on the left, real draft status on the right.
-class _ComposerFooter extends StatelessWidget {
-  const _ComposerFooter({required this.draftSaved});
-
-  /// True while the editor holds text that is persisted (or about to be).
-  final bool draftSaved;
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = context.colors;
-    final statusColor = draftSaved ? colors.success : colors.textTertiary;
-
-    return ColoredBox(
-      color: colors.background,
-      child: SafeArea(
-        top: false,
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(
-            Mv2Spacing.pageNarrow,
-            Mv2Spacing.x2,
-            Mv2Spacing.pageNarrow,
-            Mv2Spacing.x2,
-          ),
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Divider(height: 1, color: context.colors.divider),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
           child: Row(
-            children: <Widget>[
-              Text(
-                '支持 Markdown',
-                style: context.text.metadata.copyWith(
-                  color: colors.textTertiary,
+            children: [
+              ComposerImageButton(onInsert: onInsertImage),
+              Mv2ToolbarButton(
+                label: '表情',
+                icon: Icons.sentiment_satisfied_alt_outlined,
+                active: emojiOpen,
+                onPressed: onToggleEmoji,
+              ),
+              PopupMenuButton<String>(
+                tooltip: '更多工具',
+                icon: Icon(
+                  Icons.more_horiz,
+                  color: context.colors.textSecondary,
+                ),
+                onSelected: (value) {
+                  if (value == 'base64') onBase64();
+                  if (value == 'markdown') {
+                    showDialog<void>(
+                      context: context,
+                      builder: (context) => AlertDialog(
+                        title: const Text('Markdown 格式'),
+                        content: const Text(
+                          '**粗体**\n*斜体*\n[链接文字](网址)\n> 引用内容\n`行内代码`\n\nBase64 编码：先在正文中选中文字，再从更多工具中选择编码。',
+                        ),
+                        actions: [
+                          TextButton(
+                            onPressed: () => Navigator.pop(context),
+                            child: const Text('知道了'),
+                          ),
+                        ],
+                      ),
+                    );
+                  }
+                },
+                itemBuilder: (_) => const [
+                  PopupMenuItem(
+                    value: 'markdown',
+                    child: Text('Markdown 格式帮助'),
+                  ),
+                  PopupMenuItem(
+                    value: 'base64',
+                    child: Text('将选中文字编码为 Base64'),
+                  ),
+                ],
+              ),
+              Expanded(
+                child: Text(
+                  draftStatus,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  textAlign: TextAlign.end,
+                  style: context.text.metadata.copyWith(
+                    color: draftStatus.contains('失败')
+                        ? context.colors.danger
+                        : context.colors.textTertiary,
+                  ),
                 ),
               ),
-              const Spacer(),
-              Icon(
-                draftSaved ? Icons.check_circle : Icons.radio_button_unchecked,
-                size: 15,
-                color: statusColor,
-              ),
-              const SizedBox(width: Mv2Spacing.x1),
-              Text(
-                draftSaved ? '草稿已保存' : '暂无草稿',
-                style: context.text.metadata.copyWith(color: statusColor),
-              ),
+              const SizedBox(width: 12),
             ],
           ),
         ),
-      ),
+      ],
     );
   }
 }

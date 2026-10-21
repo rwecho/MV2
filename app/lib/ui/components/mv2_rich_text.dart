@@ -7,6 +7,7 @@ import 'package:html/dom.dart' as dom;
 import 'package:html/parser.dart' as html_parser;
 
 import '../../core/parser/html_dom.dart';
+import '../../shared/emoji/mv2_emoji_library.dart';
 import '../../core/telemetry/mv2_analytics.dart';
 import '../../core/text/base64_text.dart';
 import '../../design_system/theme/mv2_theme.dart';
@@ -118,6 +119,9 @@ class Mv2RichText extends StatefulWidget {
   @visibleForTesting
   static bool isEmoticon(dom.Element node) {
     if (node.localName != 'img') return false;
+    if (Mv2EmojiLibrary.imageToken(node.attributes['src'] ?? '') != null) {
+      return true;
+    }
     final width = int.tryParse(node.attributes['width'] ?? '');
     final height = int.tryParse(node.attributes['height'] ?? '');
     if ((width ?? 0) > _maxEmoticonSize || (height ?? 0) > _maxEmoticonSize) {
@@ -651,7 +655,8 @@ class _Mv2RichTextState extends State<Mv2RichText> {
           if (head.isNotEmpty) {
             spans.addAll(_textWithFloorRefs(context, head, style));
           }
-          final href = (nodes[mentionAnchor] as dom.Element).attributes['href']!;
+          final href =
+              (nodes[mentionAnchor] as dom.Element).attributes['href']!;
           final adjacentFloor = _adjacentFloorRef(nodes, mentionAnchor, href);
           final recognizer = TapGestureRecognizer();
           if (adjacentFloor != null) {
@@ -811,11 +816,14 @@ class _Mv2RichTextState extends State<Mv2RichText> {
             width: size,
             height: size,
             child: CachedNetworkImage(
-              imageUrl: src,
+              imageUrl: Mv2EmojiLibrary.cachedImageUrl(src),
+              fadeInDuration: Duration.zero,
+              fadeOutDuration: Duration.zero,
               fit: BoxFit.contain,
               placeholder: (context, _) => const SizedBox.shrink(),
-              errorWidget: (context, _, _) =>
-                  alt.isEmpty ? const SizedBox.shrink() : Text(alt, style: style),
+              errorWidget: (context, _, _) => alt.isEmpty
+                  ? const SizedBox.shrink()
+                  : Text(alt, style: style),
             ),
           ),
         ),
@@ -861,11 +869,7 @@ class _Mv2RichTextState extends State<Mv2RichText> {
       if (floor == null) continue;
       if (match.start > cursor) {
         spans.addAll(
-          _textWithBase64(
-            context,
-            text.substring(cursor, match.start),
-            style,
-          ),
+          _textWithBase64(context, text.substring(cursor, match.start), style),
         );
       }
       spans.add(_floorRefBadge(context, floor, attached: false));

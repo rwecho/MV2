@@ -124,6 +124,29 @@ abstract final class Mv2ThemeData {
           color: colors.textPrimary,
         ),
       ),
+      navigationBarTheme: NavigationBarThemeData(
+        backgroundColor: colors.surface,
+        surfaceTintColor: Colors.transparent,
+        indicatorColor: colors.accentSoft,
+        iconTheme: WidgetStateProperty.resolveWith(
+          (states) => IconThemeData(
+            color: states.contains(WidgetState.selected)
+                ? colors.accent
+                : colors.textSecondary,
+            size: 24,
+          ),
+        ),
+        labelTextStyle: WidgetStateProperty.resolveWith(
+          (states) => typography.metadata.copyWith(
+            color: states.contains(WidgetState.selected)
+                ? colors.accent
+                : colors.textSecondary,
+            fontWeight: states.contains(WidgetState.selected)
+                ? FontWeight.w600
+                : FontWeight.w400,
+          ),
+        ),
+      ),
       iconTheme: IconThemeData(color: colors.textSecondary, size: 22),
       cardTheme: CardThemeData(
         color: colors.surface,
@@ -146,9 +169,7 @@ abstract final class Mv2ThemeData {
         surfaceTintColor: Colors.transparent,
         // Material 3's own default (640pt) would leave a sheet floating in the
         // middle of the unfolded Duo; this keeps them as wide as the pages.
-        constraints: const BoxConstraints(
-          maxWidth: Mv2Spacing.maxSheetWidth,
-        ),
+        constraints: const BoxConstraints(maxWidth: Mv2Spacing.maxSheetWidth),
         shape: const RoundedRectangleBorder(
           borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
         ),

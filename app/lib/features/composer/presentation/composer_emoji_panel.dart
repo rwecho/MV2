@@ -66,12 +66,11 @@ class _ComposerEmojiPanelState extends State<ComposerEmojiPanel> {
                   Mv2Spacing.x3,
                   Mv2Spacing.x3,
                 ),
-                gridDelegate:
-                    const SliverGridDelegateWithFixedCrossAxisCount(
-                      crossAxisCount: 8,
-                      mainAxisSpacing: Mv2Spacing.x2,
-                      crossAxisSpacing: Mv2Spacing.x2,
-                    ),
+                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: 8,
+                  mainAxisSpacing: Mv2Spacing.x2,
+                  crossAxisSpacing: Mv2Spacing.x2,
+                ),
                 itemCount: group.emoji.length,
                 itemBuilder: (context, index) {
                   final emoji = group.emoji[index];
@@ -100,7 +99,9 @@ class _EmojiGlyph extends StatelessWidget {
     final imageUrl = emoji.imageUrl;
     if (imageUrl != null) {
       return CachedNetworkImage(
-        imageUrl: imageUrl,
+        imageUrl: Mv2EmojiLibrary.cachedImageUrl(imageUrl),
+        fadeInDuration: Duration.zero,
+        fadeOutDuration: Duration.zero,
         width: 30,
         height: 30,
         fit: BoxFit.contain,
@@ -109,7 +110,9 @@ class _EmojiGlyph extends StatelessWidget {
           emoji.token,
           maxLines: 1,
           overflow: TextOverflow.clip,
-          style: context.text.badge.copyWith(color: context.colors.textTertiary),
+          style: context.text.badge.copyWith(
+            color: context.colors.textTertiary,
+          ),
         ),
       );
     }

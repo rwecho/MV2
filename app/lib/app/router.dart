@@ -164,6 +164,7 @@ final routerProvider = Provider<GoRouter>((ref) {
           name: state.matchedLocation,
           child: TopicDetailPage(
             topicId: int.tryParse(state.pathParameters['id'] ?? '') ?? 0,
+            initialTitle: state.extra is String ? state.extra as String : null,
             // `/topic/123?floor=4` (from a `#reply4` link) opens at that reply.
             initialFloor: int.tryParse(
               state.uri.queryParameters['floor'] ?? '',

@@ -2,7 +2,7 @@ import 'dart:async';
 
 import 'package:adaptive_platform_ui/adaptive_platform_ui.dart';
 import 'package:adaptive_platform_ui/src/toolbar/toolbar_chrome_scope.dart'
-        show ToolbarChromeScope;
+    show ToolbarChromeScope;
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart' show Clipboard, ClipboardData;
@@ -11,6 +11,7 @@ import 'package:go_router/go_router.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../../shell/application/tablet_topic_pane.dart';
 import '../../../core/data/session_once.dart';
 import '../../../core/data/v2ex_providers.dart';
 import '../../../core/errors/failures.dart';
@@ -291,10 +292,12 @@ class TopicDetailPage extends ConsumerStatefulWidget {
     super.key,
     required this.topicId,
     this.initialFloor,
+    this.initialTitle,
     this.inPane = false,
   });
 
   final int topicId;
+  final String? initialTitle;
 
   /// Reply floor to scroll to once loaded (`/topic/123?floor=4`).
   final int? initialFloor;
@@ -310,9 +313,14 @@ class TopicDetailPage extends ConsumerStatefulWidget {
 
 class _TopicDetailPageState extends ConsumerState<TopicDetailPage> {
   bool _collapsed = false;
+  final Mv2ScrollCollapseController _collapseController =
+      Mv2ScrollCollapseController();
 
   bool _onScrollNotification(ScrollNotification notification) {
-    final collapsed = mv2CollapseFromScroll(notification);
+    final collapsed = _collapseController.handle(
+      notification,
+      isCollapsed: _collapsed,
+    );
     if (collapsed != null && collapsed != _collapsed) {
       setState(() => _collapsed = collapsed);
     }
@@ -334,26 +342,30 @@ class _TopicDetailPageState extends ConsumerState<TopicDetailPage> {
     final favorited = actions.favoritedOf(loaded?.favorited ?? false);
     final thanked = actions.thankedOf(loaded?.thanked ?? false);
 
-    // No custom `leading`: the chrome draws its own back affordance only when
-    // the page brings none, and its layout reserves space for it — a custom
-    // one made the title overlap the back button on the phone.
-    // 标题走 titleWidget:包会把原生标题隐藏、把它**居中**;两侧留白避开
-    // 返回钮与操作,长标题截断。手机工具条只留 收藏 + ⋯(感谢在文章操作条
-    // 里,不重复);Duo 尾条有空间,保留 收藏 / 感谢 / ⋯ 三个。
     final inDuoBar =
         ToolbarChromeScope.maybeOf(context)?.hostsDuoControls ?? false;
     return AdaptiveAppBar(
-      title: loaded?.topic.title,
-      titleWidget: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 96),
-        child: Text(
-          loaded?.topic.title ?? '',
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          textAlign: TextAlign.center,
-          style: context.text.itemTitle.copyWith(color: colors.textPrimary),
-        ),
-      ),
+      title: widget.inPane
+          ? null
+          : (loaded?.topic.title ?? widget.initialTitle),
+      titleWidget: widget.inPane
+          ? null
+          : Padding(
+              // Material already constrains titles between leading/actions.
+              // Only UIKit's full-width overlay needs its own button clearance.
+              padding: EdgeInsets.symmetric(
+                horizontal: PlatformInfo.isIOS && !inDuoBar ? 96 : 0,
+              ),
+              child: Text(
+                loaded?.topic.title ?? widget.initialTitle ?? '',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                textAlign: TextAlign.start,
+                style: context.text.itemTitle.copyWith(
+                  color: colors.textPrimary,
+                ),
+              ),
+            ),
       actions: <AdaptiveAppBarAction>[
         AdaptiveAppBarAction(
           iosSymbol: favorited ? 'star.fill' : 'star',
@@ -394,6 +406,41 @@ class _TopicDetailPageState extends ConsumerState<TopicDetailPage> {
     );
   }
 
+  Widget _paneTitle(BuildContext context, AsyncValue<V2TopicDetail> detail) {
+    final title = detail.value?.topic.title ?? widget.initialTitle ?? '话题';
+    return Container(
+      key: const ValueKey('topic-pane-title'),
+      constraints: const BoxConstraints(minHeight: 48),
+      decoration: BoxDecoration(
+        color: context.colors.background,
+        border: Border(bottom: BorderSide(color: context.colors.border)),
+      ),
+      padding: const EdgeInsets.only(left: Mv2Spacing.pageNarrow, right: 4),
+      child: Row(
+        children: [
+          Expanded(
+            child: Tooltip(
+              message: title,
+              child: Text(
+                title,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: context.text.itemTitle.copyWith(
+                  color: context.colors.textPrimary,
+                ),
+              ),
+            ),
+          ),
+          IconButton(
+            tooltip: '关闭话题',
+            icon: const Icon(Icons.close_rounded),
+            onPressed: () => ref.read(tabletTopicPaneProvider.notifier).close(),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final args = TopicDetailArgs(widget.topicId);
@@ -413,6 +460,9 @@ class _TopicDetailPageState extends ConsumerState<TopicDetailPage> {
       },
       child: Mv2PageScaffold(
         appBar: _topicAppBar(context, ref, detail),
+        // Reading context stays available even after the article title scrolls
+        // away. The reply composer may still retreat while reading.
+        pinnedHeader: widget.inPane ? _paneTitle(context, detail) : null,
         bottomBar: AnimatedSlide(
           // 1.2× the reply bar height clears its own safe-area padding.
           offset: _collapsed ? const Offset(0, 1.2) : Offset.zero,
@@ -794,7 +844,6 @@ class _TopicDetailBodyState extends ConsumerState<_TopicDetailBody> {
   /// `topic_read`。平板右栏切换主题/关闭会重建或销毁本 State,计时随之
   /// 归零或结算。
   late final DateTime _enteredAt = DateTime.now();
-
 
   @override
   void initState() {

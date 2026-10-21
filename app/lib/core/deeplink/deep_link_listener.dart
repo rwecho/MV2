@@ -53,6 +53,7 @@ class _Mv2DeepLinkListenerState extends ConsumerState<Mv2DeepLinkListener>
 
   /// Last link we opened or prompted for; stops the resume loop from nagging.
   String? _lastSeen;
+  bool _clipboardDialogOpen = false;
 
   /// 上次已处理过的系统剪贴板计数（iOS `changeCount`），持久化到
   /// SharedPreferences：同一段剪贴板内容跨冷启动只处理一次，否则每次
@@ -78,15 +79,17 @@ class _Mv2DeepLinkListenerState extends ConsumerState<Mv2DeepLinkListener>
     // widget mounts, so check the pasteboard once here as well — after the
     // persisted change counter loaded, or the first launch would re-read a
     // clipboard it has already offered on.
-    SharedPreferences.getInstance().then((prefs) {
-      _handledPasteboardCount = prefs.getInt(_pasteboardCountKey);
-      _pasteboardCountReady = true;
-      unawaited(_offerClipboardLink());
-    }).catchError((Object _) {
-      // 测试/无插件环境：没有持久化计数也照样工作（退化为每次会话检测）。
-      _pasteboardCountReady = true;
-      unawaited(_offerClipboardLink());
-    });
+    SharedPreferences.getInstance()
+        .then((prefs) {
+          _handledPasteboardCount = prefs.getInt(_pasteboardCountKey);
+          _pasteboardCountReady = true;
+          unawaited(_offerClipboardLink());
+        })
+        .catchError((Object _) {
+          // 测试/无插件环境：没有持久化计数也照样工作（退化为每次会话检测）。
+          _pasteboardCountReady = true;
+          unawaited(_offerClipboardLink());
+        });
   }
 
   /// Home Screen quick actions (long-press the app icon). The item's `route` is
@@ -141,12 +144,14 @@ class _Mv2DeepLinkListenerState extends ConsumerState<Mv2DeepLinkListener>
       // notifications read. Refreshing the account only moves the badge.
       unawaited(ref.read(authControllerProvider.notifier).refreshAccount());
     });
-    unawaited(push.start().then((_) {
-      if (!mounted) return;
-      if (ref.read(authControllerProvider).value?.isSignedIn ?? false) {
-        unawaited(push.register());
-      }
-    }));
+    unawaited(
+      push.start().then((_) {
+        if (!mounted) return;
+        if (ref.read(authControllerProvider).value?.isSignedIn ?? false) {
+          unawaited(push.register());
+        }
+      }),
+    );
   }
 
   void _openPushPayload(Map<String, Object?> data) {
@@ -184,7 +189,9 @@ class _Mv2DeepLinkListenerState extends ConsumerState<Mv2DeepLinkListener>
     final route = Mv2DeepLink.routeFor(raw);
     if (route == null) return;
     _lastSeen = Mv2DeepLink.urlIn(raw) ?? raw;
-    Mv2Analytics.logDeeplinkOpen(kind: raw.startsWith('mv2://') ? 'mv2' : 'web');
+    Mv2Analytics.logDeeplinkOpen(
+      kind: raw.startsWith('mv2://') ? 'mv2' : 'web',
+    );
     _navigate(route, source: 'deeplink');
   }
 
@@ -223,7 +230,7 @@ class _Mv2DeepLinkListenerState extends ConsumerState<Mv2DeepLinkListener>
   /// (`detectPatterns`). Only a genuinely new link pays the prompt, with the
   /// offer appearing right after it.
   Future<void> _offerClipboardLink() async {
-    if (!_pasteboardCountReady) return;
+    if (!_pasteboardCountReady || _clipboardDialogOpen) return;
     final probe = ref.read(clipboardProbeProvider);
     final count = await probe.changeCount();
     final counted = count != null;
@@ -243,7 +250,6 @@ class _Mv2DeepLinkListenerState extends ConsumerState<Mv2DeepLinkListener>
       return;
     }
     if (!mounted) return;
-    final messenger = ScaffoldMessenger.of(context);
     if (counted) await _rememberPasteboardCount(count);
 
     final text = data?.text;
@@ -252,21 +258,58 @@ class _Mv2DeepLinkListenerState extends ConsumerState<Mv2DeepLinkListener>
     if (route == null || url == null || url == _lastSeen) return;
     _lastSeen = url;
 
-    messenger.hideCurrentSnackBar();
+    if (!mounted || _clipboardDialogOpen) return;
+    final dialogContext = rootNavigatorKey.currentContext;
+    if (dialogContext == null || !dialogContext.mounted) return;
+    final segments = Uri.parse(route).pathSegments;
+    final destination = switch (segments.firstOrNull) {
+      'topic' => '话题 #${segments.last}',
+      'node' => '节点 · ${Uri.decodeComponent(segments.last)}',
+      'member' => '用户 · ${Uri.decodeComponent(segments.last)}',
+      'login' => '登录页面',
+      _ => 'V2EX 页面',
+    };
+    _clipboardDialogOpen = true;
     Mv2Analytics.logClipboardOffer(action: 'shown');
-    messenger.showSnackBar(
-      SnackBar(
-        content: const Text('检测到 V2EX 链接'),
-        duration: const Duration(seconds: 6),
-        action: SnackBarAction(
-          label: '打开',
-          onPressed: () {
-            Mv2Analytics.logClipboardOffer(action: 'accepted');
-            _navigate(route, source: 'clipboard');
-          },
+    try {
+      final open = await showDialog<bool>(
+        context: dialogContext,
+        builder: (context) => AlertDialog(
+          title: const Text('打开剪贴板中的链接？'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(destination),
+              const SizedBox(height: 8),
+              Text(
+                url,
+                maxLines: 3,
+                overflow: TextOverflow.ellipsis,
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('暂不'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('打开'),
+            ),
+          ],
         ),
-      ),
-    );
+      );
+      if (!mounted) return;
+      if (open == true) {
+        Mv2Analytics.logClipboardOffer(action: 'accepted');
+        _navigate(route, source: 'clipboard');
+      }
+    } finally {
+      _clipboardDialogOpen = false;
+    }
   }
 
   Future<void> _rememberPasteboardCount(int count) async {
@@ -283,7 +326,10 @@ class _Mv2DeepLinkListenerState extends ConsumerState<Mv2DeepLinkListener>
   Widget build(BuildContext context) {
     // Signing out must stop the worker from polling the previous account's
     // feed; the next `/notifications` visit registers the new one.
-    ref.listen<AsyncValue<AuthSession>>(authControllerProvider, (previous, next) {
+    ref.listen<AsyncValue<AuthSession>>(authControllerProvider, (
+      previous,
+      next,
+    ) {
       final wasSignedIn = previous?.value?.isSignedIn ?? false;
       final isSignedIn = next.value?.isSignedIn ?? false;
       if (wasSignedIn && !isSignedIn) {

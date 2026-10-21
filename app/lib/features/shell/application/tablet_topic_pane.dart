@@ -6,9 +6,14 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 /// Only written on wide viewports (`mv2IsTwoPane`) — phones keep pushing the
 /// full-screen `/topic/:id` route.
 class TabletTopicPaneState {
-  const TabletTopicPaneState({required this.topicId, this.floor});
+  const TabletTopicPaneState({
+    required this.topicId,
+    this.floor,
+    this.initialTitle,
+  });
 
   final int topicId;
+  final String? initialTitle;
 
   /// Reply floor to scroll to, mirroring `/topic/123?floor=4`.
   final int? floor;
@@ -18,8 +23,12 @@ class TabletTopicPaneController extends Notifier<TabletTopicPaneState?> {
   @override
   TabletTopicPaneState? build() => null;
 
-  void open(int topicId, int? floor) {
-    state = TabletTopicPaneState(topicId: topicId, floor: floor);
+  void open(int topicId, int? floor, {String? initialTitle}) {
+    state = TabletTopicPaneState(
+      topicId: topicId,
+      floor: floor,
+      initialTitle: initialTitle,
+    );
   }
 
   void close() => state = null;

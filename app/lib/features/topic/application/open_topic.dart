@@ -24,6 +24,7 @@ void openTopic(
   BuildContext context,
   int topicId, {
   int? floor,
+  String? initialTitle,
   String source = Mv2Events.unspecified,
 }) {
   Mv2Analytics.logTopicOpen(
@@ -34,7 +35,7 @@ void openTopic(
   if (mv2IsTwoPane(context)) {
     ProviderScope.containerOf(context, listen: false)
         .read(tabletTopicPaneProvider.notifier)
-        .open(topicId, floor);
+        .open(topicId, floor, initialTitle: initialTitle);
     // If the call came from a sheet card (用户主页, 我的主题, 历史, …), the
     // topic now shows in the shell's pane behind it — close the card to
     // reveal it. From the left-pane lists the enclosing route is the shell
@@ -47,5 +48,8 @@ void openTopic(
     }
     return;
   }
-  context.push('/topic/$topicId${floor != null ? '?floor=$floor' : ''}');
+  context.push(
+    '/topic/$topicId${floor != null ? '?floor=$floor' : ''}',
+    extra: initialTitle,
+  );
 }

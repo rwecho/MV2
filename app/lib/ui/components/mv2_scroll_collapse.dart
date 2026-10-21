@@ -1,45 +1,87 @@
 import 'package:flutter/rendering.dart';
 import 'package:flutter/widgets.dart';
 
-/// Shared scroll rule for the collapsing page chrome.
+/// Stateful scroll rule shared by pages that collapse chrome while reading.
 ///
-/// Scrolling toward the end of the list (reading down) collapses the page
-/// header / bottom bars; scrolling back expands them again. Returns `null` when
-/// the notification should leave the current state untouched, so callers can
-/// ignore horizontal (PageView) scrolls and idle/overscroll events.
-///
-/// [ScrollNotification.metrics] `axis` gates the horizontal `PageView` in the
-/// home feed: only the inner vertical lists drive the chrome.
-bool? mv2CollapseFromScroll(ScrollNotification notification) {
-  if (notification.metrics.axis != Axis.vertical) return null;
+/// A brief counter-scroll should not immediately reopen/close the chrome. Keep
+/// a running distance in the current direction and switch only after the user
+/// has moved far enough. Reaching the top always expands immediately. Nested
+/// vertical scrollables do not control the page chrome.
+class Mv2ScrollCollapseController {
+  Mv2ScrollCollapseController({
+    this.collapseDistance = 28,
+    this.expandDistance = 20,
+    this.maxNotificationDepth = 0,
+  });
 
-  // The list is back at its very top: always expand, even mid-fling.
-  if (notification.metrics.pixels <= 0) return false;
+  final double collapseDistance;
+  final double expandDistance;
+  final int maxNotificationDepth;
 
-  if (notification is UserScrollNotification) {
-    return switch (notification.direction) {
-      // Reading on — collapse once we are past a small slop so a tiny nudge at
-      // the top does not hide the header.
-      ScrollDirection.reverse => notification.metrics.pixels > _slop,
-      ScrollDirection.forward => false,
-      ScrollDirection.idle => null,
-    };
-  }
+  double _distance = 0;
+  ScrollDirection _direction = ScrollDirection.idle;
 
-  // Raw finger deltas keep the rule working for programmatic/one-shot drags
-  // that do not emit a direction change. Gated on [dragDetails] so a fling's
-  // ballistic bounce cannot flip the chrome back and forth.
-  if (notification is ScrollUpdateNotification &&
-      notification.dragDetails != null) {
+  /// Returns the new collapsed state, or null when it has not changed.
+  bool? handle(ScrollNotification notification, {required bool isCollapsed}) {
+    if (notification.metrics.axis != Axis.vertical ||
+        notification.depth > maxNotificationDepth) {
+      return null;
+    }
+
+    if (notification.metrics.pixels <= 0) {
+      _reset();
+      return isCollapsed ? false : null;
+    }
+
+    if (notification is UserScrollNotification) {
+      if (notification.direction == ScrollDirection.idle) {
+        _reset();
+        return null;
+      }
+      if (notification.direction != _direction) {
+        _direction = notification.direction;
+        _distance = 0;
+      }
+      return null;
+    }
+
+    if (notification is! ScrollUpdateNotification ||
+        notification.dragDetails == null) {
+      return null;
+    }
+
     final delta = notification.scrollDelta ?? 0;
-    if (delta > _deltaSlop) return true;
-    if (delta < -_deltaSlop) return false;
+    if (delta.abs() < _deltaSlop) return null;
+    final direction = delta > 0
+        ? ScrollDirection.reverse
+        : ScrollDirection.forward;
+    if (direction != _direction) {
+      _direction = direction;
+      _distance = 0;
+    }
+    _distance += delta.abs();
+
+    if (!isCollapsed &&
+        direction == ScrollDirection.reverse &&
+        notification.metrics.pixels > _topSlop &&
+        _distance >= collapseDistance) {
+      _distance = 0;
+      return true;
+    }
+    if (isCollapsed &&
+        direction == ScrollDirection.forward &&
+        _distance >= expandDistance) {
+      _distance = 0;
+      return false;
+    }
+    return null;
   }
-  return null;
+
+  void _reset() {
+    _distance = 0;
+    _direction = ScrollDirection.idle;
+  }
 }
 
-/// Ignore reverse direction within the first few pixels of travel.
-const double _slop = 8;
-
-/// Minimum per-frame delta before a raw scroll update flips the chrome.
+const double _topSlop = 8;
 const double _deltaSlop = 1;

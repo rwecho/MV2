@@ -1,10 +1,12 @@
 import 'package:adaptive_platform_ui/adaptive_platform_ui.dart';
 
 import '../../../ui/components/adaptive/mv2_adaptive_destinations.dart';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../ui/utils/mv2_breakpoints.dart';
 import '../../../core/data/home_tab.dart';
 import '../../../core/telemetry/mv2_analytics.dart';
 import '../../../design_system/theme/mv2_theme.dart';
@@ -46,10 +48,10 @@ class _HomeFeedPageState extends ConsumerState<HomeFeedPage> {
   /// listener does not fight the explicit `animateToPage`.
   bool _animatingFromTap = false;
 
-  /// True while the page header is shrunk to just the tab row.
-  /// Last collapse state pushed to the shell; the page header itself is part
-  /// of the fixed toolbar now, so this only keeps that shared state in step.
+  /// Hide the toolbar while reading; category tabs stay visible.
   bool _barCollapsed = false;
+  final Mv2ScrollCollapseController _collapseController =
+      Mv2ScrollCollapseController(maxNotificationDepth: 1);
 
   @override
   void initState() {
@@ -67,9 +69,12 @@ class _HomeFeedPageState extends ConsumerState<HomeFeedPage> {
 
   /// Reading down hides the big header (and the shell's bottom bar); scrolling
   /// back brings them in again. Horizontal PageView scrolls are ignored by
-  /// [mv2CollapseFromScroll].
+  /// [Mv2ScrollCollapseController].
   bool _onScrollNotification(ScrollNotification notification) {
-    final collapsed = mv2CollapseFromScroll(notification);
+    final collapsed = _collapseController.handle(
+      notification,
+      isCollapsed: _barCollapsed,
+    );
     if (collapsed != null && collapsed != _barCollapsed) {
       setState(() => _barCollapsed = collapsed);
       ref.read(shellBarCollapsedProvider.notifier).set(collapsed);
@@ -92,6 +97,7 @@ class _HomeFeedPageState extends ConsumerState<HomeFeedPage> {
   @override
   Widget build(BuildContext context) {
     final tab = ref.watch(homeTabProvider);
+    final twoPane = mv2IsTwoPane(context);
 
     // Selection can also change outside a swipe — restoring the persisted tab
     // after hydration. Jump (not animate) there so launch does not sweep across
@@ -102,39 +108,37 @@ class _HomeFeedPageState extends ConsumerState<HomeFeedPage> {
       _pageController.jumpToPage(next.index);
     });
 
-    // Feed header → the fixed toolbar: title, subtitle and the search action
-    // are published to `adaptive_platform_ui`'s chrome (which on the Duo draws
-    // them in the trailing capsule bar) instead of scrolling away with the
-    // list. The manual collapse is therefore gone — the native toolbar
-    // minimises on its own.
-    // 头部整体收缩:向下滚动时,内容整体上移、穿进玻璃工具条之下,
-    // 标签条与列表获得其空间;向上滚动恢复完整让位。
-    final topInset = _barCollapsed
-        ? MediaQuery.paddingOf(context).top + 8.0
+    // The hosted iOS toolbar overlays the body; Android reserves its animated
+    // app-bar height itself. Once hidden, only the status-bar safe area remains.
+    final topInset = twoPane
+        ? MediaQuery.paddingOf(context).top
+        : _barCollapsed
+        ? (PlatformInfo.isAndroid ? 0.0 : MediaQuery.paddingOf(context).top)
         : mv2ChromeTopInset(context);
 
     return AdaptiveScaffold(
       resizeToAvoidBottomInset: false,
+      appBarHidden: _barCollapsed,
       appBar: AdaptiveAppBar(
-        // 标题随滚动**折叠**:展开态大字+副标题,下滚收成工具条小字(标题
-        // 始终可见,不消失),上滚再展开。
-        // 标题随滚动折叠(28→16 再展开),不带副标题;去掉包会裁剪的
-        // 状态栏 padding——带内标题区本就定位在状态栏之下。
-        titleWidget: AnimatedSize(
-          duration: Mv2Motion.tab,
-          curve: Mv2Motion.standard,
-          alignment: Alignment.bottomLeft,
-          child: AnimatedDefaultTextStyle(
-            key: const ValueKey<String>('mv2-feed-bar-title'),
-            duration: Mv2Motion.tab,
-            curve: Mv2Motion.standard,
-            style: (_barCollapsed
-                    ? context.text.itemTitle
-                    : context.text.sectionTitle)
-                .copyWith(color: context.colors.textPrimary),
-            child: const Text('MV2'),
-          ),
-        ),
+        // The complete toolbar is hidden while reading, including its actions.
+        titleWidget: twoPane
+            ? null
+            : AnimatedSize(
+                duration: Mv2Motion.tab,
+                curve: Mv2Motion.standard,
+                alignment: Alignment.bottomLeft,
+                child: AnimatedDefaultTextStyle(
+                  key: const ValueKey<String>('mv2-feed-bar-title'),
+                  duration: Mv2Motion.tab,
+                  curve: Mv2Motion.standard,
+                  style:
+                      (_barCollapsed
+                              ? context.text.itemTitle
+                              : context.text.sectionTitle)
+                          .copyWith(color: context.colors.textPrimary),
+                  child: const Text('MV2'),
+                ),
+              ),
         actions: <AdaptiveAppBarAction>[
           AdaptiveAppBarAction(
             iosSymbol: 'magnifyingglass',
@@ -160,23 +164,30 @@ class _HomeFeedPageState extends ConsumerState<HomeFeedPage> {
             height: topInset,
             width: double.infinity,
           ),
-          // 头部收缩:向下滚动时标签条收起,把垂直空间让给下面的列表;
-          // 向上滚动再展开。
-          AnimatedSize(
-            duration: Mv2Motion.tab,
-            curve: Mv2Motion.standard,
-            alignment: Alignment.topCenter,
-            child: _barCollapsed
-                ? const SizedBox(width: double.infinity)
-                : Mv2TabStrip(
-                    labels: <String>[
-                      for (final tab in HomeTab.values) tab.label,
-                    ],
-                    selectedIndex: tab.index,
-                    onChanged: _onTabSelected,
+          if (twoPane)
+            SizedBox(
+              height: 48,
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: Mv2Spacing.pageNarrow,
                   ),
+                  child: Text(
+                    'MV2',
+                    style: context.text.itemTitle.copyWith(
+                      color: context.colors.textPrimary,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          Mv2TabStrip(
+            labels: <String>[for (final tab in HomeTab.values) tab.label],
+            selectedIndex: tab.index,
+            onChanged: _onTabSelected,
           ),
-          if (!_barCollapsed) const SizedBox(height: Mv2Spacing.x3),
+          const SizedBox(height: Mv2Spacing.x3),
           Expanded(
             child: NotificationListener<ScrollNotification>(
               onNotification: _onScrollNotification,
@@ -249,7 +260,12 @@ class _TopicFeedBody extends ConsumerWidget {
                   final topic = topics[index];
                   return TopicItem(
                     topic: topic,
-                    onTap: () => openTopic(context, topic.id, source: 'feed'),
+                    onTap: () => openTopic(
+                      context,
+                      topic.id,
+                      initialTitle: topic.title,
+                      source: 'feed',
+                    ),
                   );
                 },
               ),

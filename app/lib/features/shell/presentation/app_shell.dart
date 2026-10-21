@@ -9,7 +9,9 @@ import 'package:multi_split_view/multi_split_view.dart';
 import '../../../design_system/theme/mv2_theme.dart';
 import '../../../design_system/tokens/mv2_spacing.dart';
 import '../../../ui/components/adaptive/mv2_adaptive_destinations.dart';
+
 import 'package:mv2/ui/components/adaptive/mv2_tabs.dart';
+
 import '../../../ui/components/states/mv2_state_view.dart';
 import '../../../ui/utils/mv2_breakpoints.dart';
 import '../../auth/application/auth_controller.dart';
@@ -190,7 +192,15 @@ class _AppShellState extends ConsumerState<AppShell> {
         ),
       ),
       bottomNavigationBar: AdaptiveBottomNavigationBar(
-        selectedIndex: mv2BarIndexForBranch(widget.navigationShell.currentIndex),
+        // This package maps Android's value to the indicator background, and
+        // iOS's value to the foreground tint.
+        selectedItemColor: PlatformInfo.isIOS
+            ? context.colors.accent
+            : context.colors.accentSoft,
+        unselectedItemColor: context.colors.textSecondary,
+        selectedIndex: mv2BarIndexForBranch(
+          widget.navigationShell.currentIndex,
+        ),
         onTap: (int index) => _onSelect(context, _barOrder[index]),
         items: mv2AdaptiveDestinations(
           notificationUnread: ref.watch(notificationUnreadProvider),
@@ -240,29 +250,36 @@ class _AppShellState extends ConsumerState<AppShell> {
       controller: controller,
       onDividerDragStart: (_) => _draggingSplit = true,
       onDividerDragEnd: (_) => _persistSplitRatio(windowWidth),
-      dividerBuilder: (axis, index, resizable, dragging, highlighted,
-              themeData) =>
-          KeyedSubtree(
-        key: const Key('pane_divider'),
-        child: VerticalDivider(
-          width: paneDividerThickness,
-          thickness: dragging || highlighted ? 3.0 : 1.0,
-          indent: Mv2Spacing.x6,
-          endIndent: Mv2Spacing.x6,
-          // Canvas-level hairline: `Mv2Colors.border`, the same token as every
-          // card outline on the page canvas; accent while interacted with.
-          color: dragging || highlighted
-              ? context.colors.accent
-              : context.colors.border,
-        ),
-      ),
+      dividerBuilder:
+          (
+            axis,
+            index,
+            resizable,
+            dragging,
+            highlighted,
+            themeData,
+          ) => KeyedSubtree(
+            key: const Key('pane_divider'),
+            child: VerticalDivider(
+              width: paneDividerThickness,
+              thickness: dragging || highlighted ? 3.0 : 1.0,
+              indent: Mv2Spacing.x6,
+              endIndent: Mv2Spacing.x6,
+              // Canvas-level hairline: `Mv2Colors.border`, the same token as every
+              // card outline on the page canvas; accent while interacted with.
+              color: dragging || highlighted
+                  ? context.colors.accent
+                  : context.colors.border,
+            ),
+          ),
       // v3 API: content is built per Area, identified by controller index. In
       // two-pane mode the screen-padding safe area belongs to the window edges
       // only: the left pane keeps the leading inset and the right pane the
       // trailing one, so the divider side of each pane is not double-padded
       // (which would make the content columns look narrower than the window).
       builder: (context, area) {
-        final isLeft = _splitController != null &&
+        final isLeft =
+            _splitController != null &&
             identical(area, _splitController!.getArea(0));
         final outer = MediaQuery.paddingOf(context);
         final panePadding = isLeft
@@ -310,7 +327,9 @@ class _AppShellState extends ConsumerState<AppShell> {
     }
     final ratio = leftFlex / (leftFlex + rightFlex);
     _syncedSplitRatio = ratio.clamp(minSplitRatio, maxSplitRatio);
-    unawaited(ref.read(settingsProvider.notifier).setSplitRatio(_syncedSplitRatio!));
+    unawaited(
+      ref.read(settingsProvider.notifier).setSplitRatio(_syncedSplitRatio!),
+    );
   }
 }
 
@@ -347,6 +366,7 @@ class _TabletDetailPane extends ConsumerWidget {
       key: ValueKey('${selection.topicId}:${selection.floor}'),
       child: TopicDetailPage(
         topicId: selection.topicId,
+        initialTitle: selection.initialTitle,
         initialFloor: selection.floor,
         inPane: true,
       ),

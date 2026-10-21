@@ -6,6 +6,44 @@ import 'package:flutter_test/flutter_test.dart';
 /// Regression tests for in-place scaffold updates (#84, #144). They run on
 /// the Material path, which is what the host machine resolves to.
 void main() {
+  testWidgets(
+    'hidden header releases its height while keeping the status safe area',
+    (tester) async {
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetDevicePixelRatio);
+      tester.view.padding = const FakeViewPadding(top: 24);
+      addTearDown(tester.view.resetPadding);
+      var hidden = false;
+      late StateSetter update;
+      const bodyKey = ValueKey('reading-body');
+      await tester.pumpWidget(
+        MaterialApp(
+          home: StatefulBuilder(
+            builder: (context, setState) {
+              update = setState;
+              return AdaptiveScaffold(
+                appBarHidden: hidden,
+                appBar: const AdaptiveAppBar(title: 'Page'),
+                body: const SizedBox.expand(key: bodyKey),
+              );
+            },
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      final expandedTop = tester.getTopLeft(find.byKey(bodyKey)).dy;
+      expect(expandedTop, 24 + kToolbarHeight);
+      update(() => hidden = true);
+      await tester.pumpAndSettle();
+      expect(tester.getTopLeft(find.byKey(bodyKey)).dy, 24);
+      expect(find.text('Page').hitTestable(), findsNothing);
+      update(() => hidden = false);
+      await tester.pumpAndSettle();
+      expect(tester.getTopLeft(find.byKey(bodyKey)).dy, expandedTop);
+      expect(find.text('Page').hitTestable(), findsOneWidget);
+    },
+  );
+
   testWidgets('app bar actions added and removed within the page show up', (
     tester,
   ) async {

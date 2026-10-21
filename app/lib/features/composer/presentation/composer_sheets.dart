@@ -16,6 +16,7 @@ Future<void> showReplyComposer(
 }) {
   return showMv2Sheet<void>(
     context,
+    trailingPane: true,
     child: ReplyComposerPage(
       topicId: topicId,
       floor: floor,

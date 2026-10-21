@@ -30,9 +30,11 @@ class MainActivity : FlutterActivity() {
                     "clearCookies" -> {
                         // android.webkit.CookieManager 没有按域删除的 API；本 app
                         // 的 WebView 只用于登录与视频播放，清空整个 jar 代价可忽略。
-                        CookieManager.getInstance().removeAllCookies(null)
-                        CookieManager.getInstance().flush()
-                        result.success(null)
+                        val manager = CookieManager.getInstance()
+                        manager.removeAllCookies {
+                            manager.flush()
+                            result.success(null)
+                        }
                     }
                     else -> result.notImplemented()
                 }

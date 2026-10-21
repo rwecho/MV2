@@ -166,6 +166,7 @@ abstract final class NotificationParser {
     return V2Notification(
       id: id,
       kind: _kindFor(_actionText(item)),
+      actionLabel: _actionLabel(_actionText(item)),
       actor: V2User(username: actorName, avatarUrl: absoluteV2exUrl(avatar)),
       timeLabel: cleanText(item.querySelector('span.snow')?.text) ?? '',
       quote: cleanText(payload?.text) ?? '',
@@ -187,7 +188,15 @@ abstract final class NotificationParser {
     void walk(Node node) {
       for (final child in node.nodes) {
         if (child is Element) {
-          if (child.classes.contains('payload')) continue;
+          if (child.classes.contains('payload') ||
+              child.classes.contains('topic-link') ||
+              child.classes.contains('snow') ||
+              child.localName == 'strong' ||
+              child.localName == 'script' ||
+              child.localName == 'style' ||
+              child.localName == 'input') {
+            continue;
+          }
           walk(child);
         } else {
           parts.add(child.text ?? '');
@@ -199,6 +208,21 @@ abstract final class NotificationParser {
     return cleanText(parts.join(' ')) ?? '';
   }
 
+  static String _actionLabel(String text) {
+    return switch (_kindFor(text)) {
+      NotificationKind.reply => '回复了你的主题',
+      NotificationKind.mention => text.contains('主题') ? '在主题中提到了你' : '在回复中提到了你',
+      NotificationKind.favorite => '收藏了你的主题',
+      NotificationKind.like =>
+        text.contains('主题')
+            ? '感谢了你的主题'
+            : text.contains('回复')
+            ? '感谢了你的回复'
+            : '感谢了你',
+      NotificationKind.other => text.isEmpty ? '发来了一条通知' : text,
+    };
+  }
+
   /// Maps V2EX's action phrasing to [NotificationKind].
   static NotificationKind _kindFor(String text) {
     if (text.contains('收藏')) return NotificationKind.favorite;
@@ -206,7 +230,8 @@ abstract final class NotificationParser {
     if (text.contains('提到') || text.contains('@')) {
       return NotificationKind.mention;
     }
-    return NotificationKind.reply;
+    if (text.contains('回复')) return NotificationKind.reply;
+    return NotificationKind.other;
   }
 
   /// Groups a `span.snow` label (今天/昨天/更早) without a day separator.

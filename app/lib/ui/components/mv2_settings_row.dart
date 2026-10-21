@@ -83,6 +83,8 @@ class Mv2SettingsRow extends StatelessWidget {
                   children: <Widget>[
                     Text(
                       label,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                       style: context.text.itemTitle.copyWith(
                         color: colors.textPrimary,
                       ),
@@ -101,10 +103,15 @@ class Mv2SettingsRow extends StatelessWidget {
               ),
               if (value != null) ...<Widget>[
                 const SizedBox(width: Mv2Spacing.x2),
-                Text(
-                  value!,
-                  style: context.text.bodySmall.copyWith(
-                    color: colors.textSecondary,
+                Flexible(
+                  child: Text(
+                    value!,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    textAlign: TextAlign.end,
+                    style: context.text.bodySmall.copyWith(
+                      color: colors.textSecondary,
+                    ),
                   ),
                 ),
               ],

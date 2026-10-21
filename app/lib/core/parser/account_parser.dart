@@ -113,8 +113,12 @@ abstract final class DailyMissionParser {
     String? continuous;
     for (final cell in document.querySelectorAll('div.cell')) {
       final text = cleanText(cell.text);
-      if (text != null && text.contains('已连续')) {
-        continuous = text;
+      if (text == null) continue;
+      // A cell may include hidden member identifiers and other page text.
+      // Keep only the consecutive-days sentence shown to the reader.
+      final match = RegExp(r'已连续(?:登录|签到)?\s*(\d+)\s*天').firstMatch(text);
+      if (match != null) {
+        continuous = match.group(0);
         break;
       }
     }

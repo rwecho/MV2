@@ -17,37 +17,51 @@ Future<T?> showMv2Sheet<T>(
   BuildContext context, {
   required Widget child,
   double heightFactor = 0.92,
+  bool trailingPane = false,
 }) {
   final colors = context.colors;
   return showModalBottomSheet<T>(
     context: context,
     isScrollControlled: true,
+    constraints: trailingPane
+        ? BoxConstraints(maxWidth: MediaQuery.sizeOf(context).width)
+        : null,
     backgroundColor: Colors.transparent,
     barrierColor: colors.scrim,
     // The sheet is positioned by its own container; the page handles the rest.
     useSafeArea: false,
     builder: (sheetContext) {
       final media = MediaQuery.of(sheetContext);
-      return ClipRRect(
-        borderRadius: const BorderRadius.vertical(
-          top: Radius.circular(Mv2Radius.xlValue),
-        ),
-        child: Container(
-          height: media.size.height * heightFactor,
-          color: colors.background,
-          child: Column(
-            children: <Widget>[
-              const _SheetGrabber(),
-              Expanded(
-                // The sheet already sits below the status bar, so the page's
-                // own `SafeArea`/`Scaffold` must not add the top inset again.
-                child: MediaQuery.removePadding(
-                  context: sheetContext,
-                  removeTop: true,
-                  child: child,
-                ),
+      final paneWidth = trailingPane && media.size.width >= 840
+          ? media.size.width * 0.55
+          : media.size.width;
+      return Align(
+        alignment: Alignment.bottomRight,
+        heightFactor: 1,
+        child: SizedBox(
+          width: paneWidth,
+          child: ClipRRect(
+            borderRadius: const BorderRadius.vertical(
+              top: Radius.circular(Mv2Radius.xlValue),
+            ),
+            child: Container(
+              height: media.size.height * heightFactor,
+              color: colors.background,
+              child: Column(
+                children: <Widget>[
+                  const _SheetGrabber(),
+                  Expanded(
+                    // The sheet already sits below the status bar, so the page's
+                    // own `SafeArea`/`Scaffold` must not add the top inset again.
+                    child: MediaQuery.removePadding(
+                      context: sheetContext,
+                      removeTop: true,
+                      child: child,
+                    ),
+                  ),
+                ],
               ),
-            ],
+            ),
           ),
         ),
       );

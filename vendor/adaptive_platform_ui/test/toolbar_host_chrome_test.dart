@@ -136,6 +136,46 @@ double opacityOf(WidgetTester tester, Finder finder) => tester
     .value;
 
 void main() {
+  testWidgets(
+    'hiding page chrome clears Duo controls and preserves page state',
+    (tester) async {
+      useDuoLandscape(tester);
+      var hidden = false;
+      late StateSetter update;
+      await tester.pumpWidget(
+        hostedApp(
+          home: StatefulBuilder(
+            builder: (context, setState) {
+              update = setState;
+              return AdaptiveScaffold(
+                appBarHidden: hidden,
+                appBar: AdaptiveAppBar(
+                  title: 'Reading',
+                  actions: [
+                    AdaptiveAppBarAction(icon: Icons.search, onPressed: () {}),
+                  ],
+                ),
+                body: const _Counter(),
+              );
+            },
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('count:0'));
+      await tester.pump();
+      expect(inBar(find.byIcon(Icons.search)), findsOneWidget);
+      update(() => hidden = true);
+      await tester.pumpAndSettle();
+      expect(inBar(find.byIcon(Icons.search)), findsNothing);
+      expect(find.text('count:1'), findsOneWidget);
+      update(() => hidden = false);
+      await tester.pumpAndSettle();
+      expect(inBar(find.byIcon(Icons.search)), findsOneWidget);
+      expect(find.text('count:1'), findsOneWidget);
+    },
+  );
+
   testWidgets('one fixed bar shows the controls of the page in front', (
     tester,
   ) async {

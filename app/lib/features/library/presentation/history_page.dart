@@ -89,7 +89,12 @@ class HistoryPage extends ConsumerWidget {
                   onLongPress: () => _removeOne(context, ref, topic),
                   child: TopicItem(
                     topic: topic,
-                    onTap: () => openTopic(context, topic.id, source: 'history'),
+                    onTap: () => openTopic(
+                      context,
+                      topic.id,
+                      initialTitle: topic.title,
+                      source: 'history',
+                    ),
                   ),
                 );
               },

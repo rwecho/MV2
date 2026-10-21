@@ -9,7 +9,7 @@ import 'package:flutter/foundation.dart' show visibleForTesting;
 /// reach the server-rendered HTML we parse. [matchVideoEmbed] upgrades those
 /// anchors to [Mv2VideoEmbedCard]s; playback happens in the in-app WebView
 /// player page, which follows each provider's official embed page and is
-/// therefore immune to their internal player changes.
+/// subject to their availability and playback restrictions.
 class Mv2VideoEmbed {
   const Mv2VideoEmbed({
     required this.originalUrl,
@@ -49,11 +49,7 @@ Mv2VideoEmbed? matchVideoEmbed(String? url) {
   // player (Livid's video service, `v2ex.com/t/1243480`).
   if (host == 'hub.v2core.com') {
     if (!RegExp(r'^/p/[0-9a-fA-F]{64}/?$').hasMatch(uri.path)) return null;
-    return Mv2VideoEmbed(
-      originalUrl: url,
-      playUrl: uri,
-      provider: 'hub',
-    );
+    return Mv2VideoEmbed(originalUrl: url, playUrl: uri, provider: 'hub');
   }
 
   // Bilibili. The web player embed (`player.bilibili.com/player.html`) is the
@@ -68,30 +64,46 @@ Mv2VideoEmbed? matchVideoEmbed(String? url) {
       needsRedirectResolution: true,
     );
   }
-  if (host == 'bilibili.com' || host == 'www.bilibili.com' || host == 'm.bilibili.com') {
+  if (host == 'bilibili.com' ||
+      host == 'www.bilibili.com' ||
+      host == 'm.bilibili.com') {
     final play = bilibiliPlayerUrl(uri);
     if (play == null) return null;
     return Mv2VideoEmbed(originalUrl: url, playUrl: play, provider: 'bilibili');
   }
 
   // YouTube's official embed surface.
-  if (host == 'youtube.com' || host == 'www.youtube.com' || host == 'm.youtube.com') {
+  if (host == 'youtube.com' ||
+      host == 'www.youtube.com' ||
+      host == 'm.youtube.com') {
     if (uri.path == '/watch') {
       final id = uri.queryParameters['v'];
       if (id == null || !isYouTubeId(id)) return null;
-      return Mv2VideoEmbed(originalUrl: url, playUrl: youtubeEmbedUrl(id), provider: 'youtube');
+      return Mv2VideoEmbed(
+        originalUrl: url,
+        playUrl: youtubeEmbedUrl(id),
+        provider: 'youtube',
+      );
     }
     if (uri.pathSegments.length >= 2 && uri.pathSegments.first == 'shorts') {
       final id = uri.pathSegments[1];
       if (!isYouTubeId(id)) return null;
-      return Mv2VideoEmbed(originalUrl: url, playUrl: youtubeEmbedUrl(id), provider: 'youtube');
+      return Mv2VideoEmbed(
+        originalUrl: url,
+        playUrl: youtubeEmbedUrl(id),
+        provider: 'youtube',
+      );
     }
     return null;
   }
   if (host == 'youtu.be') {
     final id = uri.pathSegments.isNotEmpty ? uri.pathSegments.first : null;
     if (id == null || !isYouTubeId(id)) return null;
-    return Mv2VideoEmbed(originalUrl: url, playUrl: youtubeEmbedUrl(id), provider: 'youtube');
+    return Mv2VideoEmbed(
+      originalUrl: url,
+      playUrl: youtubeEmbedUrl(id),
+      provider: 'youtube',
+    );
   }
 
   return null;
@@ -99,9 +111,9 @@ Mv2VideoEmbed? matchVideoEmbed(String? url) {
 
 /// The Bilibili embed player URL for a `/video/…` page link, or `null` when
 /// the path is not a video (space, search, festival pages, …).
-@visibleForTesting
 Uri? bilibiliPlayerUrl(Uri uri) {
-  final bv = RegExp(r'^/video/(BV[0-9A-Za-z]{10})(?:[/?]|$)').firstMatch(uri.path);
+  final bv = RegExp(r'^/video/(BV[0-9A-Za-z]{10})(?:[/?]|$)')
+      .firstMatch(uri.path);
   if (bv != null) {
     final page = uri.queryParameters['p'];
     return Uri.https('player.bilibili.com', '/player.html', <String, String>{
@@ -126,7 +138,8 @@ String? bilibiliBvidFromUrl(Uri uri) {
       ?.group(1);
 }
 
-Uri youtubeEmbedUrl(String id) => Uri.https('www.youtube-nocookie.com', '/embed/$id');
+Uri youtubeEmbedUrl(String id) =>
+    Uri.https('www.youtube-nocookie.com', '/embed/$id');
 
 /// YouTube video ids are 11 chars of `[A-Za-z0-9_-]`; exact length keeps
 /// ordinary paths from matching.
@@ -134,7 +147,7 @@ Uri youtubeEmbedUrl(String id) => Uri.https('www.youtube-nocookie.com', '/embed/
 bool isYouTubeId(String id) => RegExp(r'^[A-Za-z0-9_-]{11}$').hasMatch(id);
 
 /// Resolves a short link (`b23.tv`) to its landing URL by following manual
-/// HEAD redirects.
+/// GET redirects without downloading the response body.
 ///
 /// External hosts — deliberately NOT routed through [Mv2HttpClient]'s pacer:
 /// the 350ms anti-flood gap is a v2ex.com courtesy, and a redirect chain here
@@ -145,14 +158,15 @@ Future<Uri?> resolveVideoRedirect(
   int maxHops = 5,
   @visibleForTesting LocationFetcher? fetchLocation,
 }) async {
-  if (!url.host.endsWith('b23.tv')) return url;
+  if (url.host != 'b23.tv' && url.host != 'www.b23.tv') return url;
   var current = url;
   final follow = fetchLocation ?? headLocation;
   for (var hop = 0; hop < maxHops; hop++) {
     final (status, location) = await follow(current);
     if (location == null || status < 300 || status >= 400) return current;
     final next = current.resolveUri(location);
-    if (!next.host.endsWith('b23.tv')) return next;
+    if (next.scheme != 'https' && next.scheme != 'http') return null;
+    if (next.host != 'b23.tv' && next.host != 'www.b23.tv') return next;
     current = next;
   }
   return null;
@@ -164,12 +178,14 @@ typedef LocationFetcher = Future<(int, Uri?)> Function(Uri url);
 
 @visibleForTesting
 Future<(int, Uri?)> headLocation(Uri url) async {
-  final client = HttpClient()
-    ..connectionTimeout = const Duration(seconds: 6);
+  final client = HttpClient()..connectionTimeout = const Duration(seconds: 6);
   try {
-    final request = await client.headUrl(url);
-    final response = await request.close();
-    await response.drain<void>();
+    final request = await client
+        .getUrl(url)
+        .timeout(const Duration(seconds: 8));
+    request.followRedirects = false;
+    final response = await request.close().timeout(const Duration(seconds: 8));
+    // Only redirect headers are needed; closing the client cancels the body.
     final location = response.headers.value(HttpHeaders.locationHeader);
     return (response.statusCode, location == null ? null : Uri.parse(location));
   } finally {

@@ -1,3 +1,6 @@
-• New: encode selected text as Base64 when posting or replying — share contact info without letting scrapers grab it; tap a Base64 string in a topic to decode and copy it
-• New: share a topic as a beautifully formatted long image, perfect for chat groups
-• Stability and performance improvements
+• Topic titles now appear immediately while details load
+• Improved collapsing headers and iPhone Duo two-column reading
+• Refined the reply composer, inline emoji, and embedded video playback
+• Filter notifications by replies or mentions, with type-specific content
+• Improved Google sign-in return, clipboard link prompts, and daily check-in
+• Fixed Android navigation colors and layout overflow

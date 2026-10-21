@@ -1,110 +1,221 @@
 import 'package:flutter/material.dart';
 import 'package:webview_flutter/webview_flutter.dart';
+import 'package:webview_flutter_wkwebview/webview_flutter_wkwebview.dart';
 
-import '../../../design_system/tokens/mv2_spacing.dart';
+import '../../../features/reader/application/open_external_url.dart';
 import 'mv2_video_embed.dart';
 
-/// Opens the in-app full-screen video player for a recognized video link.
-///
-/// The WebView loads each provider's official embed/play surface, so playback
-/// tracks whatever the provider serves today (no fragile direct-media
-/// extraction). Returns when the page is closed.
 Future<void> showMv2VideoPlayer(BuildContext context, Mv2VideoEmbed embed) {
   return Navigator.of(context, rootNavigator: true).push<void>(
-    // Fullscreen dialog: the page is a player surface, and the platform back
-    // gesture / button closes it like a sheet.
-    MaterialPageRoute<void>(fullscreenDialog: true, builder: (_) => Mv2VideoPlayerPage(embed: embed)),
+    MaterialPageRoute<void>(
+      fullscreenDialog: true,
+      builder: (_) => Mv2VideoPlayerPage(embed: embed),
+    ),
   );
 }
 
-/// Full-screen WebView player (`docs/06` → 视频嵌入).
-///
-/// Short links (`b23.tv`) resolve their redirect first so the WebView can load
-/// the clean `player.bilibili.com` embed instead of the whole mobile page; on
-/// resolution failure it falls back to loading the original link as-is.
-class Mv2VideoPlayerPage extends StatefulWidget {
+class Mv2VideoPlayerPage extends StatelessWidget {
   const Mv2VideoPlayerPage({super.key, required this.embed});
-
   final Mv2VideoEmbed embed;
 
   @override
-  State<Mv2VideoPlayerPage> createState() => _Mv2VideoPlayerPageState();
+  Widget build(BuildContext context) => Scaffold(
+    backgroundColor: Colors.black,
+    appBar: AppBar(
+      backgroundColor: Colors.black,
+      foregroundColor: Colors.white,
+      title: const Text('视频'),
+    ),
+    body: SafeArea(
+      child: Center(
+        child: AspectRatio(
+          aspectRatio: 16 / 9,
+          child: Mv2VideoSurface(embed: embed),
+        ),
+      ),
+    ),
+  );
 }
 
-class _Mv2VideoPlayerPageState extends State<Mv2VideoPlayerPage> {
-  late final Future<Uri> _playUrl = _resolve();
-  int _progress = 0;
+/// Owns one controller for its lifetime; progress rebuilds must not reload it.
+class Mv2VideoSurface extends StatefulWidget {
+  const Mv2VideoSurface({super.key, required this.embed});
+  final Mv2VideoEmbed embed;
+  @override
+  State<Mv2VideoSurface> createState() => _Mv2VideoSurfaceState();
+}
 
-  Future<Uri> _resolve() async {
-    if (!widget.embed.needsRedirectResolution) return widget.embed.playUrl;
+class _Mv2VideoSurfaceState extends State<Mv2VideoSurface>
+    with WidgetsBindingObserver {
+  WebViewController? _controller;
+  bool _failed = false;
+  int _progress = 0;
+  int _generation = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    _load();
+  }
+
+  Future<void> _load() async {
+    final generation = ++_generation;
+    setState(() {
+      _failed = false;
+      _progress = 0;
+      _controller = null;
+    });
     try {
-      final landed = await resolveVideoRedirect(Uri.parse(widget.embed.originalUrl));
-      if (landed == null) return widget.embed.playUrl;
-      final bvid = bilibiliBvidFromUrl(landed);
-      if (bvid == null) return landed;
-      return Uri.https('player.bilibili.com', '/player.html', <String, String>{
-        'bvid': bvid,
-      });
-    } on Exception {
-      // Network trouble resolving the short link — the original URL still
-      // lands on a playable page inside the WebView.
-      return widget.embed.playUrl;
+      var url = widget.embed.playUrl;
+      if (widget.embed.needsRedirectResolution) {
+        try {
+          final landed = await resolveVideoRedirect(
+            Uri.parse(widget.embed.originalUrl),
+          ).timeout(const Duration(seconds: 10));
+          final player = landed == null ? null : bilibiliPlayerUrl(landed);
+          if (player != null) url = player;
+        } catch (error) {
+          debugPrint(
+            'Video redirect unresolved: ${error.runtimeType}; using web redirect',
+          );
+        }
+      }
+      if (!mounted || generation != _generation) return;
+      url = url.replace(
+        queryParameters: {
+          ...url.queryParameters,
+          'autoplay': '0',
+          'playsinline': '1',
+        },
+      );
+      final params = WebViewPlatform.instance is WebKitWebViewPlatform
+          ? WebKitWebViewControllerCreationParams(
+              allowsInlineMediaPlayback: true,
+            )
+          : const PlatformWebViewControllerCreationParams();
+      final controller = WebViewController.fromPlatformCreationParams(params);
+      await controller.setJavaScriptMode(JavaScriptMode.unrestricted);
+      await controller.setBackgroundColor(Colors.black);
+      await controller.setNavigationDelegate(
+        NavigationDelegate(
+          onProgress: (value) {
+            if (mounted && generation == _generation) {
+              setState(() => _progress = value);
+            }
+          },
+          onWebResourceError: (error) {
+            if (error.isForMainFrame == true &&
+                mounted &&
+                generation == _generation) {
+              debugPrint(
+                'Video main-frame error: ${error.errorCode} ${error.errorType} ${error.description}',
+              );
+              setState(() => _failed = true);
+            }
+          },
+          onNavigationRequest: (request) {
+            final next = Uri.tryParse(request.url);
+            if (next == null ||
+                (next.scheme != 'https' && request.url != 'about:blank')) {
+              return NavigationDecision.prevent;
+            }
+            if (request.isMainFrame &&
+                widget.embed.provider == 'bilibili' &&
+                const {
+                  'www.bilibili.com',
+                  'm.bilibili.com',
+                  'bilibili.com',
+                }.contains(next.host)) {
+              final player = bilibiliPlayerUrl(next);
+              if (player != null) {
+                controller.loadRequest(
+                  player.replace(
+                    queryParameters: {
+                      ...player.queryParameters,
+                      'autoplay': '0',
+                      'playsinline': '1',
+                    },
+                  ),
+                );
+                return NavigationDecision.prevent;
+              }
+            }
+            return NavigationDecision.navigate;
+          },
+        ),
+      );
+      await controller.loadRequest(url);
+      if (mounted && generation == _generation) {
+        setState(() => _controller = controller);
+      }
+    } catch (error, stack) {
+      debugPrint('Video initialization failed: $error\n$stack');
+      if (mounted && generation == _generation) setState(() => _failed = true);
     }
+  }
+
+  void _pause() {
+    _controller
+        ?.runJavaScript(
+          "document.querySelectorAll('video,audio').forEach(function(v){v.pause();});",
+        )
+        .catchError((_) {});
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state != AppLifecycleState.resumed) _pause();
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _pause();
+    super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.black,
-      body: SafeArea(
-        child: Column(
-          children: <Widget>[
-            Row(
-              children: <Widget>[
-                IconButton(
-                  onPressed: () => Navigator.of(context).maybePop(),
-                  icon: const Icon(Icons.close, color: Colors.white),
-                ),
-                const Spacer(),
-              ],
-            ),
-            Expanded(
-              child: FutureBuilder<Uri>(
-                future: _playUrl,
-                builder: (context, snapshot) {
-                  final url = snapshot.data;
-                  if (url == null) {
-                    return const Center(child: CircularProgressIndicator());
-                  }
-                  return Stack(
-                    children: <Widget>[
-                      WebViewWidget(controller: _controller(url)),
-                      if (_progress < 100)
-                        const LinearProgressIndicator(minHeight: 2),
-                    ],
-                  );
-                },
+    if (_failed) {
+      return ColoredBox(
+        color: Colors.black,
+        child: Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text('视频加载失败', style: TextStyle(color: Colors.white)),
+              Wrap(
+                alignment: WrapAlignment.center,
+                children: [
+                  TextButton(onPressed: _load, child: const Text('重试')),
+                  TextButton(
+                    onPressed: () =>
+                        openExternalUrl(context, widget.embed.originalUrl),
+                    child: const Text('打开原网页'),
+                  ),
+                ],
               ),
-            ),
-            const SizedBox(height: Mv2Spacing.x2),
-          ],
+            ],
+          ),
         ),
+      );
+    }
+    return ColoredBox(
+      color: Colors.black,
+      child: Stack(
+        children: [
+          if (_controller != null)
+            Positioned.fill(child: WebViewWidget(controller: _controller!)),
+          if (_progress < 100)
+            const Positioned(
+              top: 0,
+              left: 0,
+              right: 0,
+              child: LinearProgressIndicator(minHeight: 2),
+            ),
+        ],
       ),
     );
-  }
-
-  WebViewController _controller(Uri url) {
-    return WebViewController()
-      ..setJavaScriptMode(JavaScriptMode.unrestricted)
-      ..setBackgroundColor(Colors.black)
-      ..setNavigationDelegate(
-        NavigationDelegate(
-          onProgress: (progress) {
-            if (!mounted) return;
-            setState(() => _progress = progress);
-          },
-        ),
-      )
-      ..loadRequest(url);
   }
 }

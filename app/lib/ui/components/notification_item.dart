@@ -72,38 +72,40 @@ class NotificationItem extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: <Widget>[
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: <Widget>[
-                    Expanded(child: _ActionLine(notification: n)),
-                    const SizedBox(width: Mv2Spacing.x2),
-                    Text(
-                      n.timeLabel,
-                      style: context.text.metadata.copyWith(
-                        color: colors.textTertiary,
-                      ),
+                _ActionLine(notification: n),
+                if (n.timeLabel.trim().isNotEmpty) ...[
+                  const SizedBox(height: 3),
+                  Text(
+                    n.timeLabel,
+                    style: context.text.metadata.copyWith(
+                      color: colors.textTertiary,
                     ),
-                  ],
-                ),
-                const SizedBox(height: Mv2Spacing.x2),
-                Text(
-                  '“${n.quote}”',
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: context.text.bodySmall.copyWith(
-                    color: colors.textSecondary,
-                    height: 1.5,
                   ),
-                ),
-                const SizedBox(height: Mv2Spacing.x2),
-                Text(
-                  n.sourceTitle,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: context.text.metadata.copyWith(
-                    color: colors.textTertiary,
+                ],
+                if (n.quote.trim().isNotEmpty &&
+                    n.kind != NotificationKind.favorite) ...[
+                  const SizedBox(height: Mv2Spacing.x2),
+                  Text(
+                    n.quote.trim(),
+                    maxLines: 3,
+                    overflow: TextOverflow.ellipsis,
+                    style: context.text.bodySmall.copyWith(
+                      color: colors.textSecondary,
+                      height: 1.5,
+                    ),
                   ),
-                ),
+                ],
+                if (n.sourceTitle.trim().isNotEmpty) ...[
+                  const SizedBox(height: Mv2Spacing.x2),
+                  Text(
+                    n.sourceTitle,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: context.text.metadata.copyWith(
+                      color: colors.textTertiary,
+                    ),
+                  ),
+                ],
               ],
             ),
           ),
@@ -166,8 +168,9 @@ class _ActionLineState extends State<_ActionLine> {
     final action = switch (widget.notification.kind) {
       NotificationKind.reply => ' 回复了你的主题',
       NotificationKind.mention => ' 在评论中 @了你',
-      NotificationKind.like => ' 赞了你的回复',
+      NotificationKind.like => ' 感谢了你',
       NotificationKind.favorite => ' 收藏了你的主题',
+      NotificationKind.other => ' 发来了一条通知',
     };
 
     return Text.rich(
@@ -179,12 +182,14 @@ class _ActionLineState extends State<_ActionLine> {
             style: context.text.bodyStrong.copyWith(color: colors.textPrimary),
           ),
           TextSpan(
-            text: action,
+            text: widget.notification.actionLabel?.trim().isNotEmpty == true
+                ? ' ${widget.notification.actionLabel!.trim()}'
+                : action,
             style: context.text.bodySmall.copyWith(color: colors.textSecondary),
           ),
         ],
       ),
-      maxLines: 1,
+      maxLines: 2,
       overflow: TextOverflow.ellipsis,
     );
   }

@@ -26,7 +26,7 @@ publish_to: 'none' # Remove this line if you wish to publish to pub.dev
 # fails the build on a mismatch instead of shipping a mislabelled binary.
 # Verify against the live versionCode in Play Console / App Store Connect before
 # uploading and raise the `+N` if the old run number was 4 digits or more.
-version: 2.2.15+2002015000
+version: 2.2.16+2002016000
 
 environment:
   sdk: ^3.13.3
@@ -70,6 +70,7 @@ dependencies:
   in_app_review: ^2.0.10
   image_picker: ^1.2.3
   webview_flutter: ^4.14.1
+  webview_flutter_wkwebview: ^3.27.0
   app_links: ^7.2.1
   firebase_core: ^4.14.0
   firebase_messaging: ^16.6.0
@@ -90,6 +91,7 @@ dependency_overrides:
   adaptive_platform_ui:
     path: ../vendor/adaptive_platform_ui
 dev_dependencies:
+  webview_flutter_platform_interface: ^2.15.1
   flutter_test:
     sdk: flutter
 

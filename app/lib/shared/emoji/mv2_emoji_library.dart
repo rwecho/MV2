@@ -182,6 +182,37 @@ abstract final class Mv2EmojiLibrary {
     '[偷笑R]': 'https://i.imgur.com/aF7QiE5.png',
   };
 
+  /// Exact known URLs only: arbitrary small photos remain content images.
+  static final Map<String, String> _imageTokens = {
+    for (final group in groups)
+      for (final emoji in group.emoji)
+        if (emoji.imageUrl != null)
+          _imageIdentity(emoji.imageUrl!): emoji.token,
+    for (final entry in _submitLinks.entries)
+      _imageIdentity(entry.value): entry.key,
+  };
+
+  static String _imageIdentity(String url) {
+    final uri = Uri.tryParse(url);
+    return uri == null ? url : '${uri.host.toLowerCase()}${uri.path}';
+  }
+
+  static String? imageToken(String url) => _imageTokens[_imageIdentity(url)];
+
+  /// Both reader and picker fetch the preview asset, with one disk-cache key.
+  static String cachedImageUrl(String url) {
+    final token = imageToken(url);
+    if (token == null) return url;
+    for (final group in groups) {
+      for (final emoji in group.emoji) {
+        if (emoji.token == token && emoji.imageUrl != null) {
+          return emoji.imageUrl!;
+        }
+      }
+    }
+    return url;
+  }
+
   static final RegExp _tokenPattern = RegExp(r'\[[^\]]+\]');
 
   /// Mirrors V2EX Polish's `transformEmoji`: known `[token]`s become the hosted

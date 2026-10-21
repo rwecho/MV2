@@ -371,7 +371,12 @@ class _SearchPageState extends ConsumerState<SearchPage> {
                     topic: topic,
                     onTap: () {
                       Mv2Analytics.logSearchResultOpen(type: 'topic');
-                      openTopic(context, topic.id, source: 'search');
+                      openTopic(
+                        context,
+                        topic.id,
+                        initialTitle: topic.title,
+                        source: 'search',
+                      );
                     },
                   );
                 }),

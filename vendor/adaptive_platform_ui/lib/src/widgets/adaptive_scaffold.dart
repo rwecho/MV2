@@ -139,11 +139,15 @@ class AdaptiveScaffold extends StatefulWidget {
     this.useHeroBackButton = true,
     this.useFixedToolbar = true,
     this.tabBarHidden = false,
+    this.appBarHidden = false,
   });
 
   /// App bar configuration
   /// If null, no app bar or toolbar will be shown
   final AdaptiveAppBar? appBar;
+
+  /// Hide page chrome while retaining the scaffold and scrollable state.
+  final bool appBarHidden;
 
   /// Bottom navigation bar configuration
   /// If null, no bottom navigation will be shown
@@ -343,11 +347,11 @@ class _AdaptiveScaffoldState extends State<AdaptiveScaffold> {
     registry.upsert(
       ToolbarEntry(
         id: this,
-        appBar: widget.appBar,
+        appBar: widget.appBarHidden ? null : widget.appBar,
         route: ModalRoute.of(context),
         navigator: navigator,
         enclosingRoutes: enclosingRoutes,
-        titleOverlay: _buildIOS26TitleOverlay(),
+        titleOverlay: widget.appBarHidden ? null : _buildIOS26TitleOverlay(),
         // `TickerMode.valuesOf` replaces this, but only exists in Flutter
         // releases after 3.35; `of` works on every supported version.
         // ignore: deprecated_member_use
@@ -700,7 +704,7 @@ class _AdaptiveScaffoldState extends State<AdaptiveScaffold> {
           CupertinoPageScaffold(
             resizeToAvoidBottomInset:
                 widget.resizeToAvoidBottomInset ?? !hasNativeTabBar,
-            navigationBar: navigationBar,
+            navigationBar: widget.appBarHidden ? null : navigationBar,
             child: bodyWidget,
           ),
         );
@@ -794,7 +798,7 @@ class _AdaptiveScaffoldState extends State<AdaptiveScaffold> {
       return _wrapWithDrawerIfNeeded(
         CupertinoPageScaffold(
           resizeToAvoidBottomInset: widget.resizeToAvoidBottomInset ?? true,
-          navigationBar: navigationBar,
+          navigationBar: widget.appBarHidden ? null : navigationBar,
           child: body,
         ),
       );
@@ -895,7 +899,7 @@ class _AdaptiveScaffoldState extends State<AdaptiveScaffold> {
 
       return Scaffold(
         key: widget.scaffoldKey,
-        appBar: appBar,
+        appBar: widget.appBarHidden ? null : appBar,
         body: widget.body ?? const SizedBox.shrink(),
         resizeToAvoidBottomInset: widget.resizeToAvoidBottomInset,
         bottomNavigationBar: bottomNavBar,
@@ -960,22 +964,48 @@ class _AdaptiveScaffoldState extends State<AdaptiveScaffold> {
     }
 
     // Always use Scaffold to ensure Material context
-    return Scaffold(
-      key: widget.scaffoldKey,
-      appBar: appBar,
-      body: widget.body ?? const SizedBox.shrink(),
-      resizeToAvoidBottomInset: widget.resizeToAvoidBottomInset,
-      floatingActionButton: widget.floatingActionButton,
-      extendBodyBehindAppBar: widget.extendBodyBehindAppBar,
-      extendBody: widget.extendBody,
-      backgroundColor: widget.backgroundColor,
-      drawer: widget.drawer,
-      endDrawer: widget.endDrawer,
-      drawerScrimColor: widget.drawerScrimColor,
-      onDrawerChanged: widget.onDrawerChanged,
-      onEndDrawerChanged: widget.onEndDrawerChanged,
-      drawerEnableOpenDragGesture: widget.drawerEnableOpenDragGesture,
-      endDrawerEnableOpenDragGesture: widget.endDrawerEnableOpenDragGesture,
+    final toolbar = appBar;
+    final topPadding = MediaQuery.paddingOf(context).top;
+    return TweenAnimationBuilder<double>(
+      tween: Tween<double>(end: widget.appBarHidden ? 0 : 1),
+      duration: const Duration(milliseconds: 220),
+      curve: Curves.easeInOutCubic,
+      builder: (context, visibility, _) => Scaffold(
+        primary: false,
+        key: widget.scaffoldKey,
+        appBar: toolbar == null
+            ? null
+            : PreferredSize(
+                preferredSize: Size.fromHeight(
+                  topPadding + toolbar.preferredSize.height * visibility,
+                ),
+                child: ClipRect(
+                  child: SizedBox(
+                    height:
+                        topPadding + toolbar.preferredSize.height * visibility,
+                    child: OverflowBox(
+                      alignment: Alignment.topCenter,
+                      minHeight: toolbar.preferredSize.height + topPadding,
+                      maxHeight: toolbar.preferredSize.height + topPadding,
+                      child: Opacity(opacity: visibility, child: toolbar),
+                    ),
+                  ),
+                ),
+              ),
+        body: widget.body ?? const SizedBox.shrink(),
+        resizeToAvoidBottomInset: widget.resizeToAvoidBottomInset,
+        floatingActionButton: widget.floatingActionButton,
+        extendBodyBehindAppBar: widget.extendBodyBehindAppBar,
+        extendBody: widget.extendBody,
+        backgroundColor: widget.backgroundColor,
+        drawer: widget.drawer,
+        endDrawer: widget.endDrawer,
+        drawerScrimColor: widget.drawerScrimColor,
+        onDrawerChanged: widget.onDrawerChanged,
+        onEndDrawerChanged: widget.onEndDrawerChanged,
+        drawerEnableOpenDragGesture: widget.drawerEnableOpenDragGesture,
+        endDrawerEnableOpenDragGesture: widget.endDrawerEnableOpenDragGesture,
+      ),
     );
   }
 

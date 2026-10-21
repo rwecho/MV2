@@ -225,7 +225,7 @@ class V2Reply {
   final List<String> badges;
 }
 
-enum NotificationKind { reply, mention, like, favorite }
+enum NotificationKind { reply, mention, like, favorite, other }
 
 @immutable
 class V2Notification {
@@ -238,6 +238,7 @@ class V2Notification {
     required this.sourceTitle,
     this.topicId,
     this.topicUrl,
+    this.actionLabel,
     this.isUnread = false,
   });
 
@@ -245,6 +246,9 @@ class V2Notification {
   final NotificationKind kind;
   final V2User actor;
   final String timeLabel;
+
+  /// The action reported by the server, without actor, title or timestamp.
+  final String? actionLabel;
 
   /// Quoted snippet of the reply/comment.
   final String quote;

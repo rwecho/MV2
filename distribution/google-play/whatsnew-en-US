@@ -1,5 +1,6 @@
-• New: iPhone Duo support — unfold for two-column reading, fold for a side toolbar with favorite/thank/compose
-• New: iOS 26 Liquid Glass toolbar and tab bar, auto-collapsing as you scroll
-• New: share a topic as a formatted long image for chat groups
-• New: one-tap Base64 encoding for contact info, with in-topic decode & copy
-• Stability and performance improvements
+• Topic titles appear immediately while details load
+• Improved scrolling headers and iPhone Duo two-column reading
+• Refined replies, inline emoji, and embedded video playback
+• Filter notifications by replies or mentions
+• Improved sign-in return, clipboard link prompts, and daily check-in
+• Fixed navigation colors and layout issues

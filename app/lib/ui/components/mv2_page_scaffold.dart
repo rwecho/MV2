@@ -10,6 +10,7 @@ import 'mv2_page_header.dart';
 import '../primitives/mv2_buttons.dart';
 import 'adaptive/mv2_adaptive_destinations.dart';
 import '../../features/settings/application/settings_controller.dart';
+
 import 'package:mv2/ui/components/adaptive/mv2_tabs.dart';
 
 /// Shared page frame for the primary (tabbed) and secondary pages.
@@ -28,6 +29,8 @@ class Mv2PageScaffold extends ConsumerWidget {
     this.bottomBar,
     this.resizeToAvoidBottomInset = true,
     this.appBar,
+    this.appBarHidden = false,
+    this.pinnedHeader,
   });
 
   /// Usually a `CustomScrollView` / `ListView`.
@@ -48,6 +51,12 @@ class Mv2PageScaffold extends ConsumerWidget {
   /// Toolbar for pages whose top bar is not an [Mv2PageHeader] (a topic's own
   /// bar with a back affordance, say). Takes precedence over [header].
   final AdaptiveAppBar? appBar;
+
+  /// Collapse the page toolbar while reading without replacing the page.
+  final bool appBarHidden;
+
+  /// Context that stays above this page's own scrollable, including split panes.
+  final Widget? pinnedHeader;
 
   /// Extra bottom padding a scrollable must reserve so its last row clears the
   /// floating bar.
@@ -72,7 +81,8 @@ class Mv2PageScaffold extends ConsumerWidget {
     final headerWidget = header;
     final pageHeader = headerWidget is Mv2PageHeader ? headerWidget : null;
     final explicitAppBar = appBar;
-    final effectiveAppBar = explicitAppBar ??
+    final effectiveAppBar =
+        explicitAppBar ??
         (pageHeader == null
             ? null
             : AdaptiveAppBar(
@@ -103,6 +113,7 @@ class Mv2PageScaffold extends ConsumerWidget {
     return AdaptiveScaffold(
       resizeToAvoidBottomInset: resizeToAvoidBottomInset,
       appBar: _collapsedForLegacyIOS(effectiveAppBar),
+      appBarHidden: appBarHidden,
       body: Stack(
         children: <Widget>[
           SafeArea(
@@ -113,22 +124,23 @@ class Mv2PageScaffold extends ConsumerWidget {
             child: Material(
               type: MaterialType.transparency,
               child: Align(
-              alignment: Alignment.topCenter,
-              child: ConstrainedBox(
-                constraints: BoxConstraints(maxWidth: contentWidth.maxWidth),
-                child: SizedBox(
-                  width: double.infinity,
-                  child: Column(
-                    children: <Widget>[
-                      if (pageHeader == null && explicitAppBar == null)
-                        ?headerWidget,
-                      if (fromCache) const _OfflineNotice(),
-                      Expanded(child: child),
-                    ],
+                alignment: Alignment.topCenter,
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(maxWidth: contentWidth.maxWidth),
+                  child: SizedBox(
+                    width: double.infinity,
+                    child: Column(
+                      children: <Widget>[
+                        if (pageHeader == null && explicitAppBar == null)
+                          ?headerWidget,
+                        if (pinnedHeader != null) pinnedHeader!,
+                        if (fromCache) const _OfflineNotice(),
+                        Expanded(child: child),
+                      ],
+                    ),
                   ),
                 ),
               ),
-            ),
             ),
           ),
           // Page-level bottom bar (the composer's action row). The shell's own

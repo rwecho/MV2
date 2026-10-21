@@ -1,3 +1,4 @@
+import 'package:adaptive_platform_ui/adaptive_platform_ui.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -11,6 +12,7 @@ import 'package:mv2/shared/models/models.dart';
 import 'package:mv2/shared/models/topic_detail.dart';
 import 'package:mv2/shared/models/write_result.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+
 import 'support/fixture_api.dart';
 import 'support/test_container.dart';
 
@@ -30,6 +32,17 @@ class _RecordingThanksApi extends FixtureV2exApi {
 /// Reading the replies down should dock the topic title into the top bar and
 /// slide the floating reply bar away; scrolling back restores both.
 void main() {
+  Future<void> revealFirst(WidgetTester tester, Finder matches) async {
+    // Lazy rows may not exist yet, and the same author can have many replies.
+    for (var i = 0; i < 30 && matches.evaluate().isEmpty; i++) {
+      await tester.drag(find.byType(ListView).first, const Offset(0, -300));
+      await tester.pump(const Duration(milliseconds: 400));
+    }
+    expect(matches, findsWidgets);
+    await tester.ensureVisible(matches.first);
+    await tester.pump(const Duration(milliseconds: 400));
+  }
+
   /// Pumps the topic page and waits for the fixture to resolve.
   ///
   /// [signedIn] overrides the detail with a `once` token so write actions run
@@ -82,67 +95,170 @@ void main() {
     await tester.pump(const Duration(milliseconds: 200));
   }
 
-  testWidgets('reading down docks the title and hides the reply bar', (
+  testWidgets(
+    'reading retains the topic context and hides only the reply composer',
+    (tester) async {
+      // Short but wide viewport: scrollable without squeezing `_AuthorRow`.
+      tester.view.physicalSize = const Size(600, 400);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      SharedPreferences.setMockInitialValues(<String, Object>{});
+      final container = ProviderContainer(
+        overrides: [v2exApiProvider.overrideWithValue(fixtureApi())],
+      );
+      addTearDown(container.dispose);
+
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: container,
+          child: MaterialApp(
+            theme: Mv2ThemeData.light(),
+            home: const TopicDetailPage(topicId: 1),
+          ),
+        ),
+      );
+      await tester.pump();
+      // Fixture latency + skeleton.
+      await tester.pump(const Duration(milliseconds: 400));
+      await tester.pump(const Duration(milliseconds: 400));
+
+      final title = container
+          .read(topicDetailProvider(const TopicDetailArgs(1)))
+          .value!
+          .topic
+          .title;
+
+      // The compact toolbar retains context after the article title leaves.
+      // Only the reply composer retreats while reading.
+      expect(find.text(title), findsWidgets);
+      expect(
+        tester.widget<AnimatedSlide>(find.byType(AnimatedSlide)).offset,
+        Offset.zero,
+      );
+
+      await tester.drag(find.byType(ListView), const Offset(0, -240));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 400));
+
+      expect(
+        tester.widget<AnimatedSlide>(find.byType(AnimatedSlide)).offset,
+        isNot(Offset.zero),
+      );
+      expect(
+        tester
+            .widget<AdaptiveScaffold>(find.byType(AdaptiveScaffold))
+            .appBarHidden,
+        isFalse,
+      );
+
+      await tester.drag(find.byType(ListView), const Offset(0, 300));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 400));
+
+      expect(
+        tester.widget<AnimatedSlide>(find.byType(AnimatedSlide)).offset,
+        Offset.zero,
+      );
+      expect(
+        tester
+            .widget<AdaptiveScaffold>(find.byType(AdaptiveScaffold))
+            .appBarHidden,
+        isFalse,
+      );
+    },
+  );
+
+  testWidgets('phone title uses the space between back and topic actions', (
     tester,
   ) async {
-    // Short but wide viewport: scrollable without squeezing `_AuthorRow`.
-    tester.view.physicalSize = const Size(600, 400);
+    tester.view.physicalSize = const Size(360, 640);
     tester.view.devicePixelRatio = 1;
-    addTearDown(tester.view.resetPhysicalSize);
-    addTearDown(tester.view.resetDevicePixelRatio);
-
+    addTearDown(tester.view.reset);
     SharedPreferences.setMockInitialValues(<String, Object>{});
     final container = ProviderContainer(
       overrides: [v2exApiProvider.overrideWithValue(fixtureApi())],
     );
     addTearDown(container.dispose);
-
     await tester.pumpWidget(
       UncontrolledProviderScope(
         container: container,
         child: MaterialApp(
           theme: Mv2ThemeData.light(),
-          home: const TopicDetailPage(topicId: 1),
+          onGenerateRoute: (_) =>
+              MaterialPageRoute<void>(builder: (_) => const Scaffold()),
+          onGenerateInitialRoutes: (_) => [
+            MaterialPageRoute<void>(builder: (_) => const Scaffold()),
+            MaterialPageRoute<void>(
+              builder: (_) => const TopicDetailPage(topicId: 1),
+            ),
+          ],
         ),
       ),
     );
     await tester.pump();
-    // Fixture latency + skeleton.
-    await tester.pump(const Duration(milliseconds: 400));
-    await tester.pump(const Duration(milliseconds: 400));
-
+    await tester.pump(const Duration(milliseconds: 800));
+    await tester.pump(const Duration(milliseconds: 800));
     final title = container
         .read(topicDetailProvider(const TopicDetailArgs(1)))
         .value!
         .topic
         .title;
-
-    // The title now lives in the fixed toolbar, which shows it from the start
-    // (the native bar minimises on its own) — the page no longer fades a copy
-    // in. The reply bar still slides away as the page is read.
-    expect(find.text(title), findsWidgets);
-    expect(
-      tester.widget<AnimatedSlide>(find.byType(AnimatedSlide)).offset,
-      Offset.zero,
+    final toolbarTitle = find.descendant(
+      of: find.byType(AppBar),
+      matching: find.text(title),
     );
+    expect(toolbarTitle, findsOneWidget);
+    expect(tester.getSize(toolbarTitle).width, greaterThan(140));
+    expect(find.byType(BackButton), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
 
-    await tester.drag(find.byType(ListView), const Offset(0, -240));
+  testWidgets('split pane retains its own title after scrolling', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(480, 500);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    SharedPreferences.setMockInitialValues(<String, Object>{});
+    final container = ProviderContainer(
+      overrides: [v2exApiProvider.overrideWithValue(fixtureApi())],
+    );
+    addTearDown(container.dispose);
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: container,
+        child: MaterialApp(
+          theme: Mv2ThemeData.light(),
+          home: const TopicDetailPage(topicId: 1, inPane: true),
+        ),
+      ),
+    );
     await tester.pump();
-    await tester.pump(const Duration(milliseconds: 400));
-
+    await tester.pump(const Duration(milliseconds: 800));
+    final header = find.byKey(const ValueKey('topic-pane-title'));
+    final top = tester.getTopLeft(header);
+    final bar = tester
+        .widget<AdaptiveScaffold>(find.byType(AdaptiveScaffold))
+        .appBar!;
+    expect(bar.titleWidget, isNull);
+    expect(bar.title, isNull);
+    expect(bar.actions, isNotEmpty);
+    await tester.drag(find.byType(ListView), const Offset(0, -350));
+    await tester.pumpAndSettle();
+    expect(tester.getTopLeft(header), top);
     expect(
-      tester.widget<AnimatedSlide>(find.byType(AnimatedSlide)).offset,
-      isNot(Offset.zero),
+      find.descendant(of: header, matching: find.byType(Text)),
+      findsWidgets,
     );
-
-    await tester.drag(find.byType(ListView), const Offset(0, 300));
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 400));
-
     expect(
-      tester.widget<AnimatedSlide>(find.byType(AnimatedSlide)).offset,
-      Offset.zero,
+      tester
+          .widget<AdaptiveScaffold>(find.byType(AdaptiveScaffold))
+          .appBarHidden,
+      isFalse,
     );
+    expect(tester.takeException(), isNull);
   });
 
   testWidgets('long-pressing a reply opens 回复 / 复制 / 举报', (tester) async {
@@ -167,11 +283,7 @@ void main() {
 
     // Bring the first reply into view (the article precedes it).
     final authors = find.text('@sentinelK');
-    await tester.scrollUntilVisible(
-      authors,
-      300,
-      scrollable: find.byType(Scrollable).first,
-    );
+    await revealFirst(tester, authors);
     await tester.pump();
 
     await tester.longPress(authors.first);
@@ -312,11 +424,7 @@ void main() {
 
     // Scroll the first reply into view.
     final author = find.text('@sentinelK');
-    await tester.scrollUntilVisible(
-      author,
-      300,
-      scrollable: find.byType(Scrollable).first,
-    );
+    await revealFirst(tester, author);
     await tester.pump();
 
     // V2EX has no reply like, so the dead 👍 was removed.

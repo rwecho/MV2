@@ -1,3 +1,4 @@
+import 'package:adaptive_platform_ui/adaptive_platform_ui.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -13,6 +14,7 @@ import 'package:mv2/features/shell/application/shell_chrome.dart';
 import 'package:mv2/shared/models/models.dart';
 import 'package:mv2/ui/components/xna_item.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+
 import 'support/fixture_api.dart';
 import 'support/test_container.dart';
 
@@ -105,9 +107,7 @@ void main() {
     expect(container.read(homeTabProvider), HomeTab.vxna);
   });
 
-  testWidgets('reading down flips the shared collapse state', (
-    tester,
-  ) async {
+  testWidgets('reading down flips the shared collapse state', (tester) async {
     // Shrink the viewport so the short fixture list is scrollable.
     tester.view.physicalSize = const Size(400, 360);
     tester.view.devicePixelRatio = 1;
@@ -125,20 +125,19 @@ void main() {
     expect(find.byType(Mv2TabStrip), findsOneWidget);
     expect(titleFontSize(), Mv2Typography.standard().sectionTitle.fontSize);
 
-    // Scroll toward the end of the list — the title collapses to the bar size
-    // (it never hides) and the shared collapse state flips.
+    // Reading hides the whole header while preserving the category tabs.
     await tester.drag(find.byType(PageView), const Offset(0, -160));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 400));
 
     expect(container.read(shellBarCollapsedProvider), isTrue);
     expect(
-      titleFontSize(),
-      Mv2Typography.standard().itemTitle.fontSize,
-      reason: 'reading down collapses the title',
+      tester
+          .widgetList<AdaptiveScaffold>(find.byType(AdaptiveScaffold))
+          .any((scaffold) => scaffold.appBarHidden),
+      isTrue,
     );
-    // 头部收缩:标签条收起,把垂直空间让给列表。
-    expect(find.byType(Mv2TabStrip), findsNothing);
+    expect(find.byType(Mv2TabStrip), findsOneWidget);
 
     // Scroll back — the title expands again.
     await tester.drag(find.byType(PageView), const Offset(0, 200));

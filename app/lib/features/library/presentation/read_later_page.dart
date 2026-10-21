@@ -90,7 +90,12 @@ class ReadLaterPage extends ConsumerWidget {
                   onLongPress: () => _removeOne(context, ref, topic),
                   child: TopicItem(
                     topic: topic,
-                    onTap: () => openTopic(context, topic.id, source: 'read_later'),
+                    onTap: () => openTopic(
+                      context,
+                      topic.id,
+                      initialTitle: topic.title,
+                      source: 'read_later',
+                    ),
                   ),
                 );
               },

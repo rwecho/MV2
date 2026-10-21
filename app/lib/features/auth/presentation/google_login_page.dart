@@ -22,12 +22,9 @@ import '../../auth/application/auth_controller.dart';
 /// 从原生 cookie store 收割，再交给 [AuthController.signInWithCookies] 校验
 /// 并灌进 Dio 的 jar。
 ///
-/// 为什么这里是 WebView 而登录表单不是：OAuth 必须在 v2ex.com 的浏览器会话
-/// 里走完（state/cookie 校验 + Google 对嵌入式 UA 的风控），无法用原生表单
-/// 复刻。UA 用与本机平台自洽的真实浏览器（iPhone → CriOS）：桌面 UA 出现在
-/// iPhone 上是不一致信号，Google 风控会直接拦（"This browser or app may
-/// not be secure"）。加载前先清掉 WebView 里 v2ex.com 的残留 cookie，保证
-/// `once`/state 绑定干净的匿名会话。
+/// This WebView flow can be rejected by Google's embedded-browser policy.
+/// Completion handling here only synchronizes an already-issued V2EX session;
+/// it does not bypass Google authentication or certificate checks.
 ///
 /// V2EX 的 `/signin`（桌面布局）只是取 `once` 的中间步骤，不等它渲染完成
 /// 就被隐藏：WebView 加载后立即注入 JS 跳转 Google，用户看到的是加载态 →
@@ -64,12 +61,15 @@ class _GoogleLoginPageState extends ConsumerState<GoogleLoginPage> {
 
   /// Cookie 收割是一次性动作：签名检查可能触发多次导航事件。
   bool _harvesting = false;
+  bool _completed = false;
 
   /// V2EX 取令牌页是否已放行显示。
   bool _revealed = false;
   Timer? _revealTimer;
 
   String? _error;
+
+  bool get _active => mounted && (ModalRoute.of(context)?.isCurrent ?? true);
 
   @override
   void initState() {
@@ -90,7 +90,10 @@ class _GoogleLoginPageState extends ConsumerState<GoogleLoginPage> {
     await ref
         .read(webCookieBridgeProvider)
         .clearCookies('${V2exEndpoints.baseUrl}/');
-    await _web.loadRequest(Uri.parse('${V2exEndpoints.baseUrl}${V2exEndpoints.signIn}'));
+    if (!mounted) return;
+    await _web.loadRequest(
+      Uri.parse('${V2exEndpoints.baseUrl}${V2exEndpoints.signIn}'),
+    );
   }
 
   void _reveal() {
@@ -104,43 +107,32 @@ class _GoogleLoginPageState extends ConsumerState<GoogleLoginPage> {
   /// OAuth from that page, and detecting the signed-in landing page the
   /// callback eventually reaches.
   Future<void> _onPageSettled() async {
-    if (_harvesting) return;
+    if (!_active || _harvesting || _completed) return;
     final url = Uri.tryParse(await _web.currentUrl() ?? '');
-    if (url == null) return;
+    if (!_active || url == null) return;
 
-    final onV2exSignin =
-        url.host == V2exEndpoints.host && url.path == V2exEndpoints.signIn;
+    final onV2exSignin = _isV2ex(url) && url.path == V2exEndpoints.signIn;
     if (!onV2exSignin) _reveal();
 
-    if (url.host != V2exEndpoints.host) return;
+    if (!_isV2ex(url)) return;
 
-    if (url.path == V2exEndpoints.signIn) {
-      if (!_authStarted) {
-        _authStarted = true;
-        await _startGoogleAuth();
-      } else if (_error == null) {
-        // 取消或失败后 V2EX 退回 /signin；放行页面让用户直接重试。
-        setState(() {
-          _revealed = true;
-          _error = 'Google 登录未完成，可在页面中重试或关闭后重来。';
-        });
-      }
+    if (url.path == V2exEndpoints.signIn && !_authStarted) {
+      _authStarted = true;
+      await _startGoogleAuth();
       return;
     }
 
-    // 回跳落点（`/` 或 OAuth 后的去向）：只有真正出现「退出登录」链接才算
-    // 已登录 —— OAuth 中间页（/auth/*）也会落在 v2ex.com 域上。
-    final signedIn = await _web.runJavaScriptReturningResult(
-      "document.querySelector('a[href^=\"/signout\"]') ? '1' : '0'",
-    );
-    if ('$signedIn' == '1') {
+    // A mobile menu may never mount a /signout anchor. JS string results also
+    // differ between WKWebView and Android. Neither is an authentication check:
+    // copy the native cookies and let currentUser validate the session.
+    if (_authStarted && !url.path.startsWith('/auth/')) {
       await _harvestCookies();
-      return;
-    }
-    if (mounted && _authStarted && _error == null && url.path != '/auth/google') {
-      setState(() => _error = 'Google 登录未完成，可在页面中重试或关闭后重来。');
     }
   }
+
+  bool _isV2ex(Uri url) =>
+      url.scheme == 'https' &&
+      (url.host == V2exEndpoints.host || url.host == 'v2ex.com');
 
   /// Extracts `/auth/google?once=…` from the rendered button's inline
   /// handler and follows it. Falls back to a synthetic click when V2EX
@@ -159,14 +151,23 @@ class _GoogleLoginPageState extends ConsumerState<GoogleLoginPage> {
   }
 
   Future<void> _harvestCookies() async {
-    if (_harvesting) return;
+    if (_harvesting || _completed || !_active) return;
     _harvesting = true;
+    setState(() => _error = null);
     try {
       // OAuth 回跳后，会话 cookie 写入 WKHTTPCookieStore 比页面渲染慢一拍：
       // DOM 已是已登录、cookie store 里可能还是旧值（xinghelee/v2ex 记录过
       // 同样现象：「Cookie 写入稍有延迟时会短暂重试」）。所以第一次拿不到
       // 有效会话不报错，短暂重试，耗尽才提示。
       for (var attempt = 1; attempt <= 3; attempt++) {
+        if (!_active) return;
+        final current = Uri.tryParse(await _web.currentUrl() ?? '');
+        if (!_active ||
+            current == null ||
+            !_isV2ex(current) ||
+            current.path.startsWith('/auth/')) {
+          return;
+        }
         final header = await ref
             .read(webCookieBridgeProvider)
             .cookieHeader('${V2exEndpoints.baseUrl}/');
@@ -174,42 +175,51 @@ class _GoogleLoginPageState extends ConsumerState<GoogleLoginPage> {
             ? null
             : WebCookieBridge.parseHeader(header);
         if (mounted) {
-          debugPrint('MV2 Google: harvest attempt $attempt, '
-              'cookies=${cookies?.length ?? 0}');
+          debugPrint(
+            'MV2 Google: harvest attempt $attempt, '
+            'cookies=${cookies?.length ?? 0}',
+          );
         }
         if (cookies == null || cookies.isEmpty) {
           if (attempt < 3) {
             await Future<void>.delayed(const Duration(milliseconds: 800));
             continue;
           }
-          if (!mounted) return;
+          if (!_active) return;
           setState(() => _error = '未能读取登录会话，请重试。');
           _harvesting = false;
           return;
         }
+        if (!_active) return;
         await ref
             .read(authControllerProvider.notifier)
             .signInWithCookies(cookies);
-        if (!mounted) return;
+        if (!mounted || !_active) return;
         final signedIn =
             ref.read(authControllerProvider).value?.isSignedIn ?? false;
         if (signedIn) {
           Mv2Analytics.logLoginGoogleSubmit(result: 'success');
-          // 先关 OAuth 页，再关底下的登录页。
-          context.pop();
-          if (mounted) context.pop();
+          _completed = true;
+          // The caller owns dismissing /login. Never pop the topic underneath.
+          if (context.canPop()) {
+            context.pop(true);
+          } else {
+            context.go('/feed');
+          }
           return;
         }
         if (attempt < 3) {
           await Future<void>.delayed(const Duration(milliseconds: 800));
           continue;
         }
-        setState(() => _error = '登录未完成，请在页面中重试。');
+        setState(() => _error = '尚未同步登录状态，请点击重新同步；若网页尚未登录，请先完成登录。');
         _harvesting = false;
       }
     } catch (error) {
-      if (!mounted) return;
+      if (!_active) return;
       setState(() => _error = '登录失败：$error');
+      _harvesting = false;
+    } finally {
       _harvesting = false;
     }
   }
@@ -258,6 +268,10 @@ class _GoogleLoginPageState extends ConsumerState<GoogleLoginPage> {
                         ),
                       ),
                     ),
+                    TextButton(
+                      onPressed: _harvesting ? null : _onPageSettled,
+                      child: const Text('重新同步'),
+                    ),
                     GestureDetector(
                       onTap: () => setState(() => _error = null),
                       child: Icon(
@@ -277,16 +291,21 @@ class _GoogleLoginPageState extends ConsumerState<GoogleLoginPage> {
               index: _revealed ? 0 : 1,
               children: <Widget>[
                 WebViewWidget(controller: _web),
-                Center(
-                  child: SizedBox(
-                    width: 24,
-                    height: 24,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2.5,
-                      valueColor: AlwaysStoppedAnimation<Color>(colors.accent),
+                if (_revealed)
+                  const SizedBox.shrink()
+                else
+                  Center(
+                    child: SizedBox(
+                      width: 24,
+                      height: 24,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2.5,
+                        valueColor: AlwaysStoppedAnimation<Color>(
+                          colors.accent,
+                        ),
+                      ),
                     ),
                   ),
-                ),
               ],
             ),
           ),
