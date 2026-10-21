@@ -1,22 +1,23 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../core/deeplink/deep_link_listener.dart';
-import '../../core/telemetry/mv2_analytics.dart';
-import '../../core/telemetry/mv2_telemetry.dart';
-import '../../core/native/widget_sync.dart';
-import '../../design_system/theme/mv2_theme.dart';
-import '../../features/auth/application/auth_controller.dart';
-import '../../features/settings/application/settings_controller.dart';
-import '../../ui/utils/mv2_breakpoints.dart';
-import '../../ui/primitives/mv2_shad_theme.dart';
+import '../core/deeplink/deep_link_listener.dart';
+import '../core/telemetry/mv2_analytics.dart';
+import '../core/telemetry/mv2_telemetry.dart';
+import '../core/native/widget_sync.dart';
+import '../design_system/theme/mv2_theme.dart';
+import '../features/auth/application/auth_controller.dart';
+import '../features/settings/application/settings_controller.dart';
+import '../ui/utils/mv2_breakpoints.dart';
+import '../ui/primitives/mv2_shad_theme.dart';
 
 import 'package:adaptive_platform_ui/adaptive_platform_ui.dart';
 import 'package:foldable/foldable.dart';
 
-import '../../ui/utils/scene_sync.dart';
+import '../ui/utils/scene_sync.dart';
 import 'router.dart';
 import 'session_cache_refresh.dart';
+import '../features/pro/application/pro_controller.dart';
 
 /// Root widget: owns theming (Light/Dark + reading scale) and the router.
 class Mv2App extends ConsumerWidget {
@@ -36,6 +37,7 @@ class Mv2App extends ConsumerWidget {
     // Keeps session-scoped caches honest across sign-in/sign-out; watching it at
     // the root means it runs regardless of the current route.
     ref.watch(sessionCacheRefreshProvider);
+    ref.watch(proLifecycleProvider);
     // Keeps the iOS Home Screen widget's snapshot in step with the app.
     ref.watch(widgetSyncProvider);
     // Theme context on every crash/non-fatal report: 颜色 reports are only

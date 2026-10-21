@@ -220,7 +220,9 @@ flutter run \
   --dart-define=MV2_REVENUECAT_GOOGLE_KEY=goog_vPzlRtaqdnrOkwlWxMTUJlhPflb
 ```
 
-不注入 key 的构建（本地开发 / CI）付费墙显示「商店尚未配置」，不可购但一切正常。
+公开 SDK key 同时作为客户端默认值，普通本地构建也能读取正式商品；
+`--dart-define` 可覆盖环境配置。传入空 key 可显式禁用对应商店。
+服务端 RevenueCat secret key 仍仅配置在 Worker，不能放入客户端。
 商店侧需要一次性配置：
 
 1. RevenueCat 后台建 App（iOS / Android 各一把 public key），创建 entitlement

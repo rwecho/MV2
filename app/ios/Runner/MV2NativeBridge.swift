@@ -2,6 +2,7 @@ import Flutter
 import UIKit
 import WebKit
 import WidgetKit
+import LinkPresentation
 
 /// Native half of the MV2 ↔ iOS integration.
 ///
@@ -51,6 +52,9 @@ final class MV2NativeBridge {
 
   private func handle(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
     switch call.method {
+    case "shareApp":
+      presentAppShare(call.arguments, result: result)
+
     case "setWidgetSnapshot":
       guard let payload = call.arguments as? [String: Any] else {
         result(
@@ -92,6 +96,53 @@ final class MV2NativeBridge {
     default:
       result(FlutterMethodNotImplemented)
     }
+  }
+
+  private func presentAppShare(_ arguments: Any?, result: @escaping FlutterResult) {
+    guard let args = arguments as? [String: Any],
+      let text = args["text"] as? String,
+      let title = args["title"] as? String,
+      let urlString = args["url"] as? String,
+      let url = URL(string: urlString),
+      let scene = UIApplication.shared.connectedScenes
+        .compactMap({ $0 as? UIWindowScene })
+        .first(where: { $0.activationState == .foregroundActive }),
+      let window = scene.windows.first(where: { $0.isKeyWindow }),
+      var presenter = window.rootViewController
+    else {
+      result(FlutterError(code: "share_unavailable", message: "Cannot present sharing", details: nil))
+      return
+    }
+    while let presented = presenter.presentedViewController {
+      presenter = presented
+    }
+    guard !(presenter is UIActivityViewController) else {
+      result(FlutterError(code: "share_busy", message: "Sharing is already open", details: nil))
+      return
+    }
+
+    let item = MV2AppShareItem(text: text, title: title, url: url)
+    let controller = UIActivityViewController(activityItems: [item], applicationActivities: nil)
+    if let popover = controller.popoverPresentationController {
+      popover.sourceView = presenter.view
+      if let rect = args["sourceRect"] as? [String: Double],
+        let x = rect["x"], let y = rect["y"],
+        let width = rect["width"], let height = rect["height"] {
+        let source = presenter.view.convert(CGRect(x: x, y: y, width: width, height: height), from: window)
+        let clipped = source.intersection(presenter.view.bounds)
+        popover.sourceRect = clipped.isNull ? CGRect(x: presenter.view.bounds.midX, y: presenter.view.bounds.midY, width: 1, height: 1) : clipped
+      } else {
+        popover.sourceRect = CGRect(x: presenter.view.bounds.midX, y: presenter.view.bounds.midY, width: 1, height: 1)
+      }
+    }
+    controller.completionWithItemsHandler = { _, _, _, error in
+      if let error {
+        result(FlutterError(code: "share_failed", message: error.localizedDescription, details: nil))
+      } else {
+        result(nil)
+      }
+    }
+    presenter.present(controller, animated: true)
   }
 
   /// `UIWindowScene.traitCollection.horizontalSizeClass` 归一化字符串:
@@ -153,6 +204,46 @@ final class MV2NativeBridge {
     if #available(iOS 14.0, *) {
       WidgetCenter.shared.reloadAllTimelines()
     }
+  }
+}
+
+/// The preview icon is metadata, not an image attachment. Recipients still
+/// receive the invitation text and store URL, without an extra logo file.
+private final class MV2AppShareItem: NSObject, UIActivityItemSource {
+  let text: String
+  let title: String
+  let url: URL
+
+  init(text: String, title: String, url: URL) {
+    self.text = text
+    self.title = title
+    self.url = url
+  }
+
+  func activityViewControllerPlaceholderItem(_ activityViewController: UIActivityViewController) -> Any {
+    text
+  }
+
+  func activityViewController(_ activityViewController: UIActivityViewController,
+    itemForActivityType activityType: UIActivity.ActivityType?) -> Any? {
+    text
+  }
+
+  func activityViewController(_ activityViewController: UIActivityViewController,
+    subjectForActivityType activityType: UIActivity.ActivityType?) -> String {
+    title
+  }
+
+  func activityViewControllerLinkMetadata(_ activityViewController: UIActivityViewController) -> LPLinkMetadata? {
+    let metadata = LPLinkMetadata()
+    metadata.title = title
+    metadata.url = url
+    metadata.originalURL = url
+    if let image = UIImage(named: "ShareAppIcon") {
+      metadata.iconProvider = NSItemProvider(object: image)
+      metadata.imageProvider = NSItemProvider(object: image)
+    }
+    return metadata
   }
 }
 

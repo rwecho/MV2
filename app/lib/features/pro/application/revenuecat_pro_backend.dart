@@ -8,7 +8,8 @@ import 'pro_backend.dart';
 
 /// RevenueCat 生产实现。
 ///
-/// 公钥是客户端公开凭据，通过 `--dart-define` 注入（CI/构建时传入，仓库不落盘）：
+/// Public SDK keys ship in every build; --dart-define can override them for
+/// another environment. These are not the server's secret API credentials.
 ///
 /// ```sh
 /// flutter run \
@@ -20,10 +21,16 @@ import 'pro_backend.dart';
 /// 挂在 entitlement 上的终身包（`$rc_lifetime`，商品 id
 /// [kProLifetimeProductId]）。缺公钥时 [isConfigured] 为 false，付费墙进入
 /// 不可购状态而不是在运行时崩掉 —— 本地开发与 CI 不配 key 也能跑。
-class RevenueCatProBackend implements ProBackend {
+class RevenueCatProBackend implements ProBackend, ProPurchaseSynchronizer {
   RevenueCatProBackend({
-    this.appleKey = const String.fromEnvironment('MV2_REVENUECAT_APPLE_KEY'),
-    this.googleKey = const String.fromEnvironment('MV2_REVENUECAT_GOOGLE_KEY'),
+    this.appleKey = const String.fromEnvironment(
+      'MV2_REVENUECAT_APPLE_KEY',
+      defaultValue: 'appl_vhcSVsNoTuUwJWzgJwLgCLeQccs',
+    ),
+    this.googleKey = const String.fromEnvironment(
+      'MV2_REVENUECAT_GOOGLE_KEY',
+      defaultValue: 'goog_vPzlRtaqdnrOkwlWxMTUJlhPflb',
+    ),
     this.entitlementId = kProEntitlementId,
   });
 
@@ -32,6 +39,7 @@ class RevenueCatProBackend implements ProBackend {
   final String entitlementId;
 
   bool _configured = false;
+  Future<void>? _configuration;
 
   /// 当前平台对应的公钥（公钥本身是公开凭据，不涉密）。
   String get _apiKey {
@@ -53,15 +61,32 @@ class RevenueCatProBackend implements ProBackend {
   Future<void> ensureReady() async {
     if (_configured) return;
     if (!isConfigured) throw const ProUnconfiguredException();
-    await Purchases.setLogLevel(LogLevel.warn);
-    await Purchases.configure(PurchasesConfiguration(_apiKey));
-    _configured = true;
+    await (_configuration ??= _configure());
+  }
+
+  Future<void> _configure() async {
+    try {
+      await Purchases.setLogLevel(LogLevel.warn);
+      await Purchases.configure(PurchasesConfiguration(_apiKey));
+      _configured = true;
+    } catch (_) {
+      _configuration = null;
+      rethrow;
+    }
   }
 
   @override
   Future<bool> checkEntitlement() async {
     final info = await Purchases.getCustomerInfo();
     return info.entitlements.all[entitlementId]?.isActive ?? false;
+  }
+
+  @override
+  Future<bool> syncEntitlement() async {
+    await ensureReady();
+    await Purchases.syncPurchases();
+    await Purchases.invalidateCustomerInfoCache();
+    return checkEntitlement();
   }
 
   @override

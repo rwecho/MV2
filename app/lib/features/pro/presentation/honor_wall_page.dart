@@ -48,11 +48,22 @@ class _HonorWallPageState extends ConsumerState<HonorWallPage> {
       child: honors.when(
         skipLoadingOnReload: true,
         loading: () => const Center(child: CircularProgressIndicator()),
-        error: (_, _) => Mv2StateView(
-          kind: Mv2StateKind.error,
-          description: '赞助榜加载失败',
-          actionLabel: '重试',
-          onAction: () => ref.invalidate(honorsControllerProvider),
+        error: (_, _) => Column(
+          children: [
+            Expanded(
+              child: Mv2StateView(
+                kind: Mv2StateKind.error,
+                description: '赞助榜加载失败',
+                actionLabel: '重试',
+                onAction: () => ref.invalidate(honorsControllerProvider),
+              ),
+            ),
+            Mv2TextButton(
+              label: '赞助 MV2 / 恢复购买',
+              onPressed: () => context.push('/pro?source=feature_gate'),
+            ),
+            const SizedBox(height: Mv2Spacing.x6),
+          ],
         ),
         data: (state) => Mv2Refreshable(
           onRefresh: () async => ref.invalidate(honorsControllerProvider),

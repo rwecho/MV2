@@ -77,7 +77,12 @@ class _PaywallPageState extends ConsumerState<PaywallPage> {
     try {
       final entitled = await ref.read(proControllerProvider.notifier).restore();
       if (!mounted) return;
-      _toast(entitled ? '已恢复永久版权益' : '此账号下没有可恢复的购买');
+      _toast(
+        entitled
+            ? '已恢复永久版权益'
+            : ref.read(proControllerProvider).value?.errorMessage ??
+                  '此账号下没有可恢复的购买',
+      );
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -178,11 +183,17 @@ class _Body extends StatelessWidget {
 
     final product = state.product;
     if (product == null) {
-      return Mv2StateView(
-        kind: Mv2StateKind.error,
-        description: '暂时拿不到商品信息',
-        actionLabel: '重试',
-        onAction: onRetry,
+      return Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Mv2StateView(
+            kind: Mv2StateKind.error,
+            description: state.errorMessage ?? '暂时拿不到商品信息',
+            actionLabel: '重试',
+            onAction: onRetry,
+          ),
+          Mv2TextButton(label: '恢复购买', enabled: !busy, onPressed: onRestore),
+        ],
       );
     }
 

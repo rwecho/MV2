@@ -58,6 +58,8 @@ class HonorsController extends AsyncNotifier<HonorsState> {
     final backend = ref.read(proControllerProvider.notifier).backend;
     String rcUserId;
     try {
+      await ref.read(proControllerProvider.future);
+      await backend.ensureReady();
       rcUserId = await backend.appUserId();
     } on Exception {
       Mv2Analytics.logHonorJoin(result: HonorJoinResult.error.name);

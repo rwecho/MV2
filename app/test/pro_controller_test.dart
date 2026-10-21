@@ -52,7 +52,70 @@ Future<ProviderContainer> _boot(ProBackend backend) async {
   return container;
 }
 
+class _ExternalRedemptionBackend extends _FakeBackend
+    implements ProPurchaseSynchronizer {
+  @override
+  Future<bool> syncEntitlement() async => true;
+}
+
+class _PriceFailureBackend extends _FakeBackend {
+  @override
+  Future<bool> checkEntitlement() async => true;
+
+  @override
+  Future<ProProduct?> fetchLifetimeProduct() async =>
+      throw Exception('store unavailable');
+}
+
+class _PurchaseFailureBackend extends _FakeBackend {
+  @override
+  Future<ProPurchaseOutcome> purchaseLifetime() async =>
+      throw Exception('store unavailable');
+}
+
 void main() {
+  test(
+    'external redemption refresh updates and persists entitlement',
+    () async {
+      final container = await _boot(_ExternalRedemptionBackend());
+      expect(container.read(isProProvider), isFalse);
+      expect(
+        await container
+            .read(proControllerProvider.notifier)
+            .refreshEntitlement(),
+        isTrue,
+      );
+      expect(container.read(isProProvider), isTrue);
+      expect(
+        (await SharedPreferences.getInstance()).getBool('mv2.pro.entitled'),
+        isTrue,
+      );
+    },
+  );
+
+  test(
+    'price fetch failure still persists a verified permanent entitlement',
+    () async {
+      final container = await _boot(_PriceFailureBackend());
+      expect(container.read(isProProvider), isTrue);
+      expect(
+        (await SharedPreferences.getInstance()).getBool('mv2.pro.entitled'),
+        isTrue,
+      );
+    },
+  );
+
+  test(
+    'store exception returns a purchase failure without escaping the UI',
+    () async {
+      final container = await _boot(_PurchaseFailureBackend());
+      expect(
+        await container.read(proControllerProvider.notifier).purchase(),
+        ProPurchaseOutcome.error,
+      );
+      expect(container.read(isProProvider), isFalse);
+    },
+  );
   test('unconfigured build stays not-entitled and not purchasable', () async {
     final container = await _boot(_FakeBackend(configured: false));
 

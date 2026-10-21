@@ -66,3 +66,8 @@ abstract interface class ProBackend {
   /// 恢复购买;返回恢复后是否拥有权益。
   Future<bool> restore();
 }
+
+/// Reconciles purchases redeemed or approved outside the application.
+abstract interface class ProPurchaseSynchronizer {
+  Future<bool> syncEntitlement();
+}

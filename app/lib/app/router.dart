@@ -22,6 +22,7 @@ import '../features/reader/presentation/reader_page.dart';
 import '../features/search/presentation/search_page.dart';
 import '../features/pro/presentation/honor_wall_page.dart';
 import '../features/pro/presentation/paywall_page.dart';
+import '../features/pro/presentation/redeem_code_page.dart';
 import '../features/settings/presentation/about_page.dart';
 import '../features/settings/presentation/settings_page.dart';
 import '../features/shell/presentation/app_shell.dart';
@@ -250,6 +251,11 @@ final routerProvider = Provider<GoRouter>((ref) {
             source: state.uri.queryParameters['source'] ?? 'settings',
           ),
         ),
+      ),
+      GoRoute(
+        path: '/redeem',
+        pageBuilder: (context, state) =>
+            _sheet(context, state, const RedeemCodePage()),
       ),
       GoRoute(
         path: '/read-later',

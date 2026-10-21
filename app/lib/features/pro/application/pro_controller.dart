@@ -1,3 +1,8 @@
+import 'dart:async';
+
+import 'package:flutter/widgets.dart';
+import 'package:flutter/services.dart';
+import 'package:purchases_flutter/purchases_flutter.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -11,6 +16,7 @@ class ProState {
     this.configured = false,
     this.entitled = false,
     this.product,
+    this.errorMessage,
   });
 
   /// 后端是否具备可购配置（公钥注入、平台受支持）。
@@ -21,13 +27,19 @@ class ProState {
 
   /// 商店里的终身买断商品；null = 还没拉到 / 商店无商品。
   final ProProduct? product;
+  final String? errorMessage;
 
-  ProState copyWith({bool? configured, bool? entitled, ProProduct? product}) =>
-      ProState(
-        configured: configured ?? this.configured,
-        entitled: entitled ?? this.entitled,
-        product: product ?? this.product,
-      );
+  ProState copyWith({
+    bool? configured,
+    bool? entitled,
+    ProProduct? product,
+    String? errorMessage,
+  }) => ProState(
+    configured: configured ?? this.configured,
+    entitled: entitled ?? this.entitled,
+    product: product ?? this.product,
+    errorMessage: errorMessage,
+  );
 }
 
 /// 权益的本地持久化 key。权益是"最后一次已知状态"，真值永远在 RevenueCat；
@@ -36,13 +48,15 @@ const String _kEntitledKey = 'mv2.pro.entitled';
 
 class ProController extends AsyncNotifier<ProState> {
   ProBackend? _backendOverride;
+  late final ProBackend _productionBackend = RevenueCatProBackend();
+  bool _refreshing = false;
 
   /// 测试注入假后端用；生产代码不要调用。
   // coverage:ignore-start
   void debugOverrideBackend(ProBackend backend) => _backendOverride = backend;
   // coverage:ignore-end
 
-  ProBackend get backend => _backendOverride ?? RevenueCatProBackend();
+  ProBackend get backend => _backendOverride ?? _productionBackend;
 
   @override
   Future<ProState> build() async {
@@ -63,14 +77,39 @@ class ProController extends AsyncNotifier<ProState> {
     try {
       await backend.ensureReady();
       entitled = await backend.checkEntitlement();
-      final product = await backend.fetchLifetimeProduct();
       await _persist(entitled);
+      final product = await backend.fetchLifetimeProduct();
       return ProState(configured: true, entitled: entitled, product: product);
     } on ProUnconfiguredException {
       return ProState(configured: false, entitled: entitled);
-    } on Exception {
+    } on Exception catch (error) {
       // 拉取失败不阻塞界面：保留缓存权益，付费墙里可重试。
-      return ProState(configured: true, entitled: entitled);
+      return ProState(
+        configured: true,
+        entitled: entitled,
+        errorMessage: _storeError(error),
+      );
+    }
+  }
+
+  /// Refreshes an external redemption without clearing the visible state.
+  Future<bool> refreshEntitlement() async {
+    if (_refreshing) return state.value?.entitled ?? false;
+    _refreshing = true;
+    try {
+      await future;
+      final store = backend;
+      if (!store.isConfigured) return false;
+      await store.ensureReady();
+      final entitled = store is ProPurchaseSynchronizer
+          ? await (store as ProPurchaseSynchronizer).syncEntitlement()
+          : await store.checkEntitlement();
+      await _setEntitled(entitled);
+      return entitled;
+    } on Exception {
+      return state.value?.entitled ?? false;
+    } finally {
+      _refreshing = false;
     }
   }
 
@@ -82,13 +121,19 @@ class ProController extends AsyncNotifier<ProState> {
       return ProPurchaseOutcome.error;
     }
     try {
+      await future;
       await backend.ensureReady();
-    } on ProUnconfiguredException {
-      Mv2Analytics.logPurchaseResult(result: 'unconfigured');
+    } on Exception {
+      Mv2Analytics.logPurchaseResult(result: 'error');
       return ProPurchaseOutcome.error;
     }
 
-    final outcome = await backend.purchaseLifetime();
+    ProPurchaseOutcome outcome;
+    try {
+      outcome = await backend.purchaseLifetime();
+    } on Exception {
+      outcome = ProPurchaseOutcome.error;
+    }
     Mv2Analytics.logPurchaseResult(result: outcome.name);
     if (outcome == ProPurchaseOutcome.success) {
       await _setEntitled(true);
@@ -106,8 +151,14 @@ class ProController extends AsyncNotifier<ProState> {
       return false;
     }
     try {
+      await future;
       await backend.ensureReady();
-    } on ProUnconfiguredException {
+    } on Exception catch (error) {
+      state = AsyncData(
+        (state.value ?? const ProState()).copyWith(
+          errorMessage: _storeError(error),
+        ),
+      );
       Mv2Analytics.logRestoreResult(result: 'error');
       return false;
     }
@@ -119,7 +170,12 @@ class ProController extends AsyncNotifier<ProState> {
         result: entitled ? 'success' : 'no_entitlement',
       );
       return entitled;
-    } on Exception {
+    } on Exception catch (error) {
+      state = AsyncData(
+        (state.value ?? const ProState()).copyWith(
+          errorMessage: _storeError(error),
+        ),
+      );
       Mv2Analytics.logRestoreResult(result: 'error');
       return false;
     }
@@ -141,9 +197,30 @@ class ProController extends AsyncNotifier<ProState> {
   }
 }
 
+String _storeError(Exception error) {
+  if (error is PlatformException &&
+      PurchasesErrorHelper.getErrorCode(error) ==
+          PurchasesErrorCode.purchaseNotAllowedError) {
+    return '此设备或商店账号暂时无法购买。请检查商店登录状态及购买权限，并通过应用商店安装应用后重试。';
+  }
+  return '暂时无法连接应用商店，请检查网络后重试。';
+}
+
 final proControllerProvider = AsyncNotifierProvider<ProController, ProState>(
   ProController.new,
 );
+
+final proLifecycleProvider = Provider<void>((ref) {
+  // Observe throughout the app so returning from a store redemption or a
+  // delayed payment updates the sponsor wall as well as the purchase page.
+  ref.watch(proControllerProvider);
+  final listener = AppLifecycleListener(
+    onResume: () {
+      unawaited(ref.read(proControllerProvider.notifier).refreshEntitlement());
+    },
+  );
+  ref.onDispose(listener.dispose);
+});
 
 /// 全应用门控读取点：`ref.watch(isProProvider)` 即"是否已解锁永久版"。
 /// 骨架阶段没有任何功能依赖它，后续门控一行接入。

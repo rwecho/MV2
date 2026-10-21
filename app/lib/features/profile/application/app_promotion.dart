@@ -2,8 +2,9 @@ import 'dart:io' show Platform;
 
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart' show Clipboard, ClipboardData;
-import 'package:in_app_review/in_app_review.dart';
+import 'package:flutter/services.dart'
+    show Clipboard, ClipboardData, MethodChannel, MissingPluginException;
+import 'package:go_router/go_router.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -28,28 +29,20 @@ abstract final class AppPromotion {
   /// 给个好评。
   ///
   /// iOS 由用户主动点击，按 HIG 直达商店「写评价」页（系统评分弹窗留给
-  /// 场景化时机，且不保证每次弹出，不适合做按钮反馈）；Android 用 Play
-  /// 系统内评分弹窗，不可用（未装 Play / 系统限流）时退商店详情页。
+  /// 场景化时机，且不保证每次弹出，不适合做按钮反馈）。Android 同样
+  /// 直接打开商店页面，避免评分配额造成按钮没有可见反馈。
   static Future<void> requestReview(BuildContext context) async {
     if (_isIos) {
       Mv2Analytics.logAppReview(method: 'write_review_page');
       await _open(
         context,
-        Uri.parse('https://apps.apple.com/app/id$appleAppId?action=write-review'),
+        Uri.parse(
+          'https://apps.apple.com/app/id$appleAppId?action=write-review',
+        ),
       );
       return;
     }
     if (_isAndroid) {
-      try {
-        if (await InAppReview.instance.isAvailable()) {
-          Mv2Analytics.logAppReview(method: 'native_dialog');
-          await InAppReview.instance.requestReview();
-          return;
-        }
-      } catch (error) {
-        // 评分弹窗拿不到不阻断入口：退到商店详情页。
-        debugPrint('MV2: in-app review unavailable: $error');
-      }
       Mv2Analytics.logAppReview(method: 'store_page');
       if (!context.mounted) return;
       await _open(context, Uri.parse(_playStoreUrl));
@@ -59,12 +52,14 @@ abstract final class AppPromotion {
     await _open(context, Uri.parse(githubUrl));
   }
 
-  /// 兑换码：交给系统商店自己的兑换界面输入，应用内不做输入框。
-  ///
-  /// App Store 兑换面板在 iOS 16 起没有公开 API，官方推荐通用链接；
-  /// Play 用 redeem 深链。
+  /// Store promo codes are entered in the store. Android has a return page
+  /// that restores the redeemed purchase and links to the sponsor wall.
   static Future<void> openRedeem(BuildContext context) async {
     Mv2Analytics.logAppRedeem();
+    if (_isAndroid) {
+      await context.push('/redeem');
+      return;
+    }
     await _open(
       context,
       Uri.parse(
@@ -74,6 +69,9 @@ abstract final class AppPromotion {
       ),
     );
   }
+
+  static Future<void> openPlayRedemption(BuildContext context) =>
+      _open(context, Uri.parse(_playRedeemUrl));
 
   /// 分享给朋友：带上当前平台的商店链接（无商店平台带 GitHub）。
   static Future<void> shareApp(BuildContext context) async {
@@ -87,8 +85,32 @@ abstract final class AppPromotion {
       final origin = (box != null && box.hasSize)
           ? box.localToGlobal(Offset.zero) & box.size
           : null;
+      if (_isIos) {
+        try {
+          await const MethodChannel('mv2/native')
+              .invokeMethod<void>('shareApp', {
+                'text': text,
+                'title': 'MV2 · 极简 V2EX 社区客户端',
+                'url': storeUrl,
+                if (origin != null)
+                  'sourceRect': {
+                    'x': origin.left,
+                    'y': origin.top,
+                    'width': origin.width,
+                    'height': origin.height,
+                  },
+              });
+          return;
+        } on MissingPluginException {
+          // Older native hosts can still share the text and store link.
+        }
+      }
       await SharePlus.instance.share(
-        ShareParams(text: text, sharePositionOrigin: origin),
+        ShareParams(
+          text: text,
+          subject: 'MV2 · 极简 V2EX 社区客户端',
+          sharePositionOrigin: origin,
+        ),
       );
     } catch (error, stackTrace) {
       debugPrint('MV2: share app failed: $error\n$stackTrace');
@@ -96,9 +118,8 @@ abstract final class AppPromotion {
         await Clipboard.setData(ClipboardData(text: storeUrl));
       } catch (_) {}
       if (!context.mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('无法打开分享面板，链接已复制到剪贴板')),
-      );
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text('无法打开分享面板，链接已复制到剪贴板')));
     }
   }
 
@@ -135,8 +156,6 @@ abstract final class AppPromotion {
     try {
       await Clipboard.setData(ClipboardData(text: url.toString()));
     } catch (_) {}
-    messenger.showSnackBar(
-      const SnackBar(content: Text('无法打开应用商店，链接已复制到剪贴板')),
-    );
+    messenger.showSnackBar(const SnackBar(content: Text('无法打开应用商店，链接已复制到剪贴板')));
   }
 }
