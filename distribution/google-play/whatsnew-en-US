@@ -1,7 +1,2 @@
-• Keep the page layout stable when opening and closing full-screen images
-• Save original images to the system photo library
-• Display protected email addresses correctly in topics and replies
-• Align settings values consistently at the right edge
-• Open the Play Store directly when choosing to rate the app
-• Improve purchase recovery and refresh access after redeeming a code
-• Improve sponsor wall registration and store error messages
+• Fix leftover Markdown markers around uploaded reply images
+• Clarify formatting help for replies

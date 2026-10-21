@@ -605,7 +605,7 @@ class _ComposerToolbar extends StatelessWidget {
           padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
           child: Row(
             children: [
-              ComposerImageButton(onInsert: onInsertImage),
+              ComposerImageButton(onInsert: onInsertImage, markdown: false),
               Mv2ToolbarButton(
                 label: '表情',
                 icon: Icons.sentiment_satisfied_alt_outlined,
@@ -624,9 +624,9 @@ class _ComposerToolbar extends StatelessWidget {
                     showDialog<void>(
                       context: context,
                       builder: (context) => AlertDialog(
-                        title: const Text('Markdown 格式'),
+                        title: const Text('回复格式'),
                         content: const Text(
-                          '**粗体**\n*斜体*\n[链接文字](网址)\n> 引用内容\n`行内代码`\n\nBase64 编码：先在正文中选中文字，再从更多工具中选择编码。',
+                          '回复使用纯文本，网址会自动识别。图片地址单独放一行即可展示图片，无需添加 Markdown 图片标记。\n\nBase64 编码：先在正文中选中文字，再从更多工具中选择编码。',
                         ),
                         actions: [
                           TextButton(
@@ -641,7 +641,7 @@ class _ComposerToolbar extends StatelessWidget {
                 itemBuilder: (_) => const [
                   PopupMenuItem(
                     value: 'markdown',
-                    child: Text('Markdown 格式帮助'),
+                    child: Text('回复格式帮助'),
                   ),
                   PopupMenuItem(
                     value: 'base64',

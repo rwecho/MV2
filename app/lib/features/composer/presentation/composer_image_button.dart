@@ -15,7 +15,14 @@ import '../application/image_picker_providers.dart';
 /// V2EX has no image host of its own; the returned link is inserted as
 /// `![](https://i.imgur.com/…)` at the caret so the post renders the image.
 class ComposerImageButton extends ConsumerStatefulWidget {
-  const ComposerImageButton({super.key, required this.onInsert});
+  const ComposerImageButton({
+    super.key,
+    required this.onInsert,
+    this.markdown = true,
+  });
+
+  /// Topics support Markdown; replies auto-embed standalone image URLs.
+  final bool markdown;
 
   /// Receives the Markdown snippet to insert at the caret.
   final ValueChanged<String> onInsert;
@@ -55,7 +62,7 @@ class _ComposerImageButtonState extends ConsumerState<ComposerImageButton> {
         sizeBytes: picked.bytes.length,
       );
       if (!mounted) return;
-      widget.onInsert('![]($url)');
+      widget.onInsert(widget.markdown ? '![]($url)' : '\n$url\n');
     } catch (error) {
       Mv2Analytics.logImageUpload(
         result: 'failed',
