@@ -1,11 +1,17 @@
 import 'package:html/dom.dart';
 import 'package:html/parser.dart' as html_parser;
 
+import 'cloudflare_email.dart';
+
 /// Small, defensive wrapper around `package:html`.
 ///
 /// V2EX pages are hand-written HTML with `&nbsp;` separators and Chinese
 /// literals; these helpers centralise the cleaning so parsers stay readable.
-Document parseHtmlDocument(String source) => html_parser.parse(source);
+Document parseHtmlDocument(String source) {
+  final document = html_parser.parse(source);
+  decodeCloudflareEmails(document);
+  return document;
+}
 
 extension Mv2ElementQueries on Element {
   /// Inner text of the first match, cleaned; `null` when absent or blank.

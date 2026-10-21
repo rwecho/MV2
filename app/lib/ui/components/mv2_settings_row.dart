@@ -104,6 +104,7 @@ class Mv2SettingsRow extends StatelessWidget {
               if (value != null) ...<Widget>[
                 const SizedBox(width: Mv2Spacing.x2),
                 Flexible(
+                  fit: FlexFit.tight,
                   child: Text(
                     value!,
                     maxLines: 1,

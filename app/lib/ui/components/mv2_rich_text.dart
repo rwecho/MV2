@@ -7,6 +7,7 @@ import 'package:html/dom.dart' as dom;
 import 'package:html/parser.dart' as html_parser;
 
 import '../../core/parser/html_dom.dart';
+import '../../core/parser/cloudflare_email.dart';
 import '../../shared/emoji/mv2_emoji_library.dart';
 import '../../core/telemetry/mv2_analytics.dart';
 import '../../core/text/base64_text.dart';
@@ -162,6 +163,7 @@ class _Mv2RichTextState extends State<Mv2RichText> {
         widget.baseStyle ??
         context.text.reading.copyWith(color: colors.textPrimary);
     final fragment = html_parser.parseFragment(widget.html);
+    decodeCloudflareEmails(fragment);
     _gallery = _collectImages(fragment);
 
     final blocks = _flow(context, fragment.nodes, style);
