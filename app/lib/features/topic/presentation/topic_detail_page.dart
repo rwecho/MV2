@@ -24,6 +24,7 @@ import '../../../design_system/tokens/mv2_spacing.dart';
 import '../../../shared/models/models.dart';
 import '../../../shared/models/topic_detail.dart';
 import '../../../ui/components/floating_reply_bar.dart';
+import '../../../ui/components/mv2_reply_header.dart';
 import '../../../ui/components/mv2_collapsible_body.dart';
 import '../../../ui/components/mv2_error_feedback.dart';
 import '../../../ui/components/mv2_page_scaffold.dart';
@@ -1747,36 +1748,11 @@ class _ReplyRow extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: <Widget>[
-                    Row(
-                      children: <Widget>[
-                        Flexible(
-                          child: GestureDetector(
-                            behavior: HitTestBehavior.opaque,
-                            onTap: memberRoute == null
-                                ? null
-                                : () => context.push(memberRoute),
-                            child: Text(
-                              '@${reply.author.username}',
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: context.text.bodyStrong.copyWith(
-                                color: colors.textPrimary,
-                              ),
-                            ),
-                          ),
-                        ),
-                        for (final badge in reply.badges) ...<Widget>[
-                          const SizedBox(width: Mv2Spacing.x1),
-                          _ReplyBadge(label: badge),
-                        ],
-                        const SizedBox(width: Mv2Spacing.x2),
-                        Text(
-                          '#${reply.floor} · ${reply.createdAtLabel}',
-                          style: context.text.metadata.copyWith(
-                            color: colors.textTertiary,
-                          ),
-                        ),
-                      ],
+                    Mv2ReplyHeader(
+                      reply: reply,
+                      onAuthorTap: memberRoute == null
+                          ? null
+                          : () => context.push(memberRoute),
                     ),
                     const SizedBox(height: Mv2Spacing.x2),
                     if (contentHtml != null)
@@ -2115,35 +2091,6 @@ class _TopicArticleSkeleton extends StatelessWidget {
           radius: Mv2Radius.allMd,
         ),
       ],
-    );
-  }
-}
-
-/// `OP` / `PRO` chip straight from V2EX's own `div.badge` markup.
-class _ReplyBadge extends StatelessWidget {
-  const _ReplyBadge({required this.label});
-
-  final String label;
-
-  bool get _isOwner => label.toUpperCase() == 'OP';
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = context.colors;
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
-      decoration: BoxDecoration(
-        color: _isOwner ? colors.accentSoft : colors.divider,
-        borderRadius: Mv2Radius.allXs,
-      ),
-      child: Text(
-        // V2EX's own label is `OP` and that is the established convention —
-        // do not translate it to 楼主.
-        label,
-        style: context.text.badge.copyWith(
-          color: _isOwner ? colors.accent : colors.textSecondary,
-        ),
-      ),
     );
   }
 }
