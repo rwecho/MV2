@@ -1,3 +1,2 @@
-• Purchase and restore Pro without registering or signing in to V2EX.
-• Choose whether to appear on the supporter wall, edit your display name, or hide it.
-• Improved supporter-name recovery after restoring purchases, registration retries, and store error messages.
+Fixed password sign-in for V2EX accounts with two-factor authentication enabled.
+Improved sign-in redirects, verification code retries, and expired-session messages.

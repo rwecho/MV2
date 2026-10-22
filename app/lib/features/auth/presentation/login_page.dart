@@ -60,6 +60,7 @@ class _LoginPageState extends ConsumerState<LoginPage> {
   bool _submitting = false;
   bool _obscurePassword = true;
   bool _needsTwoFactor = false;
+  V2TwoFactorForm? _challenge;
   bool _formUnavailable = false;
 
   /// Why the form could not be scraped, when known — used to pick the title.
@@ -165,7 +166,7 @@ class _LoginPageState extends ConsumerState<LoginPage> {
     if (form == null || _submitting) return;
 
     if (_needsTwoFactor) {
-      await _submitTwoFactor(form);
+      await _submitTwoFactor();
       return;
     }
 
@@ -197,10 +198,12 @@ class _LoginPageState extends ConsumerState<LoginPage> {
         await _finishSignIn();
         return;
       }
-      if (result.twoFactor) {
+      if (result.twoFactor && result.challenge != null) {
         Mv2Analytics.logLoginSubmit(result: 'needs_2fa');
         setState(() {
           _needsTwoFactor = true;
+          _challenge = result.challenge;
+          _password.clear();
           _submitting = false;
           _errors = <String>['该账号开启了两步验证，请输入动态验证码。'];
         });
@@ -230,7 +233,9 @@ class _LoginPageState extends ConsumerState<LoginPage> {
     }
   }
 
-  Future<void> _submitTwoFactor(V2LoginForm form) async {
+  Future<void> _submitTwoFactor() async {
+    final form = _challenge;
+    if (form == null) return;
     final code = _twoFactorCode.text.trim();
     if (code.isEmpty) {
       setState(() => _errors = <String>['请输入两步验证码。']);
@@ -250,10 +255,22 @@ class _LoginPageState extends ConsumerState<LoginPage> {
         await _finishSignIn();
         return;
       }
-      setState(() {
-        _submitting = false;
-        _errors = result.errors.isEmpty ? <String>['验证码不正确。'] : result.errors;
-      });
+      if (result.requiresPassword) {
+        setState(() {
+          _needsTwoFactor = false;
+          _challenge = null;
+          _submitting = false;
+          _twoFactorCode.clear();
+        });
+        await _loadForm(keepErrors: result.errors);
+      } else {
+        setState(() {
+          _submitting = false;
+          _challenge = result.challenge ?? _challenge;
+          _twoFactorCode.clear();
+          _errors = result.errors.isEmpty ? <String>['验证码不正确。'] : result.errors;
+        });
+      }
       Mv2Analytics.logTwoFactorSubmit(result: 'failed');
     } catch (error) {
       if (!mounted) return;
@@ -278,10 +295,12 @@ class _LoginPageState extends ConsumerState<LoginPage> {
     if (!signedIn) {
       setState(() {
         _submitting = false;
-        _errors = <String>['登录未完成，请重试。'];
+        _needsTwoFactor = false;
+        _challenge = null;
+        _twoFactorCode.clear();
       });
       Mv2Analytics.logLoginSubmit(result: 'failed');
-      await _loadForm();
+      await _loadForm(keepErrors: const ['登录未完成，请重新登录。']);
       return;
     }
     Mv2Analytics.logLoginSubmit(result: 'success');

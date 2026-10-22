@@ -164,7 +164,7 @@ class FixtureV2exApi implements V2exApi {
 
   @override
   Future<V2LoginResult> twoStep({
-    required V2LoginForm form,
+    required V2TwoFactorForm form,
     required String code,
   }) async {
     return const V2LoginResult(success: false, errors: <String>['测试数据源。']);

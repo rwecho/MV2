@@ -163,7 +163,7 @@ class _FakeWriteApi implements V2exApi {
 
   @override
   Future<V2LoginResult> twoStep({
-    required V2LoginForm form,
+    required V2TwoFactorForm form,
     required String code,
   }) => throw UnimplementedError();
 

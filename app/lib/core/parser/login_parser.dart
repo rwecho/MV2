@@ -55,11 +55,46 @@ abstract final class LoginFormParser {
     );
   }
 
+  /// Read the challenge's own hidden fields and POST target. Never reuse the
+  /// password form's once token or guess the verification input's name.
+  static V2TwoFactorForm? parseTwoFactor(String html, {required String path}) {
+    final document = parseHtmlDocument(html);
+    final page = Uri.parse('https://www.v2ex.com').resolve(path);
+    for (final form in document.querySelectorAll('form')) {
+      final target = page.resolve(form.attributes['action'] ?? '');
+      if (target.origin != page.origin || target.path != '/2fa') continue;
+      final inputs = form.querySelectorAll('input[name]');
+      final candidates = inputs.where((input) {
+        final type = (input.attributes['type'] ?? 'text').toLowerCase();
+        return const ['text', 'number', 'tel', 'password'].contains(type);
+      }).toList();
+      if (candidates.length != 1) continue;
+      final fields = <String, String>{
+        for (final input in inputs)
+          if (input.attributes['type']?.toLowerCase() == 'hidden')
+            input.attributes['name']!: input.attributes['value'] ?? '',
+      };
+      return V2TwoFactorForm(
+        path: target.replace(fragment: '').toString(),
+        codeFieldName: candidates.single.attributes['name']!,
+        fields: Map.unmodifiable(fields),
+      );
+    }
+    return null;
+  }
+
+  static bool isSignInRedirect(String? location) {
+    final path = Uri.tryParse(location ?? '')?.path ?? '';
+    return path == '/signin' ||
+        path.startsWith('/signin/') ||
+        path == '/restricted';
+  }
+
   /// `div.problem ul li` — the same shape for sign-in and 2FA failures.
   static List<String> parseErrors(String html) => parseProblemList(html);
 
   /// V2EX answers the sign-in POST with `302` to `/2fa` when the account has
   /// two-step verification enabled.
   static bool isTwoFactorRedirect(String? location) =>
-      location != null && location.contains('/2fa');
+      location != null && Uri.tryParse(location)?.path == '/2fa';
 }

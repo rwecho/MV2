@@ -105,7 +105,7 @@ abstract interface class V2exApi {
 
   /// Second step for accounts with two-step verification enabled.
   Future<V2LoginResult> twoStep({
-    required V2LoginForm form,
+    required V2TwoFactorForm form,
     required String code,
   });
 
@@ -233,7 +233,11 @@ class RemoteV2exApi implements V2exApi {
     PacePriority priority = PacePriority.userRead,
   }) async {
     try {
-      final result = await _client.get(path, referer: referer, priority: priority);
+      final result = await _client.get(
+        path,
+        referer: referer,
+        priority: priority,
+      );
       if (rejectRedirect && result.isRedirect) {
         throw _redirectFailure(result);
       }
@@ -302,11 +306,19 @@ class RemoteV2exApi implements V2exApi {
           await cache?.write(jsonPath, result.body);
         } catch (error, stack) {
           // 缓存层坏了绝不能杀死网络请求本身——降级为无缓存继续
-          Mv2Telemetry.recordNonFatal(error, stack, reason: 'cache.write $jsonPath');
+          Mv2Telemetry.recordNonFatal(
+            error,
+            stack,
+            reason: 'cache.write $jsonPath',
+          );
         }
         return V1JsonParser.parseTopicList(decoded);
       } on Failure catch (error, stack) {
-        Mv2Telemetry.recordNonFatal(error, stack, reason: 'feed json $jsonPath');
+        Mv2Telemetry.recordNonFatal(
+          error,
+          stack,
+          reason: 'feed json $jsonPath',
+        );
       }
     }
     // Every topic tab is the same page with a different `?tab=` value; the
@@ -625,9 +637,7 @@ class RemoteV2exApi implements V2exApi {
       // failed attempts) — not "already signed in". Reporting it as a missing
       // form made the page blame a markup change.
       if (result.location?.contains(V2exEndpoints.signInCooldown) ?? false) {
-        throw const RateLimitFailure(
-          message: '登录尝试过于频繁，V2EX 暂时限制了登录，请稍后再试。',
-        );
+        throw const RateLimitFailure(message: '登录尝试过于频繁，V2EX 暂时限制了登录，请稍后再试。');
       }
       // An already-authenticated session is redirected away from `/signin`.
       return null;
@@ -667,34 +677,112 @@ class RemoteV2exApi implements V2exApi {
       },
     );
 
-    // V2EX signals success with 302 + a changed Location (`docs/12` §4).
-    if (result.isRedirect) {
-      return V2LoginResult(
-        success: !LoginFormParser.isTwoFactorRedirect(result.location),
-        twoFactor: LoginFormParser.isTwoFactorRedirect(result.location),
+    // A password POST may first redirect to `next` (usually `/`). Only that
+    // page then redirects to /2fa. Resolve the session's redirect chain before
+    // asking currentUser() to validate a completed sign-in.
+    var page = result;
+    var pageUrl = Uri.parse(V2exEndpoints.baseUrl)
+        .resolve(V2exEndpoints.signIn);
+    final origin = pageUrl.origin;
+    for (var hop = 0; hop < 6; hop++) {
+      debugPrint(
+        'MV2 auth: HTTP ${page.statusCode} ${pageUrl.path}'
+        ' -> ${Uri.tryParse(page.location ?? "")?.path ?? ""}',
       );
+      if (!page.isRedirect) {
+        final challenge = LoginFormParser.parseTwoFactor(
+          page.body,
+          path: pageUrl.toString(),
+        );
+        if (challenge != null) {
+          return V2LoginResult(
+            success: false,
+            twoFactor: true,
+            challenge: challenge,
+          );
+        }
+        if (LoginFormParser.parse(page.body) != null || !page.isSuccess) {
+          return V2LoginResult(
+            success: false,
+            errors: LoginFormParser.parseErrors(page.body),
+          );
+        }
+        return V2LoginResult(
+          success: result.isRedirect,
+          errors: LoginFormParser.parseErrors(page.body),
+        );
+      }
+      final location = page.location;
+      if (location == null || location.isEmpty) break;
+      final target = pageUrl.resolve(location);
+      if (target.origin != origin) break;
+      if (LoginFormParser.isSignInRedirect(target.toString())) {
+        return V2LoginResult(
+          success: false,
+          requiresPassword: true,
+          errors: [
+            target.path.contains('cooldown')
+                ? '登录尝试过于频繁，请稍后再试。'
+                : '登录未完成，请重新登录。',
+          ],
+        );
+      }
+      page = await _client.get(target.toString(), referer: pageUrl.toString());
+      pageUrl = target;
     }
+    return const V2LoginResult(success: false, errors: ['登录跳转未完成，请稍后重试。']);
+  }
+
+  V2LoginResult _twoFactorResult(HttpResult result, String path) {
+    final challenge = LoginFormParser.parseTwoFactor(result.body, path: path);
+    final errors = LoginFormParser.parseErrors(result.body);
     return V2LoginResult(
       success: false,
-      errors: LoginFormParser.parseErrors(result.body),
+      twoFactor: challenge != null,
+      challenge: challenge,
+      requiresPassword:
+          LoginFormParser.isSignInRedirect(result.location) ||
+          LoginFormParser.parse(result.body) != null,
+      errors: errors.isNotEmpty
+          ? errors
+          : challenge == null
+          ? const ['两步验证会话已失效，请重新登录。']
+          : const [],
     );
   }
 
   @override
   Future<V2LoginResult> twoStep({
-    required V2LoginForm form,
+    required V2TwoFactorForm form,
     required String code,
   }) async {
     final result = await _client.postForm(
-      V2exEndpoints.twoFactor,
-      referer: '${V2exEndpoints.baseUrl}${V2exEndpoints.signIn}',
-      data: <String, String>{'code': code, 'once': form.once},
+      form.path,
+      referer: form.path,
+      data: <String, String>{...form.fields, form.codeFieldName: code},
     );
-    if (result.isRedirect) return const V2LoginResult(success: true);
-    return V2LoginResult(
-      success: false,
-      errors: LoginFormParser.parseErrors(result.body),
-    );
+    if (result.isRedirect) {
+      if (LoginFormParser.isSignInRedirect(result.location)) {
+        return const V2LoginResult(
+          success: false,
+          requiresPassword: true,
+          errors: ['两步验证会话已失效，请重新登录。'],
+        );
+      }
+      if (LoginFormParser.isTwoFactorRedirect(result.location)) {
+        final refreshed = await _client.get(form.path, referer: form.path);
+        final retry = _twoFactorResult(refreshed, form.path);
+        return V2LoginResult(
+          success: false,
+          twoFactor: retry.twoFactor,
+          challenge: retry.challenge,
+          requiresPassword: retry.requiresPassword,
+          errors: retry.errors.isEmpty ? const ['验证码不正确，请重试。'] : retry.errors,
+        );
+      }
+      return V2LoginResult(success: result.location != null);
+    }
+    return _twoFactorResult(result, form.path);
   }
 
   @override

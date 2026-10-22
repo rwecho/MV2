@@ -32,6 +32,20 @@ class V2LoginForm {
   final String captchaPath;
 }
 
+/// A server-issued two-step challenge, separate from the password form.
+@immutable
+class V2TwoFactorForm {
+  const V2TwoFactorForm({
+    required this.path,
+    required this.codeFieldName,
+    required this.fields,
+  });
+
+  final String path;
+  final String codeFieldName;
+  final Map<String, String> fields;
+}
+
 /// Outcome of a sign-in attempt.
 @immutable
 class V2LoginResult {
@@ -39,6 +53,8 @@ class V2LoginResult {
     required this.success,
     this.errors = const <String>[],
     this.twoFactor = false,
+    this.challenge,
+    this.requiresPassword = false,
   });
 
   final bool success;
@@ -48,6 +64,8 @@ class V2LoginResult {
 
   /// The server asked for the 2FA code.
   final bool twoFactor;
+  final V2TwoFactorForm? challenge;
+  final bool requiresPassword;
 }
 
 /// Outcome of a Solana wallet sign-in (`POST /auth/solana`).

@@ -9,6 +9,7 @@ import 'package:mv2/core/data/v2ex_providers.dart';
 import 'package:mv2/design_system/theme/mv2_theme.dart';
 import 'package:mv2/features/auth/presentation/login_page.dart';
 import 'package:mv2/shared/models/login_form.dart';
+
 import 'support/fixture_api.dart';
 
 /// A 1x1 transparent PNG so `Image.memory` can actually decode in the test.
@@ -65,10 +66,7 @@ class _RotatingLoginApi extends FixtureV2exApi {
         errors: <String>['输入的验证码不正确', 'CSRF 失效，请重新提交'],
       );
     }
-    return const V2LoginResult(
-      success: false,
-      errors: <String>['输入的验证码不正确'],
-    );
+    return const V2LoginResult(success: false, errors: <String>['输入的验证码不正确']);
   }
 }
 
@@ -82,9 +80,12 @@ void main() {
     addTearDown(tester.view.resetDevicePixelRatio);
   }
 
-  Future<_RotatingLoginApi> pumpLogin(WidgetTester tester) async {
+  Future<_RotatingLoginApi> pumpLogin(
+    WidgetTester tester, [
+    _RotatingLoginApi? source,
+  ]) async {
     useTallSurface(tester);
-    final api = _RotatingLoginApi();
+    final api = source ?? _RotatingLoginApi();
     final container = ProviderContainer(
       overrides: [v2exApiProvider.overrideWithValue(api)],
     );
@@ -117,7 +118,6 @@ void main() {
     debugDefaultTargetPlatformOverride = null;
   });
 
-
   Future<void> fillAndSubmit(WidgetTester tester) async {
     final fields = find.byType(TextField);
     await tester.enterText(fields.at(0), 'someone');
@@ -127,6 +127,41 @@ void main() {
     await tester.tap(find.text('登录'));
     await tester.pumpAndSettle();
   }
+
+  testWidgets(
+    'wrong OTP stays on verification and retry uses refreshed challenge',
+    (tester) async {
+      final api = _TwoFactorApi();
+      await pumpLogin(tester, api);
+      await fillAndSubmit(tester);
+      expect(find.text('两步验证码'), findsOneWidget);
+      expect(find.byType(TextField), findsOneWidget);
+      await tester.enterText(find.byType(TextField), '000000');
+      await tester.tap(find.text('提交验证码'));
+      await tester.pumpAndSettle();
+      expect(find.text('动态验证码不正确'), findsOneWidget);
+      expect(find.text('两步验证码'), findsOneWidget);
+      expect(api.formRenders, 1);
+      await tester.enterText(find.byType(TextField), '123456');
+      await tester.tap(find.text('提交验证码'));
+      await tester.pumpAndSettle();
+      expect(api.tokens, ['challenge-1', 'challenge-2']);
+    },
+  );
+
+  testWidgets('expired challenge returns to password with an explicit reason', (
+    tester,
+  ) async {
+    final api = _TwoFactorApi()..expired = true;
+    await pumpLogin(tester, api);
+    await fillAndSubmit(tester);
+    await tester.enterText(find.byType(TextField), '123456');
+    await tester.tap(find.text('提交验证码'));
+    await tester.pumpAndSettle();
+    expect(find.byType(TextField), findsNWidgets(3));
+    expect(find.text('两步验证会话已失效，请重新登录。'), findsOneWidget);
+    expect(api.formRenders, 2);
+  });
 
   testWidgets('a failed submit re-scrapes the form so the retry uses a fresh '
       'once', (tester) async {
@@ -248,4 +283,44 @@ class _CooldownLoginApi extends FixtureV2exApi {
   @override
   Future<V2LoginForm?> loginForm() async =>
       throw const RateLimitFailure(message: '登录尝试过于频繁，请稍后再试。');
+}
+
+class _TwoFactorApi extends _RotatingLoginApi {
+  bool expired = false;
+  final tokens = <String>[];
+  V2TwoFactorForm challenge(String token) => V2TwoFactorForm(
+    path: 'https://www.v2ex.com/2fa',
+    codeFieldName: 'code',
+    fields: {'once': token},
+  );
+  @override
+  Future<V2LoginResult> login({
+    required V2LoginForm form,
+    required String username,
+    required String password,
+    required String captcha,
+  }) async => V2LoginResult(
+    success: false,
+    twoFactor: true,
+    challenge: challenge('challenge-1'),
+  );
+  @override
+  Future<V2LoginResult> twoStep({
+    required V2TwoFactorForm form,
+    required String code,
+  }) async {
+    tokens.add(form.fields['once']!);
+    if (expired)
+      return const V2LoginResult(
+        success: false,
+        requiresPassword: true,
+        errors: ['两步验证会话已失效，请重新登录。'],
+      );
+    return V2LoginResult(
+      success: false,
+      twoFactor: true,
+      challenge: challenge('challenge-2'),
+      errors: ['动态验证码不正确'],
+    );
+  }
 }

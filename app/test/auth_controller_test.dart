@@ -59,7 +59,7 @@ class _FakeApi implements V2exApi {
 
   @override
   Future<V2LoginResult> twoStep({
-    required V2LoginForm form,
+    required V2TwoFactorForm form,
     required String code,
   }) async => const V2LoginResult(success: false);
 
