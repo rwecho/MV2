@@ -22,51 +22,35 @@ Future<GoRouter> _pump(WidgetTester tester) async {
   final router = GoRouter(
     initialLocation: '/',
     routes: <RouteBase>[
+      GoRoute(path: '/', builder: (_, _) => const ProfilePage()),
       GoRoute(
-        path: '/',
-        builder: (_, _) => const ProfilePage(),
+        path: '/pro',
+        builder: (_, state) =>
+            Text('pro:${state.uri.queryParameters['source']}'),
       ),
       GoRoute(
         path: '/honors',
         builder: (context, state) =>
             Text('honors:${state.uri.queryParameters['source']}'),
       ),
-      GoRoute(
-        path: '/my/topics',
-        builder: (_, _) => const Text('my-topics'),
-      ),
-      GoRoute(
-        path: '/my/replies',
-        builder: (_, _) => const Text('my-replies'),
-      ),
+      GoRoute(path: '/my/topics', builder: (_, _) => const Text('my-topics')),
+      GoRoute(path: '/my/replies', builder: (_, _) => const Text('my-replies')),
       GoRoute(
         path: '/my/favorites',
         builder: (_, _) => const Text('my-favorites'),
       ),
-      GoRoute(
-        path: '/read-later',
-        builder: (_, _) => const Text('read-later'),
-      ),
-      GoRoute(
-        path: '/history',
-        builder: (_, _) => const Text('history'),
-      ),
+      GoRoute(path: '/read-later', builder: (_, _) => const Text('read-later')),
+      GoRoute(path: '/history', builder: (_, _) => const Text('history')),
       GoRoute(
         path: '/blocked-users',
         builder: (_, _) => const Text('blocked-users'),
       ),
-      GoRoute(
-        path: '/my/nodes',
-        builder: (_, _) => const Text('my-nodes'),
-      ),
+      GoRoute(path: '/my/nodes', builder: (_, _) => const Text('my-nodes')),
       GoRoute(
         path: '/notifications',
         builder: (_, _) => const Text('notifications'),
       ),
-      GoRoute(
-        path: '/settings',
-        builder: (_, _) => const Text('settings'),
-      ),
+      GoRoute(path: '/settings', builder: (_, _) => const Text('settings')),
       GoRoute(path: '/login', builder: (_, _) => const Text('login')),
     ],
   );
@@ -84,7 +68,10 @@ Future<GoRouter> _pump(WidgetTester tester) async {
   await tester.pumpWidget(
     UncontrolledProviderScope(
       container: container,
-      child: MaterialApp.router(routerConfig: router, theme: Mv2ThemeData.light()),
+      child: MaterialApp.router(
+        routerConfig: router,
+        theme: Mv2ThemeData.light(),
+      ),
     ),
   );
   await tester.pumpAndSettle();
@@ -92,6 +79,14 @@ Future<GoRouter> _pump(WidgetTester tester) async {
 }
 
 void main() {
+  testWidgets('guest opens Pro directly without signing in', (tester) async {
+    await _pump(tester);
+    await tester.tap(find.text('MV2 Pro 永久版'));
+    await tester.pumpAndSettle();
+    expect(find.text('pro:profile'), findsOneWidget);
+    expect(find.text('login'), findsNothing);
+  });
+
   testWidgets('赞助榜 entry is always visible on 我的, signed out included', (
     tester,
   ) async {
@@ -100,9 +95,7 @@ void main() {
     expect(find.text('赞助榜'), findsOneWidget);
   });
 
-  testWidgets('tapping 赞助榜 opens /honors with source=profile', (
-    tester,
-  ) async {
+  testWidgets('tapping 赞助榜 opens /honors with source=profile', (tester) async {
     await _pump(tester);
 
     await tester.tap(find.text('赞助榜'));

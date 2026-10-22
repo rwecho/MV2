@@ -42,3 +42,6 @@ preferences.json
 # ZCode local session data
 .zcode/
 .zcodeignore
+
+# Cloudflare local runtime state
+cloudflare/.wrangler/

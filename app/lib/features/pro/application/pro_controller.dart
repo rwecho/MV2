@@ -198,10 +198,17 @@ class ProController extends AsyncNotifier<ProState> {
 }
 
 String _storeError(Exception error) {
-  if (error is PlatformException &&
-      PurchasesErrorHelper.getErrorCode(error) ==
-          PurchasesErrorCode.purchaseNotAllowedError) {
-    return '此设备或商店账号暂时无法购买。请检查商店登录状态及购买权限，并通过应用商店安装应用后重试。';
+  if (error is PlatformException) {
+    switch (PurchasesErrorHelper.getErrorCode(error)) {
+      case PurchasesErrorCode.purchaseNotAllowedError:
+        return '此设备或商店账号暂时无法购买，请检查商店登录状态及购买权限。';
+      case PurchasesErrorCode.configurationError:
+        return '暂时无法获取商店商品，可能是商品配置或当前测试环境尚未就绪。';
+      case PurchasesErrorCode.storeProblemError:
+        return '应用商店暂时无法处理请求，请检查商店账号或稍后重试。';
+      default:
+        break;
+    }
   }
   return '暂时无法连接应用商店，请检查网络后重试。';
 }

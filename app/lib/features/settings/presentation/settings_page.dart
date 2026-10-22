@@ -41,8 +41,7 @@ class SettingsPage extends ConsumerWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: <Widget>[
-            // 付费墙入口不在设置页：永久版购买经「我的」→ 赞助榜（/pro 仍
-            // 由赞助榜的解锁按钮 `source=feature_gate` 触达）。
+            // 永久版购买入口在「我的」中常驻，游客也能直接购买与恢复。
 
             // ----------------------------------------------------- 外观
             Mv2SettingsGroup(

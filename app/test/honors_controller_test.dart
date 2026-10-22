@@ -1,153 +1,98 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mv2/features/pro/application/honors_controller.dart';
-import 'package:mv2/features/pro/application/pro_backend.dart';
 import 'package:mv2/features/pro/application/pro_controller.dart';
 import 'package:mv2/features/pro/data/honors_api.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-/// 赞助榜登记状态机：服务端结局 → 本地标记 / 名单更新 / 遥测，各分支要闭环。
-class _FakeProBackend implements ProBackend {
-  const _FakeProBackend();
-
+class _Pro extends ProController {
   @override
-  bool get isConfigured => true;
-
-  @override
-  Future<void> ensureReady() async {}
-
-  @override
-  Future<bool> checkEntitlement() async => true;
-
-  @override
-  Future<String> appUserId() async => 'rc-user-1';
-
-  @override
-  Future<ProProduct?> fetchLifetimeProduct() async => null;
-
-  @override
-  Future<ProPurchaseOutcome> purchaseLifetime() async =>
-      ProPurchaseOutcome.error;
-
-  @override
-  Future<bool> restore() async => false;
+  Future<ProState> build() async => const ProState(entitled: true);
 }
 
-class _FakeHonorsApi implements HonorsApi {
-  _FakeHonorsApi({this.joinResult = HonorJoinResult.joined});
-
-  HonorJoinResult joinResult;
-  String? lastName;
-  final List<HonorEntry> wall = <HonorEntry>[];
-
+class _Api extends HonorsApi {
+  HonorEntry? mine;
+  HonorJoinResult result = HonorJoinResult.joined;
+  bool failStatus = false;
   @override
-  Future<List<HonorEntry>> fetch() async => List.of(wall);
-
+  Future<List<HonorEntry>> fetch() async =>
+      mine == null || mine!.hidden ? [] : [mine!];
   @override
-  Future<HonorJoinResult> join({
-    required String name,
-    required String rcUserId,
-  }) async {
-    lastName = name;
-    if (joinResult == HonorJoinResult.joined) {
-      wall.add(HonorEntry(name: name, joinedAt: DateTime(2026, 1, 1)));
-    }
-    return joinResult;
+  Future<HonorEntry?> status() async {
+    if (failStatus) throw Exception('offline');
+    return mine;
   }
+
+  @override
+  Future<HonorJoinResult> join({required String name}) async => result;
+  @override
+  Future<void> hide() async {}
 }
 
-Future<ProviderContainer> _boot({
-  required _FakeHonorsApi api,
-  bool persistedJoined = false,
-}) async {
-  SharedPreferences.setMockInitialValues(<String, Object>{
-    if (persistedJoined) 'mv2.pro.honorJoined': true,
-  });
-  final controller = HonorsController()..debugOverrideApi(api);
-  final container = ProviderContainer(
+Future<ProviderContainer> _boot(_Api api) async {
+  // Old global marker must never override this customer's actual status.
+  SharedPreferences.setMockInitialValues({'mv2.pro.honorJoined': true});
+  final c = ProviderContainer(
     overrides: [
-      honorsControllerProvider.overrideWith(() => controller),
-      proControllerProvider.overrideWith(
-        () => ProController()..debugOverrideBackend(const _FakeProBackend()),
+      proControllerProvider.overrideWith(_Pro.new),
+      honorsControllerProvider.overrideWith(
+        () => HonorsController()..debugOverrideApi(api),
       ),
     ],
   );
-  addTearDown(container.dispose);
-  await container.read(honorsControllerProvider.future);
-  return container;
+  addTearDown(c.dispose);
+  await c.read(proControllerProvider.future);
+  await c.read(honorsControllerProvider.future);
+  return c;
 }
 
 void main() {
-  test(
-    'successful join records the local marker and appends the entry',
-    () async {
-      final api = _FakeHonorsApi();
-      final container = await _boot(api: api);
-
-      final result = await container
-          .read(honorsControllerProvider.notifier)
-          .join('  livid  ');
-
-      expect(result, HonorJoinResult.joined);
-      expect(api.lastName, 'livid', reason: '名字应先 trim 再上报');
-      final state = container.read(honorsControllerProvider).value!;
-      expect(state.joined, isTrue);
-      expect(state.entries.last.name, 'livid');
-
-      final prefs = await SharedPreferences.getInstance();
-      expect(prefs.getBool('mv2.pro.honorJoined'), isTrue);
-    },
-  );
-
-  test(
-    're-joining keeps the joined marker without duplicating the entry',
-    () async {
-      final api = _FakeHonorsApi(joinResult: HonorJoinResult.already);
-      final container = await _boot(api: api, persistedJoined: true);
-
-      final result = await container
-          .read(honorsControllerProvider.notifier)
-          .join('livid');
-
-      expect(result, HonorJoinResult.already);
-      final state = container.read(honorsControllerProvider).value!;
-      expect(state.joined, isTrue);
-      expect(state.entries, isEmpty);
-    },
-  );
-
-  test('name taken leaves the marker untouched', () async {
-    final api = _FakeHonorsApi(joinResult: HonorJoinResult.nameTaken);
-    final container = await _boot(api: api);
-
-    final result = await container
-        .read(honorsControllerProvider.notifier)
-        .join('livid');
-
-    expect(result, HonorJoinResult.nameTaken);
-    expect(container.read(honorsControllerProvider).value!.joined, isFalse);
+  test('server recovers the original name after reinstall', () async {
+    final api = _Api()
+      ..mine = HonorEntry(name: 'supporter', joinedAt: DateTime(2026));
+    final c = await _boot(api);
+    expect(c.read(honorsControllerProvider).value!.mine!.name, 'supporter');
   });
-
   test(
-    'server-side entitlement rejection is surfaced, not swallowed',
+    'stale joined marker does not claim another customer has registered',
     () async {
-      final api = _FakeHonorsApi(joinResult: HonorJoinResult.notEntitled);
-      final container = await _boot(api: api);
-
-      final result = await container
-          .read(honorsControllerProvider.notifier)
-          .join('livid');
-
-      expect(result, HonorJoinResult.notEntitled);
-      expect(container.read(honorsControllerProvider).value!.joined, isFalse);
+      final c = await _boot(_Api());
+      expect(c.read(honorsControllerProvider).value!.joined, isFalse);
     },
   );
-
-  test('a persisted joined marker survives a wall reload', () async {
-    final api = _FakeHonorsApi();
-    final container = await _boot(api: api, persistedJoined: true);
-
-    final state = container.read(honorsControllerProvider).value!;
-    expect(state.joined, isTrue);
+  test(
+    'status failure is explicit and does not invent a registration',
+    () async {
+      final c = await _boot(_Api()..failStatus = true);
+      expect(c.read(honorsControllerProvider).value!.statusError, isNotNull);
+      expect(c.read(isProProvider), isTrue);
+    },
+  );
+  test('successful rename replaces old name and keeps original date', () async {
+    final api = _Api()
+      ..mine = HonorEntry(name: 'old', joinedAt: DateTime(2020));
+    final c = await _boot(api);
+    await c.read(honorsControllerProvider.notifier).join(' new ');
+    final state = c.read(honorsControllerProvider).value!;
+    expect(state.entries.map((e) => e.name), ['new']);
+    expect(state.mine!.joinedAt, DateTime(2020));
+  });
+  test('name conflict preserves the original registered state', () async {
+    final api = _Api()..result = HonorJoinResult.nameTaken;
+    final c = await _boot(api);
+    expect(
+      await c.read(honorsControllerProvider.notifier).join('taken'),
+      HonorJoinResult.nameTaken,
+    );
+    expect(c.read(honorsControllerProvider).value!.mine, isNull);
+  });
+  test('hiding removes public display without removing Pro', () async {
+    final api = _Api()
+      ..mine = HonorEntry(name: 'supporter', joinedAt: DateTime(2026));
+    final c = await _boot(api);
+    expect(await c.read(honorsControllerProvider.notifier).hide(), isTrue);
+    expect(c.read(honorsControllerProvider).value!.mine!.hidden, isTrue);
+    expect(c.read(honorsControllerProvider).value!.entries, isEmpty);
+    expect(c.read(isProProvider), isTrue);
   });
 }

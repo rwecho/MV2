@@ -1,6 +1,3 @@
-• Topic titles now appear immediately while details load
-• Improved collapsing headers and iPhone Duo two-column reading
-• Refined the reply composer, inline emoji, and embedded video playback
-• Filter notifications by replies or mentions, with type-specific content
-• Improved Google sign-in return, clipboard link prompts, and daily check-in
-• Fixed Android navigation colors and layout overflow
+• Purchase and restore Pro without registering or signing in to V2EX.
+• Choose whether to appear on the supporter wall, edit your display name, or hide it.
+• Improved supporter-name recovery after restoring purchases, registration retries, and store error messages.

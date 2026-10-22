@@ -5,6 +5,7 @@ import WidgetKit
 import LinkPresentation
 import Photos
 import ImageIO
+import StoreKit
 
 /// Native half of the MV2 ↔ iOS integration.
 ///
@@ -54,6 +55,23 @@ final class MV2NativeBridge {
 
   private func handle(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
     switch call.method {
+    case "proPurchaseProof":
+      if #available(iOS 15.0, *) {
+        Task { @MainActor in
+          for await verification in StoreKit.Transaction.currentEntitlements {
+            if case .verified(let transaction) = verification,
+               transaction.productID == "mv2.pro.lifetime",
+               transaction.revocationDate == nil {
+              result(verification.jwsRepresentation)
+              return
+            }
+          }
+          result(nil)
+        }
+      } else {
+        result(nil)
+      }
+
     case "shareApp":
       presentAppShare(call.arguments, result: result)
 

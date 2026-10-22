@@ -92,3 +92,8 @@ kotlin {
 flutter {
     source = "../.."
 }
+
+// Match RevenueCat's BillingClient major; used only to query owned purchase proofs.
+dependencies {
+    implementation("com.android.billingclient:billing:8.3.0")
+}

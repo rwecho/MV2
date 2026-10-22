@@ -17,6 +17,9 @@ class _FixedHonors extends HonorsController {
 
   @override
   Future<HonorsState> build() async => _state;
+
+  @override
+  Future<HonorJoinResult> join(String name) async => HonorJoinResult.nameTaken;
 }
 
 class _FixedPro extends ProController {
@@ -69,6 +72,23 @@ Future<void> _pump(
 }
 
 void main() {
+  testWidgets('name conflict keeps the dialog and typed name for retry', (
+    tester,
+  ) async {
+    await _pump(tester, isPro: true, honors: const HonorsState());
+    await tester.tap(find.text('自愿登记展示名'));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byType(TextField), 'my name');
+    await tester.tap(find.text('铭刻'));
+    await tester.pumpAndSettle();
+    expect(find.byType(AlertDialog), findsOneWidget);
+    expect(
+      tester.widget<TextField>(find.byType(TextField)).controller!.text,
+      'my name',
+    );
+    expect(find.text('这个名字已被使用，换一个吧'), findsOneWidget);
+  });
+
   testWidgets('engraved names render with rank, name and date', (tester) async {
     await _pump(
       tester,
@@ -79,6 +99,7 @@ void main() {
           HonorEntry(name: 'another', joinedAt: DateTime(2026, 2, 15)),
         ],
         joined: true,
+        mine: HonorEntry(name: 'livid', joinedAt: DateTime(2026, 1, 2)),
       ),
     );
 
@@ -87,7 +108,7 @@ void main() {
     expect(find.text('1'), findsOneWidget);
     expect(find.text('2'), findsOneWidget);
     expect(find.text('2026.01.02'), findsOneWidget);
-    expect(find.text('你的名字已在这面墙上'), findsOneWidget);
+    expect(find.text('你的署名：livid'), findsOneWidget);
   });
 
   testWidgets('an empty wall invites the first buyer and unlocks', (
@@ -105,6 +126,6 @@ void main() {
   ) async {
     await _pump(tester, isPro: true, honors: const HonorsState());
 
-    expect(find.text('把我的名字刻上赞助榜'), findsOneWidget);
+    expect(find.text('自愿登记展示名'), findsOneWidget);
   });
 }

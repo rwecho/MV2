@@ -1,5 +1,9 @@
+import { handleHonorV2 } from './honor_registry';
+export { HonorRegistry } from './honor_registry';
 export interface Env {
   V2EX_PUSH_KV: KVNamespace;
+  HONOR_REGISTRY?: DurableObjectNamespace;
+  GOOGLE_PLAY_SERVICE_ACCOUNT_JSON?: string;
   FIREBASE_SERVICE_ACCOUNT_JSON: string;
   ADMIN_SECRET: string;
   /** AGC service-account JSON for HMS Push Kit (wrangler secret). */
@@ -108,13 +112,18 @@ export default {
       return handleUnregister(request, env);
     }
 
+    if (url.pathname.startsWith('/honors/v2/') && request.method === 'POST') {
+      return handleHonorV2(request, env);
+    }
+
     // 荣誉墙：永久买断用户登记（需 RevenueCat 核实权益）与名录。
     if (request.method === "POST" && url.pathname === "/honors/join") {
-      return handleHonorJoin(request, env);
+      // Old clients supplied only a public RevenueCat ID; it is not proof of ownership.
+      return Response.json({ error: 'upgrade_required' }, { status: 426 });
     }
 
     if (request.method === "GET" && url.pathname === "/honors") {
-      return handleHonorsList(env);
+      return handleHonorV2(new Request(`${url.origin}/honors/v2/list`, { method: 'POST' }), env);
     }
 
     if (request.method === "GET" && url.pathname === "/health") {
@@ -301,7 +310,7 @@ async function handleRegister(request: Request, env: Env): Promise<Response> {
 import { fetchAndParseFeed, V2exNotification } from "./utils/v2ex";
 import { sendPushNotification } from "./utils/fcm";
 import { isHmsDevice, sendHmsPush } from "./utils/hms";
-import { handleHonorJoin, handleHonorsList } from "./honors";
+
 
 /**
  * Opt-out for the app's 推送通知 switch: drops the device so the cron stops

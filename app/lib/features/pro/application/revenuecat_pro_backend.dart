@@ -67,6 +67,8 @@ class RevenueCatProBackend implements ProBackend, ProPurchaseSynchronizer {
   Future<void> _configure() async {
     try {
       await Purchases.setLogLevel(LogLevel.warn);
+      // Leave appUserID unset: RevenueCat maintains an anonymous store identity.
+      // V2EX sign-in must never be required for purchase or restoration.
       await Purchases.configure(PurchasesConfiguration(_apiKey));
       _configured = true;
     } catch (_) {

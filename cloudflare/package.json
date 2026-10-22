@@ -16,11 +16,14 @@
   "license": "ISC",
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20240208.0",
+    "esbuild": "0.17.19",
+    "miniflare": "3.20250718.3",
     "typescript": "^5.3.3",
     "vitest": "^1.6.0",
     "wrangler": "^3.28.0"
   },
   "dependencies": {
+    "@apple/app-store-server-library": "^3.1.0",
     "fast-xml-parser": "^4.3.4",
     "jose": "^6.1.3"
   }

@@ -1,4 +1,3 @@
-import 'dart:async';
 import 'dart:io' show Platform;
 
 import 'package:flutter/foundation.dart' show kIsWeb;
@@ -8,18 +7,13 @@ import 'package:go_router/go_router.dart';
 
 import '../../../core/telemetry/mv2_analytics.dart';
 import '../../../design_system/theme/mv2_theme.dart';
-import '../../../shared/models/models.dart';
 import '../../../design_system/tokens/mv2_spacing.dart';
 import '../../../ui/components/mv2_page_header.dart';
 import '../../../ui/components/mv2_page_scaffold.dart';
 import '../../../ui/components/states/mv2_state_view.dart';
-import '../../../ui/primitives/mv2_avatar.dart';
 import '../../../ui/primitives/mv2_buttons.dart';
-import '../../auth/application/auth_controller.dart';
-import '../application/honors_controller.dart';
 import '../application/pro_backend.dart';
 import '../application/pro_controller.dart';
-import 'honor_wall_page.dart';
 
 /// 付费墙：永久买断（非消耗型内购）。
 ///
@@ -65,10 +59,6 @@ class _PaywallPageState extends ConsumerState<PaywallPage> {
         _toast('购买未完成；若已扣款，稍后点「恢复购买」即可找回权益');
         return;
     }
-    if (!mounted) return;
-    // 购买成功是登记赞助榜的最佳时机（服务端会再核验权益）。
-    final joined = ref.read(honorsControllerProvider).value?.joined ?? false;
-    if (!joined) unawaited(showHonorJoinDialog(context, ref));
   }
 
   Future<void> _restore() async {
@@ -81,7 +71,7 @@ class _PaywallPageState extends ConsumerState<PaywallPage> {
         entitled
             ? '已恢复永久版权益'
             : ref.read(proControllerProvider).value?.errorMessage ??
-                  '此账号下没有可恢复的购买',
+                  '当前商店账号下没有可恢复的购买',
       );
     } finally {
       if (mounted) setState(() => _busy = false);
@@ -111,7 +101,6 @@ class _PaywallPageState extends ConsumerState<PaywallPage> {
         ),
         data: (state) => _Body(
           state: state,
-          user: ref.watch(authControllerProvider).value?.user,
           busy: _busy,
           onBuy: _purchase,
           onRestore: _restore,
@@ -137,7 +126,6 @@ String _storeName() {
 class _Body extends StatelessWidget {
   const _Body({
     required this.state,
-    required this.user,
     required this.busy,
     required this.onBuy,
     required this.onRestore,
@@ -145,7 +133,6 @@ class _Body extends StatelessWidget {
   });
 
   final ProState state;
-  final V2User? user;
   final bool busy;
   final Future<void> Function() onBuy;
   final Future<void> Function() onRestore;
@@ -153,7 +140,6 @@ class _Body extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final user = this.user;
     if (state.entitled) {
       return Column(
         mainAxisAlignment: MainAxisAlignment.center,
@@ -161,9 +147,10 @@ class _Body extends StatelessWidget {
           const Mv2StateView(
             kind: Mv2StateKind.empty,
             title: '已赞助 MV2',
-            description: '一次买断，永久有效。感谢支持！',
+            description: '一次买断，永久有效，无需登录 V2EX。\n赞助榜展示名登记为自愿选项。感谢支持！',
           ),
           const SizedBox(height: Mv2Spacing.x4),
+          Mv2TextButton(label: '恢复购买', enabled: !busy, onPressed: onRestore),
           Mv2TextButton(
             label: '看看赞助榜',
             onPressed: () => context.push('/honors?source=paywall'),
@@ -202,15 +189,11 @@ class _Body extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: <Widget>[
-          // 登录用户直接看到自己的头像 —— 这就是将来上赞助榜的那张脸；
-          // 未登录回退到奖章图标。
-          user != null
-              ? Mv2Avatar(user: user, size: 72, showBorder: true)
-              : Icon(
-                  Icons.workspace_premium_rounded,
-                  size: 72,
-                  color: context.colors.accent,
-                ),
+          Icon(
+            Icons.workspace_premium_rounded,
+            size: 72,
+            color: context.colors.accent,
+          ),
           const SizedBox(height: Mv2Spacing.x4),
           Text(
             '赞助 MV2 开发',
@@ -238,6 +221,7 @@ class _Body extends StatelessWidget {
           const SizedBox(height: Mv2Spacing.x5),
           Text(
             // 审核要求（3.1.1）：付费墙只能提当前平台的商店，不得罗列其他平台。
+            '无需注册或登录 V2EX，即可购买和恢复购买。\n'
             '通过 ${_storeName()} 结算，购买绑定你的商店账号，'
             '换机或重装后可在本页恢复。',
             textAlign: TextAlign.center,

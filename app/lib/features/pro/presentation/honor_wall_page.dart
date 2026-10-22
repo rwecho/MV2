@@ -12,7 +12,6 @@ import '../../../ui/components/mv2_page_scaffold.dart';
 import '../../../ui/components/mv2_refreshable.dart';
 import '../../../ui/components/states/mv2_state_view.dart';
 import '../../../ui/primitives/mv2_buttons.dart';
-import '../../auth/application/auth_controller.dart';
 import '../application/honors_controller.dart';
 import '../application/pro_controller.dart';
 import '../data/honors_api.dart';
@@ -98,7 +97,7 @@ class _Wall extends StatelessWidget {
           const Mv2StateView(
             kind: Mv2StateKind.empty,
             title: '赞助榜还空着',
-            description: '所有购买永久版的支持者，都会按顺序铭刻在这里。',
+            description: '购买永久版后，可自愿留下公开展示的名字。',
           ),
         ] else ...<Widget>[
           for (var i = 0; i < entries.length; i++) ...<Widget>[
@@ -108,10 +107,10 @@ class _Wall extends StatelessWidget {
         ],
         const SizedBox(height: Mv2Spacing.x6),
         if (isPro)
-          _ProFooter(joined: state.joined)
+          _ProFooter(state: state)
         else ...<Widget>[
           Text(
-            '购买了 MV2 永久版，你的名字就会永久刻在这面墙上。',
+            '购买永久版后，可以自愿登记展示名；不登记也不影响 Pro 权益。',
             textAlign: TextAlign.center,
             style: context.text.bodySmall.copyWith(color: colors.textSecondary),
           ),
@@ -184,34 +183,53 @@ class _EntryRow extends StatelessWidget {
 
 /// 已解锁用户的名片区：未铭刻 → 引导登记；已铭刻 → 安静的确认。
 class _ProFooter extends ConsumerWidget {
-  const _ProFooter({required this.joined});
-
-  final bool joined;
+  const _ProFooter({required this.state});
+  final HonorsState state;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final colors = context.colors;
-    if (joined) {
-      return Row(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: <Widget>[
-          Icon(Icons.verified_rounded, size: 16, color: colors.accent),
-          const SizedBox(width: Mv2Spacing.x1),
-          Text(
-            '你的名字已在这面墙上',
-            style: context.text.bodySmall.copyWith(color: colors.textSecondary),
+    return Column(
+      children: [
+        if (state.statusError != null) ...[
+          Text(state.statusError!),
+          Mv2TextButton(
+            label: '恢复购买',
+            onPressed: () => context.push('/pro?source=feature_gate'),
           ),
+          Mv2TextButton(
+            label: '重试',
+            onPressed: () => ref.invalidate(honorsControllerProvider),
+          ),
+        ] else ...[
+          if (state.mine != null)
+            Text(state.mine!.hidden ? '你的署名已隐藏' : '你的署名：${state.mine!.name}'),
+          Mv2TextButton(
+            label: state.mine == null ? '自愿登记展示名' : '修改或重新展示署名',
+            onPressed: () => showHonorJoinDialog(context, ref),
+          ),
+          if (state.mine != null && !state.mine!.hidden)
+            Mv2TextButton(
+              label: '隐藏我的署名',
+              onPressed: () async {
+                final success = await ref
+                    .read(honorsControllerProvider.notifier)
+                    .hide();
+                if (!context.mounted) return;
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text(success ? '署名已隐藏，Pro 权益不受影响' : '隐藏失败，请重试'),
+                  ),
+                );
+              },
+            ),
         ],
-      );
-    }
-    return Mv2TextButton(
-      label: '把我的名字刻上赞助榜',
-      onPressed: () => showHonorJoinDialog(context, ref),
+        const Text('署名为自愿公开展示，可修改或隐藏，不影响 Pro 权益。'),
+      ],
     );
   }
 }
 
-/// 登记弹窗：预填 V2EX 用户名（可改），确认后由服务端核验并铭刻。
+/// 用户主动选择公开署名；不读取或绑定社区账号。
 Future<void> showHonorJoinDialog(BuildContext context, WidgetRef ref) {
   return showDialog<void>(
     context: context,
@@ -229,12 +247,13 @@ class _HonorJoinDialog extends ConsumerStatefulWidget {
 class _HonorJoinDialogState extends ConsumerState<_HonorJoinDialog> {
   late final TextEditingController _controller;
   bool _busy = false;
+  String? _error;
 
   @override
   void initState() {
     super.initState();
-    final username = ref.read(authControllerProvider).value?.username ?? '';
-    _controller = TextEditingController(text: username);
+    final mine = ref.read(honorsControllerProvider).value?.mine;
+    _controller = TextEditingController(text: mine?.name ?? '');
   }
 
   @override
@@ -251,14 +270,19 @@ class _HonorJoinDialogState extends ConsumerState<_HonorJoinDialog> {
           .read(honorsControllerProvider.notifier)
           .join(_controller.text);
       if (!mounted) return;
-      Navigator.of(context).pop();
       final message = switch (result) {
         HonorJoinResult.joined => '已永久铭刻在赞助榜，感谢支持！',
         HonorJoinResult.already => '你的名字已经在这面墙上了',
         HonorJoinResult.nameTaken => '这个名字已被使用，换一个吧',
-        HonorJoinResult.notEntitled => '未找到有效的永久版权益',
+        HonorJoinResult.notEntitled => '无法获取商店购买证明，请恢复购买后重试',
         HonorJoinResult.error => '登记失败，请稍后重试',
       };
+      if (result != HonorJoinResult.joined &&
+          result != HonorJoinResult.already) {
+        setState(() => _error = message);
+        return;
+      }
+      Navigator.of(context).pop();
       ScaffoldMessenger.of(context)
         ..hideCurrentSnackBar()
         ..showSnackBar(SnackBar(content: Text(message)));
@@ -275,9 +299,11 @@ class _HonorJoinDialogState extends ConsumerState<_HonorJoinDialog> {
         controller: _controller,
         autofocus: true,
         maxLength: kMaxHonorNameLength,
-        decoration: const InputDecoration(
+        decoration: InputDecoration(
           labelText: '展示名',
-          hintText: '墙上的名字，一经铭刻不可修改',
+          hintText: '公开展示的名字，可修改或隐藏',
+          helperText: '自愿公开，不影响 Pro 权益',
+          errorText: _error,
         ),
         onSubmitted: (_) => unawaited(_submit()),
       ),

@@ -1,0 +1,30 @@
+{
+  "product": "MV2",
+  "source_ui": [
+    "docs/images/1.png",
+    "docs/images/2.png"
+  ],
+  "assets": [
+    {
+      "file": "mv2-product-page-header-21x9-3840x1646.png",
+      "placement": "Product page header",
+      "width": 3840,
+      "height": 1646,
+      "ratio": "21:9",
+      "alpha": false
+    },
+    {
+      "file": "mv2-search-results-3x2-2880x1920.png",
+      "placement": "Search results",
+      "width": 2880,
+      "height": 1920,
+      "ratio": "3:2",
+      "alpha": false
+    }
+  ],
+  "copy": {
+    "header": "看见正在发生的讨论",
+    "search_results": "搜索主题，找到答案"
+  },
+  "review_status": "draft; preview in App Store Connect before submission"
+}

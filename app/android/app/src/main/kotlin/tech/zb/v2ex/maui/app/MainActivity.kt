@@ -4,6 +4,15 @@ import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.os.Build
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
+import com.android.billingclient.api.BillingClient
+import com.android.billingclient.api.BillingClientStateListener
+import com.android.billingclient.api.BillingResult
+import com.android.billingclient.api.PendingPurchasesParams
+import com.android.billingclient.api.QueryPurchasesParams
+import com.android.billingclient.api.Purchase
+import java.util.concurrent.atomic.AtomicBoolean
 import android.os.Environment
 import android.Manifest
 import android.content.ContentValues
@@ -47,6 +56,11 @@ class MainActivity : FlutterActivity() {
                     }
                 }
             }
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "mv2/native")
+            .setMethodCallHandler { call, result ->
+                if (call.method == "proPurchaseProof") readProPurchaseProof(result)
+                else result.notImplemented()
+            }
         // Google OAuth 在应用内 WebView 完成后会话 cookie（PB3_SESSION，
         // HttpOnly）只存在于系统 WebView 的 CookieManager，JS 读不到。
         // Dart 侧 `WebCookieBridge` 在登录结束时来这里取原始 Cookie 头。
@@ -80,6 +94,47 @@ class MainActivity : FlutterActivity() {
                     else -> result.notImplemented()
                 }
             }
+    }
+
+    // Read-only query: RevenueCat remains the sole owner of the payment flow.
+    // Tokens are sent only to our server for Google Play Developer API verification.
+    private fun readProPurchaseProof(result: MethodChannel.Result) {
+        val completed = AtomicBoolean(false)
+        val handler = Handler(Looper.getMainLooper())
+        val client = BillingClient.newBuilder(this)
+            .setListener { _, _ -> }
+            .enablePendingPurchases(PendingPurchasesParams.newBuilder().enableOneTimeProducts().build())
+            .build()
+        fun finish(proof: String?) {
+            if (!completed.compareAndSet(false, true)) return
+            client.endConnection()
+            runOnUiThread { result.success(proof) }
+        }
+        val timeout = Runnable { finish(null) }
+        handler.postDelayed(timeout, 15000)
+        client.startConnection(object : BillingClientStateListener {
+            override fun onBillingSetupFinished(billingResult: BillingResult) {
+                if (completed.get()) return
+                if (billingResult.responseCode != BillingClient.BillingResponseCode.OK) {
+                    handler.removeCallbacks(timeout)
+                    finish(null)
+                    return
+                }
+                client.queryPurchasesAsync(
+                    QueryPurchasesParams.newBuilder().setProductType(BillingClient.ProductType.INAPP).build()
+                ) { queryResult, purchases ->
+                    handler.removeCallbacks(timeout)
+                    val owned = if (queryResult.responseCode == BillingClient.BillingResponseCode.OK)
+                        purchases.firstOrNull { it.products.contains("mv2.pro.lifetime") &&
+                            it.purchaseState == Purchase.PurchaseState.PURCHASED } else null
+                    finish(owned?.let { "google:" + it.purchaseToken })
+                }
+            }
+            override fun onBillingServiceDisconnected() {
+                handler.removeCallbacks(timeout)
+                finish(null)
+            }
+        })
     }
 
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {

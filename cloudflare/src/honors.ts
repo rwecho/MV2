@@ -1,3 +1,4 @@
+import type { Env } from './index';
 /**
  * 荣誉墙（永久买断用户名录）。
  *

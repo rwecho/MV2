@@ -81,6 +81,12 @@ class ProfilePage extends ConsumerWidget {
             // 商店专属的两项在桌面/Web/鸿蒙没有意义，只在 iOS/Android 显示。
             Mv2SettingsGroup(
               children: <Widget>[
+                // Store purchases are independent of the V2EX account.
+                Mv2SettingsRow(
+                  label: 'MV2 Pro 永久版',
+                  icon: Icons.workspace_premium_outlined,
+                  onTap: () => context.push('/pro?source=profile'),
+                ),
                 Mv2SettingsRow(
                   label: '赞助榜',
                   icon: Icons.volunteer_activism_outlined,
