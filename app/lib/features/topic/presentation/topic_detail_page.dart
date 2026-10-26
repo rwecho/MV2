@@ -472,6 +472,14 @@ class _TopicDetailPageState extends ConsumerState<TopicDetailPage> {
           child: FloatingReplyBar(
             placeholder: '写下你的回复...',
             onTap: () {
+              // A loaded anonymous page has no `once`, so the composer's 发送
+              // could never light up. Send the reader to sign-in instead of
+              // opening a dead editor (the composer still handles stale tokens).
+              final loaded = detail.value;
+              if (loaded != null && !loaded.canReply) {
+                context.push('/login');
+                return;
+              }
               Mv2Analytics.logReplyOpen(topicId: widget.topicId, source: 'bar');
               showReplyComposer(context, topicId: widget.topicId);
             },
@@ -1125,6 +1133,12 @@ class _TopicDetailBodyState extends ConsumerState<_TopicDetailBody> {
   /// cache only holds page 1), seeded with `@user #floor` so the posted comment
   /// references it. [source]: quote(引用按钮)|long_press(长按菜单).
   void _openComposerFor(V2Reply reply, {required String source}) {
+    // Quote/long-press affordances are visible to signed-out readers too; the
+    // composer cannot send without the session `once`, so sign in first.
+    if (!_signedIn) {
+      context.push('/login');
+      return;
+    }
     Mv2Analytics.logReplyOpen(topicId: widget.topicId, source: source);
     showReplyComposer(
       context,

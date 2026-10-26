@@ -100,11 +100,16 @@ class _FakeWriteApi implements V2exApi {
   // ----------------------------------------------------------- not exercised
 
   @override
-  Future<List<V2Topic>> feed(HomeTab tab, {PacePriority priority = PacePriority.userRead}) => throw UnimplementedError();
+  Future<List<V2Topic>> feed(
+    HomeTab tab, {
+    PacePriority priority = PacePriority.userRead,
+  }) => throw UnimplementedError();
 
-  
   @override
-  Future<({List<V2Topic> topics, DateTime fetchedAt})?> feedCached(HomeTab tab, {required Duration maxAge}) => throw UnimplementedError();
+  Future<({List<V2Topic> topics, DateTime fetchedAt})?> feedCached(
+    HomeTab tab, {
+    required Duration maxAge,
+  }) => throw UnimplementedError();
 
   @override
   Future<List<V2XnaEntry>> xna() => throw UnimplementedError();
@@ -523,20 +528,23 @@ void main() {
       );
     });
 
-    test('any other redirect still means the session is already valid', () async {
-      final adapter = _FakeAdapter(
-        (_) => _html(
-          '',
-          status: 302,
-          headers: <String, List<String>>{
-            'location': <String>['/'],
-          },
-        ),
-      );
-      final api = RemoteV2exApi(_clientWith(adapter));
+    test(
+      'any other redirect still means the session is already valid',
+      () async {
+        final adapter = _FakeAdapter(
+          (_) => _html(
+            '',
+            status: 302,
+            headers: <String, List<String>>{
+              'location': <String>['/'],
+            },
+          ),
+        );
+        final api = RemoteV2exApi(_clientWith(adapter));
 
-      expect(await api.loginForm(), isNull);
-    });
+        expect(await api.loginForm(), isNull);
+      },
+    );
   });
 
   group('DraftStore', () {
@@ -561,6 +569,30 @@ void main() {
 
       await store.write(key, '   ');
       expect(await store.read(key), isNull);
+    });
+
+    test('encodes Android reserved-prefix strings instead of rejecting them', () async {
+      SharedPreferences.setMockInitialValues(<String, Object>{});
+      final store = DraftStore();
+      final key = DraftStore.topicKey(9);
+      // `shared_preferences_android` throws StorageError for plain strings that
+      // start with its list marker; a base64 paste is a realistic trigger.
+      const reserved = 'VGhpcyBpcyB0aGUgcHJlZml4IGZvciBhIGxpc3QuAAAA';
+
+      await store.write(key, reserved);
+
+      final prefs = await SharedPreferences.getInstance();
+      expect(prefs.getString(key), startsWith('mv2.draft.v2:'));
+      expect(await store.read(key), reserved);
+    });
+
+    test('still reads drafts written by builds without the encoding', () async {
+      SharedPreferences.setMockInitialValues(<String, Object>{
+        'mv2.draft.topic.3': '旧版本草稿',
+      });
+      final store = DraftStore();
+
+      expect(await store.read('mv2.draft.topic.3'), '旧版本草稿');
     });
   });
 }

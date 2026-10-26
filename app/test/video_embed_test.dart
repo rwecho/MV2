@@ -216,9 +216,17 @@ void main() {
 
     expect(find.byType(Mv2VideoEmbedCard), findsOneWidget);
     expect(find.text('Mac OS 9 模拟'), findsOneWidget);
-    expect(find.text('exe-hub'), findsOneWidget);
+    // A titled link uses the author's title; the provider label is the fallback
+    // for a bare pasted URL.
+    expect(find.text('exe-hub'), findsNothing);
     // The ordinary link stays rendered as inline text, not swallowed by the
     // card upgrade.
     expect(find.textContaining('站内帖'), findsOneWidget);
+
+    await pump(
+      '<p><a href="https://hub.v2core.com/p/$_hex64">'
+      'https://hub.v2core.com/p/$_hex64</a></p>',
+    );
+    expect(find.text('exe-hub'), findsOneWidget);
   });
 }

@@ -2,11 +2,13 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../../core/data/session_once.dart';
 import '../../../core/data/v2ex_providers.dart';
 import '../../../core/errors/failures.dart';
 import '../../../core/telemetry/mv2_analytics.dart';
+import '../../../core/telemetry/mv2_telemetry.dart';
 import '../../../core/text/base64_text.dart';
 import '../../../design_system/theme/mv2_theme.dart';
 import '../../../design_system/tokens/mv2_radius.dart';
@@ -108,7 +110,17 @@ class _ReplyComposerPageState extends ConsumerState<ReplyComposerPage> {
     // be resurrected as a draft.
     final pending = _controller.text;
     if (!_submitted) {
-      unawaited(_draftStore.write(_draftKey, pending));
+      unawaited(() async {
+        try {
+          await _draftStore.write(_draftKey, pending);
+        } catch (error, stack) {
+          Mv2Telemetry.recordNonFatal(
+            error,
+            stack,
+            reason: 'draft.write $_draftKey',
+          );
+        }
+      }());
     }
     _controller.removeListener(_onTextChanged);
     _controller.dispose();
@@ -123,7 +135,18 @@ class _ReplyComposerPageState extends ConsumerState<ReplyComposerPage> {
   }
 
   Future<void> _restoreDraft() async {
-    final saved = await _draftStore.read(_draftKey);
+    final String? saved;
+    try {
+      saved = await _draftStore.read(_draftKey);
+    } catch (error, stack) {
+      Mv2Telemetry.recordNonFatal(
+        error,
+        stack,
+        reason: 'draft.read $_draftKey',
+      );
+      if (mounted) setState(() => _draftStatus = '草稿读取失败');
+      return;
+    }
     if (!mounted) return;
     if (saved != null && saved.isNotEmpty) {
       if (_controller.text.isEmpty) {
@@ -160,7 +183,12 @@ class _ReplyComposerPageState extends ConsumerState<ReplyComposerPage> {
         _savedTimer = Timer(const Duration(seconds: 2), () {
           if (mounted) setState(() => _draftStatus = '');
         });
-      } catch (_) {
+      } catch (error, stack) {
+        Mv2Telemetry.recordNonFatal(
+          error,
+          stack,
+          reason: 'draft.write $_draftKey',
+        );
         if (mounted && revision == _draftRevision) {
           setState(() => _draftStatus = '草稿保存失败');
         }
@@ -330,6 +358,22 @@ class _ReplyComposerPageState extends ConsumerState<ReplyComposerPage> {
     });
   }
 
+  /// Leaves the sheet before opening the login route: `/login` must sit on the
+  /// root navigator, not on the composer's modal route.
+  void _goLogin() {
+    final router = GoRouter.of(context);
+    Navigator.of(context).pop();
+    router.push('/login');
+  }
+
+  /// A signed-in composer that still has no `once` usually scraped an anonymous
+  /// topic page. Let the banner retry the scrape instead of forcing a sign-out.
+  Future<void> _retryOnce() async {
+    _onceAttempted = false;
+    await _refreshOnce();
+    if (mounted) setState(() {});
+  }
+
   @override
   Widget build(BuildContext context) {
     final colors = context.colors;
@@ -343,19 +387,15 @@ class _ReplyComposerPageState extends ConsumerState<ReplyComposerPage> {
     // Prefer the session's newest token: a 感谢 on the topic page rotates it,
     // and the composer must not post with the stale scraped value.
     final once = ref.watch(sessionOnceProvider) ?? detail.value?.once;
+    final auth = ref.watch(authControllerProvider);
+    final signedIn = auth.value?.isSignedIn ?? false;
     // A detail cached before the sign-in has no `once`; recover on the spot once
     // it has settled (see `session_cache_refresh.dart` for the cache fix).
-    if (once == null &&
-        ref.watch(isSignedInProvider) &&
-        detail.hasValue &&
-        !detail.isLoading) {
+    if (once == null && signedIn && detail.hasValue && !detail.isLoading) {
       _scheduleEnsureOnce();
     }
-    final canSend =
-        once != null &&
-        once.isNotEmpty &&
-        !_sending &&
-        _controller.text.trim().isNotEmpty;
+    final canReply = once != null && once.isNotEmpty;
+    final canSend = canReply && !_sending && _controller.text.trim().isNotEmpty;
 
     return Mv2PageScaffold(
       header: Mv2SecondaryHeader(
@@ -407,6 +447,13 @@ class _ReplyComposerPageState extends ConsumerState<ReplyComposerPage> {
             ),
           ),
           Divider(height: 1, color: colors.divider),
+          if (!canReply && !_sending)
+            _ReplyPermissionBanner(
+              signedIn: signedIn,
+              loading: detail.isLoading || auth.isLoading,
+              onLogin: _goLogin,
+              onRetry: () => unawaited(_retryOnce()),
+            ),
           if (_errors.isNotEmpty)
             Padding(
               padding: const EdgeInsets.fromLTRB(20, 8, 20, 0),
@@ -459,6 +506,97 @@ class _ReplyComposerPageState extends ConsumerState<ReplyComposerPage> {
               draftStatus: _draftStatus,
             ),
           ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Explains why 发送 is unavailable instead of leaving a dead grey button.
+///
+/// The floating reply bar and deep links can open the composer before the
+/// session/scraped `once` is ready; this banner turns that into an actionable
+/// state (sign in or retry) rather than a silent no-op.
+class _ReplyPermissionBanner extends StatelessWidget {
+  const _ReplyPermissionBanner({
+    required this.signedIn,
+    required this.loading,
+    required this.onLogin,
+    required this.onRetry,
+  });
+
+  final bool signedIn;
+  final bool loading;
+  final VoidCallback onLogin;
+  final VoidCallback onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+    final message = loading
+        ? '正在获取回复权限…'
+        : signedIn
+        ? '回复权限已失效，请重试或重新登录。'
+        : '登录 V2EX 账号后才能回复。';
+
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.fromLTRB(20, 8, 20, 0),
+      padding: const EdgeInsets.fromLTRB(12, 6, 6, 6),
+      decoration: BoxDecoration(
+        color: colors.accentSoft,
+        borderRadius: Mv2Radius.allMd,
+      ),
+      child: Row(
+        children: <Widget>[
+          Icon(
+            Icons.lock_outline_rounded,
+            size: 18,
+            color: colors.textSecondary,
+          ),
+          const SizedBox(width: Mv2Spacing.x2),
+          Expanded(
+            child: Text(
+              message,
+              style: context.text.bodySmall.copyWith(
+                color: colors.textSecondary,
+              ),
+            ),
+          ),
+          if (loading)
+            const Padding(
+              padding: EdgeInsets.symmetric(horizontal: Mv2Spacing.x2),
+              child: SizedBox(
+                width: 16,
+                height: 16,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              ),
+            )
+          else ...<Widget>[
+            if (signedIn)
+              TextButton(
+                onPressed: onRetry,
+                style: TextButton.styleFrom(
+                  foregroundColor: colors.accent,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: Mv2Spacing.x2,
+                  ),
+                  minimumSize: Size.zero,
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                ),
+                child: const Text('重试'),
+              ),
+            TextButton(
+              onPressed: onLogin,
+              style: TextButton.styleFrom(
+                foregroundColor: colors.accent,
+                padding: const EdgeInsets.symmetric(horizontal: Mv2Spacing.x2),
+                minimumSize: Size.zero,
+                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              ),
+              child: Text(signedIn ? '重新登录' : '去登录'),
+            ),
+          ],
         ],
       ),
     );
@@ -639,10 +777,7 @@ class _ComposerToolbar extends StatelessWidget {
                   }
                 },
                 itemBuilder: (_) => const [
-                  PopupMenuItem(
-                    value: 'markdown',
-                    child: Text('回复格式帮助'),
-                  ),
+                  PopupMenuItem(value: 'markdown', child: Text('回复格式帮助')),
                   PopupMenuItem(
                     value: 'base64',
                     child: Text('将选中文字编码为 Base64'),
