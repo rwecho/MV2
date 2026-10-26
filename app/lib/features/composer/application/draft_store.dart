@@ -20,6 +20,13 @@ class DraftStore {
   DraftStore([this._preferences]);
 
   SharedPreferences? _preferences;
+  Future<void> _writes = Future<void>.value();
+
+  Future<void> _serialize(Future<void> Function() action) {
+    final next = _writes.then((_) => action());
+    _writes = next.then<void>((_) {}, onError: (Object _, StackTrace __) {});
+    return next;
+  }
 
   static const String _encodedPrefix = 'mv2.draft.v2:';
 
@@ -46,16 +53,22 @@ class DraftStore {
 
   /// Stores [value]; an all-whitespace draft removes the key instead of
   /// persisting noise.
-  Future<void> write(String key, String value) async {
+  Future<void> write(String key, String value) => _serialize(() async {
     final prefs = await _prefs();
     if (value.trim().isEmpty) {
       await prefs.remove(key);
       return;
     }
-    await prefs.setString(key, '$_encodedPrefix${jsonEncode(value)}');
-  }
+    if (!await prefs.setString(key, '$_encodedPrefix${jsonEncode(value)}')) {
+      throw StateError('draft storage write rejected');
+    }
+  });
 
-  Future<void> clear(String key) async => (await _prefs()).remove(key);
+  Future<void> clear(String key) => _serialize(() async {
+    if (!await (await _prefs()).remove(key)) {
+      throw StateError('draft storage clear rejected');
+    }
+  });
 }
 
 final draftStoreProvider = Provider<DraftStore>((ref) => DraftStore());

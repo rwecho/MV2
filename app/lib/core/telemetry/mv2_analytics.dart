@@ -20,6 +20,20 @@ final telemetryReadyProvider = FutureProvider<bool>((ref) {
 /// 降级为 no-op,统计永远不能拖垮业务。测试通过 [sink] 捕获事件——sink
 /// 与 Firebase 就绪无关(test 环境没有 Firebase 配置),生产代码永不设置。
 abstract final class Mv2Analytics {
+  static void _deliver(Future<void> task) {
+    unawaited(() async {
+      try {
+        await task;
+      } catch (error, stack) {
+        Mv2Telemetry.recordNonFatal(
+          error,
+          stack,
+          reason: 'telemetry.analytics.delivery',
+        );
+      }
+    }());
+  }
+
   /// 测试注入点:非 null 时每个事件先转发到这里(已消毒的名称与参数)。
   static void Function(String event, Map<String, Object?> params)? sink;
 
@@ -53,6 +67,7 @@ abstract final class Mv2Analytics {
   /// 监听器同时覆盖根导航与 4 个 branch,没有挂载竞态。走 SDK 的
   /// `logScreenView` 以便 Firebase 维护"当前页面"供后续事件自动归属。
   static void logScreenView({required String screenName}) {
+    Mv2Telemetry.setScreen(screenName);
     final name = _sanitizeName(Mv2Events.screenView);
     if (name == null) return;
     final sink = Mv2Analytics.sink;
@@ -62,7 +77,7 @@ abstract final class Mv2Analytics {
     }
     if (!_enabled) return;
     try {
-      unawaited(
+      _deliver(
         _analytics!.logScreenView(
           screenName: screenName,
           screenClass: screenName,
@@ -88,7 +103,7 @@ abstract final class Mv2Analytics {
     }
     if (!_enabled) return;
     try {
-      unawaited(_analytics!.logEvent(name: name, parameters: clean));
+      _deliver(_analytics!.logEvent(name: name, parameters: clean));
     } catch (error) {
       // 统计失败不影响业务;debug 下留痕。
       debugPrint('MV2: analytics logEvent failed: $error');
@@ -111,6 +126,11 @@ abstract final class Mv2Analytics {
     params.forEach((key, value) {
       if (!_nameKeyPattern.hasMatch(key)) return;
       if (value == null) return;
+      if (value is bool) {
+        clean[key] = value ? 1 : 0;
+        return;
+      }
+      if (value is! String && value is! num) return;
       if (value is String && value.length > _maxValueLength) {
         clean[key] = value.substring(0, _maxValueLength);
       } else {
@@ -422,7 +442,7 @@ abstract final class Mv2Analytics {
     }
     if (!_enabled) return;
     try {
-      unawaited(_analytics!.setUserId(id: userId));
+      _deliver(_analytics!.setUserId(id: userId));
     } catch (error) {
       debugPrint('MV2: setUserId failed: $error');
     }
@@ -446,7 +466,7 @@ abstract final class Mv2Analytics {
     final analytics = _analytics!;
     void set(String name, String value) {
       try {
-        unawaited(analytics.setUserProperty(name: name, value: value));
+        _deliver(analytics.setUserProperty(name: name, value: value));
       } catch (error) {
         debugPrint('MV2: setUserProperty failed: $error');
       }

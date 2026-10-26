@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/network/imgur_uploader.dart';
 import '../../../core/telemetry/mv2_analytics.dart';
+import '../../../core/telemetry/mv2_telemetry.dart';
 import '../../../design_system/theme/mv2_theme.dart';
 import '../../../design_system/tokens/mv2_spacing.dart';
 import '../../../ui/components/mv2_error_feedback.dart';
@@ -42,10 +43,11 @@ class _ComposerImageButtonState extends ConsumerState<ComposerImageButton> {
     final Mv2PickedImage? picked;
     try {
       picked = await ref.read(imagePickerProvider).pickImage();
-    } catch (error) {
+    } catch (error, stack) {
       // A picker that fails to open/hand back a readable file (the ohos bridge
       // answers `copy-failed` on a broken media URI) must not take down the
       // composer.
+      Mv2Telemetry.recordNonFatal(error, stack, reason: 'composer.image.pick');
       if (!mounted) return;
       mv2ShowError(context, error);
       return;
@@ -63,7 +65,12 @@ class _ComposerImageButtonState extends ConsumerState<ComposerImageButton> {
       );
       if (!mounted) return;
       widget.onInsert(widget.markdown ? '![]($url)' : '\n$url\n');
-    } catch (error) {
+    } catch (error, stack) {
+      Mv2Telemetry.recordNonFatal(
+        error,
+        stack,
+        reason: 'composer.image.upload',
+      );
       Mv2Analytics.logImageUpload(
         result: 'failed',
         sizeBytes: picked.bytes.length,

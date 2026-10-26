@@ -8,6 +8,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../../../core/data/v2ex_providers.dart';
 import '../../../core/errors/failures.dart';
 import '../../../core/telemetry/mv2_analytics.dart';
+import '../../../core/telemetry/mv2_telemetry.dart';
 import '../../../shared/emoji/mv2_emoji_library.dart';
 import '../../../shared/models/models.dart';
 import '../../../shared/models/node_visuals.dart';
@@ -154,7 +155,8 @@ class PublishController extends Notifier<PublishState> {
       if (draft.hasContent) {
         Mv2Analytics.logDraftAction(composer: 'publish', action: 'restored');
       }
-    } catch (_) {
+    } catch (error, stack) {
+      Mv2Telemetry.recordNonFatal(error, stack, reason: 'publish.draft.read');
       // Draft storage is best-effort: a failure must never block composing.
     }
   }
@@ -238,7 +240,11 @@ class PublishController extends Notifier<PublishState> {
   }
 
   /// 提交终态埋点:token 重试走递归,由递归那次的终态记录,天然只记一次。
-  void _trackSubmit({required String slug, required String content, required String result}) {
+  void _trackSubmit({
+    required String slug,
+    required String content,
+    required String result,
+  }) {
     Mv2Analytics.logPublishSubmit(
       nodeKey: slug,
       hasImage: content.contains('![](') || content.contains('<img'),
@@ -326,6 +332,15 @@ class PublishController extends Notifier<PublishState> {
       );
       _trackSubmit(slug: slug, content: current.content, result: 'failed');
       return false;
+    } catch (error, stack) {
+      Mv2Telemetry.recordNonFatal(error, stack, reason: 'publish.submit');
+      if (!_disposed) {
+        state = state.copyWith(
+          submitting: false,
+          problems: const ['暂时无法确认发布结果，请先查看个人主题列表；草稿仍保留。'],
+        );
+      }
+      return false;
     }
   }
 
@@ -352,8 +367,10 @@ class PublishController extends Notifier<PublishState> {
       if (state.hasDraft) {
         Mv2Analytics.logDraftAction(composer: 'publish', action: 'saved');
       }
-    } catch (_) {
-      // Ignore: the draft is a convenience, not a source of truth.
+    } catch (error, stack) {
+      Mv2Telemetry.recordNonFatal(error, stack, reason: 'publish.draft.write');
+      if (!_disposed) state = state.copyWith(draftSaved: false);
+      // The draft is a convenience, not a source of truth.
     }
   }
 
@@ -362,8 +379,8 @@ class PublishController extends Notifier<PublishState> {
       final prefs = await _prefsInstance();
       await prefs.remove(_draftKey);
       Mv2Analytics.logDraftAction(composer: 'publish', action: 'cleared');
-    } catch (_) {
-      // Ignore.
+    } catch (error, stack) {
+      Mv2Telemetry.recordNonFatal(error, stack, reason: 'publish.draft.clear');
     }
   }
 

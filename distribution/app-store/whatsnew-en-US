@@ -1,2 +1,4 @@
-Fixed the reply composer opening without a signed-in session and the send button giving no feedback; the app now guides you to sign in.
-Fixed draft saving failing on some devices; existing drafts are preserved.
+• Fix Android preferences compatibility affecting drafts and replies
+• Prevent local draft cleanup failures from blocking successful replies
+• Improve reply credential recovery and error feedback
+• Improve diagnostics and stability

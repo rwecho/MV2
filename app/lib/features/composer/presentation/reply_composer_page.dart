@@ -236,7 +236,7 @@ class _ReplyComposerPageState extends ConsumerState<ReplyComposerPage> {
     return null;
   }
 
-  Future<void> _send(String once) async {
+  Future<void> _send(String? once) async {
     if (_sending) return;
     // `[doge]`-style tokens become hosted image URLs only in the submitted
     // body; the editor and the saved draft keep the readable token.
@@ -248,6 +248,16 @@ class _ReplyComposerPageState extends ConsumerState<ReplyComposerPage> {
     });
     try {
       var token = once;
+      if (token == null || token.isEmpty) {
+        token = await _refreshOnce();
+      }
+      if (!mounted) return;
+      if (token == null || token.isEmpty) {
+        setState(() {
+          _errors = const <String>['无法获取回复凭证，请检查登录状态或稍后重试。你的输入已保留。'];
+        });
+        return;
+      }
       var result = await ref
           .read(v2exApiProvider)
           .replyToTopic(widget.topicId, content, token);
@@ -266,8 +276,9 @@ class _ReplyComposerPageState extends ConsumerState<ReplyComposerPage> {
       if (result.success) {
         _submitted = true;
         _draftTimer?.cancel();
-        await _draftStore.clear(_draftKey);
-        Mv2Analytics.logDraftAction(composer: 'reply', action: 'cleared');
+        // The server has accepted the reply. Local cleanup must never turn
+        // that success into a stuck composer or invite a duplicate submission.
+        unawaited(_clearSubmittedDraft());
         Mv2Analytics.logReplySubmit(
           topicId: widget.topicId,
           hasQuote: widget.quotedReply != null || widget.floor != null,
@@ -293,6 +304,13 @@ class _ReplyComposerPageState extends ConsumerState<ReplyComposerPage> {
             ? const <String>['发送失败，请稍后重试。']
             : result.errors;
       });
+      Mv2Telemetry.recordNonFatal(
+        StateError('reply rejected'),
+        StackTrace.current,
+        reason: result.looksLikeOnceFailure
+            ? 'reply.rejected.csrf'
+            : 'reply.rejected.server',
+      );
       Mv2Analytics.logReplySubmit(
         topicId: widget.topicId,
         hasQuote: widget.quotedReply != null || widget.floor != null,
@@ -325,6 +343,31 @@ class _ReplyComposerPageState extends ConsumerState<ReplyComposerPage> {
         hasQuote: widget.quotedReply != null || widget.floor != null,
         contentLength: content.length,
         result: failure is RateLimitFailure ? 'rate_limited' : 'failed',
+      );
+    } catch (error, stack) {
+      Mv2Telemetry.recordNonFatal(
+        error,
+        stack,
+        reason: 'reply.submit ${widget.topicId}',
+      );
+      if (!mounted || _submitted) return;
+      setState(() {
+        _errors = const <String>['暂时无法确认发送结果，请先查看话题是否已有这条回复；你的输入仍保留在这里。'];
+      });
+    } finally {
+      if (mounted && _sending) setState(() => _sending = false);
+    }
+  }
+
+  Future<void> _clearSubmittedDraft() async {
+    try {
+      await _draftStore.clear(_draftKey);
+      Mv2Analytics.logDraftAction(composer: 'reply', action: 'cleared');
+    } catch (error, stack) {
+      Mv2Telemetry.recordNonFatal(
+        error,
+        stack,
+        reason: 'draft.clear $_draftKey',
       );
     }
   }
@@ -395,7 +438,9 @@ class _ReplyComposerPageState extends ConsumerState<ReplyComposerPage> {
       _scheduleEnsureOnce();
     }
     final canReply = once != null && once.isNotEmpty;
-    final canSend = canReply && !_sending && _controller.text.trim().isNotEmpty;
+    // Missing credentials should produce a recoverable send attempt, rather
+    // than a permanently disabled button after one failed background fetch.
+    final canSend = signedIn && !_sending && _controller.text.trim().isNotEmpty;
 
     return Mv2PageScaffold(
       header: Mv2SecondaryHeader(

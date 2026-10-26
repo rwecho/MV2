@@ -15,5 +15,23 @@ void main() {
   // Installs the crash handlers synchronously, then boots Firebase in the
   // background so the first frame is never blocked on an SDK handshake.
   unawaited(Mv2Telemetry.start());
-  runApp(const ProviderScope(child: Mv2App()));
+  runApp(const ProviderScope(observers: [Mv2ErrorObserver()], child: Mv2App()));
+}
+
+/// Covers provider errors that become AsyncError rather than unhandled crashes.
+final class Mv2ErrorObserver extends ProviderObserver {
+  const Mv2ErrorObserver();
+  @override
+  void providerDidFail(
+    ProviderObserverContext context,
+    Object error,
+    StackTrace stackTrace,
+  ) {
+    Mv2Telemetry.recordNonFatal(
+      error,
+      stackTrace,
+      reason:
+          'provider.${context.provider.name ?? context.provider.runtimeType}',
+    );
+  }
 }
