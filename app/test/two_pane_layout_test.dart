@@ -85,6 +85,46 @@ void main() {
     expect(find.byType(TopicDetailPage), findsOneWidget);
   });
 
+  testWidgets('tablet: the /topic route (deep link) fills the pane', (
+    tester,
+  ) async {
+    final container = await boot(tester, const Size(1200, 900));
+
+    // This is the deep-link / push-notification entry (`_navigate`): it used
+    // to `router.push('/topic/:id')`, covering the whole two-pane shell with
+    // a full-screen page that had no back affordance.
+    openTopicFromRoute(
+      tester.element(find.byType(TopicItem).first),
+      '/topic/1241298?floor=2',
+      source: 'deeplink',
+    );
+    await tester.pump(const Duration(milliseconds: 400));
+    await tester.pump(const Duration(milliseconds: 400));
+
+    final selection = container.read(tabletTopicPaneProvider);
+    expect(selection, isNotNull);
+    expect(selection!.floor, 2);
+    expect(find.text('未选择主题'), findsNothing);
+    expect(find.byType(TopicDetailPage), findsOneWidget);
+  });
+
+  testWidgets('phone: the /topic route still pushes full screen', (
+    tester,
+  ) async {
+    final container = await boot(tester, const Size(390, 844));
+
+    openTopicFromRoute(
+      tester.element(find.byType(TopicItem).first),
+      '/topic/1241298',
+      source: 'deeplink',
+    );
+    await tester.pump(const Duration(milliseconds: 400));
+    await tester.pump(const Duration(milliseconds: 400));
+
+    expect(container.read(tabletTopicPaneProvider), isNull);
+    expect(find.byType(TopicDetailPage), findsOneWidget);
+  });
+
   testWidgets('tablet: secondary pages present as a floating card', (
     tester,
   ) async {

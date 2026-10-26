@@ -174,6 +174,22 @@ void main() {
       expect(detail.ignored, isTrue);
     });
 
+    test('ignores the #Rightbar ops box on the author\'s own topic page', () {
+      // 回归：作者本人视角的页面在 #Rightbar（DOM 序在 #Main 之前）渲染
+      // 移动主题/放到首页管理箱，其中的 `div.header` 曾抢在主题头部之前被
+      // 匹配，导致 空标题 + 匿名 + 未知节点。
+      final detail = TopicParser.parse(
+        fixture('topic_own_ops_box.html'),
+        topicId: 1251839,
+      );
+
+      expect(detail.topic.title, 'Own topic parser regression');
+      expect(detail.topic.node.key, 'sandbox');
+      expect(detail.topic.node.name, '沙盒');
+      expect(detail.topic.author.username, 'tester');
+      expect(detail.contentHtml, 'repro test body');
+    });
+
     test('throws ParseFailure when the page shape changed', () {
       expect(
         () => TopicParser.parse('<html><body></body></html>', topicId: 1),

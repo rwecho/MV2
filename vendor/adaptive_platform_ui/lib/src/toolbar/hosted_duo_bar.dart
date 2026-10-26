@@ -2,19 +2,27 @@ import 'package:flutter/widgets.dart';
 import 'package:foldable/foldable.dart';
 
 import '../widgets/adaptive_app_bar_action.dart';
-import '../widgets/ios26/ios26_glass_capsule.dart';
 import 'duo_vertical_bar.dart';
 import 'toolbar_blend.dart';
 import 'toolbar_registry.dart';
 
 /// The one vertical bar of the app. It never moves; only its controls follow
-/// the page that owns the chrome, blended as [ToolbarBlend] dictates. A back
-/// button that both pages show stays put instead of fading out and in.
+/// the page that owns the chrome, blended as [ToolbarBlend] dictates. The
+/// back button can stay in the title band while this rail holds page actions.
 class HostedDuoBar extends StatelessWidget {
-  const HostedDuoBar({super.key, required this.blend, required this.regions});
+  const HostedDuoBar({
+    super.key,
+    required this.blend,
+    required this.regions,
+    this.showBackButton = true,
+  });
 
   final ToolbarBlend blend;
   final List<ReservedRegion> regions;
+
+  /// The hosted title band can own the back button while page actions remain
+  /// in this side rail.
+  final bool showBackButton;
 
   @override
   Widget build(BuildContext context) {
@@ -86,7 +94,7 @@ class HostedDuoBar extends StatelessWidget {
                 interactive: upperOwns,
                 reservedTabs: upperTabs?.tabBar?.items?.length ?? 0,
               ),
-            if (backOpacity != null)
+            if (showBackButton && backOpacity != null)
               FadeTransition(
                 key: const ValueKey<String>('adaptive_toolbar_back'),
                 opacity: backOpacity,
@@ -139,11 +147,7 @@ class HostedDuoBar extends StatelessWidget {
         child: IgnorePointer(
           ignoring: !interactive,
           child: DuoVerticalBar(
-            leading:
-                content.customLeading ??
-                (content.impliesBack
-                    ? const SizedBox.square(dimension: IOS26GlassCapsule.width)
-                    : null),
+            leading: showBackButton ? content.customLeading : null,
             actions: content.actions,
             reservedTabs: reservedTabs,
             tint: content.tint,

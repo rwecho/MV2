@@ -35,6 +35,7 @@ class AdaptiveToolbarHost extends StatefulWidget {
 
   /// The navigator (or whatever the app's `builder` receives).
   final Widget child;
+
   /// Full-screen media owns the entire view, including the Duo side band.
   final bool chromeHidden;
 
@@ -168,6 +169,7 @@ class _AdaptiveToolbarHostState extends State<AdaptiveToolbarHost>
                   child: HostedDuoBar(
                     blend: _blend,
                     regions: fold?.regions ?? const <ReservedRegion>[],
+                    showBackButton: false,
                   ),
                 ),
             ],

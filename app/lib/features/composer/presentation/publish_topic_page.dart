@@ -734,13 +734,25 @@ class _NodePickerSheetState extends ConsumerState<_NodePickerSheet> {
                                   ),
                             )
                             .toList(growable: false);
-                  if (filtered.isEmpty) {
+                  // 最近使用只在未搜索时展示；节点须仍存在于目录中，否则跳过。
+                  final recent = term.isEmpty
+                      ? <RecentPublishNode>[
+                          for (final entry
+                              in ref.watch(recentPublishNodesProvider).value ??
+                              const <RecentPublishNode>[])
+                            if (all.any((node) => node.key == entry.slug))
+                              entry,
+                        ]
+                      : const <RecentPublishNode>[];
+                  if (filtered.isEmpty && recent.isEmpty) {
                     return const Mv2StateView(
                       kind: Mv2StateKind.empty,
                       compact: true,
                       title: '没有匹配的节点',
                     );
                   }
+                  // Layout: [最近使用 label, recent…, 全部节点 label, all…].
+                  final recentHeader = recent.isEmpty ? 0 : recent.length + 2;
                   return ListView.builder(
                     padding: EdgeInsets.fromLTRB(
                       Mv2Spacing.pageNarrow,
@@ -748,9 +760,29 @@ class _NodePickerSheetState extends ConsumerState<_NodePickerSheet> {
                       Mv2Spacing.pageNarrow,
                       Mv2Spacing.x6 + MediaQuery.viewPaddingOf(context).bottom,
                     ),
-                    itemCount: filtered.length,
+                    itemCount: recentHeader + filtered.length,
                     itemBuilder: (context, index) {
-                      final node = filtered[index];
+                      if (recent.isNotEmpty) {
+                        if (index == 0) {
+                          return const _RecentSectionLabel('最近使用');
+                        }
+                        if (index <= recent.length) {
+                          final entry = recent[index - 1];
+                          return _NodePickerRow(
+                            node: all.firstWhere(
+                              (node) => node.key == entry.slug,
+                            ),
+                            selected: entry.slug == widget.selected,
+                            onTap: () => Navigator.of(
+                              context,
+                            ).pop((slug: entry.slug, title: entry.title)),
+                          );
+                        }
+                        if (index == recent.length + 1) {
+                          return const _RecentSectionLabel('全部节点');
+                        }
+                      }
+                      final node = filtered[index - recentHeader];
                       return _NodePickerRow(
                         node: node,
                         selected: node.key == widget.selected,
@@ -764,6 +796,31 @@ class _NodePickerSheetState extends ConsumerState<_NodePickerSheet> {
               ),
             ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Section label inside the node picker (`最近使用` / `全部节点`).
+class _RecentSectionLabel extends StatelessWidget {
+  const _RecentSectionLabel(this.title);
+
+  final String title;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(
+        Mv2Spacing.x1,
+        Mv2Spacing.x3,
+        Mv2Spacing.x1,
+        Mv2Spacing.x1,
+      ),
+      child: Text(
+        title,
+        style: context.text.metadata.copyWith(
+          color: context.colors.textTertiary,
         ),
       ),
     );

@@ -97,6 +97,14 @@ class _Mv2VideoSurfaceState extends State<Mv2VideoSurface>
       final controller = WebViewController.fromPlatformCreationParams(params);
       await controller.setJavaScriptMode(JavaScriptMode.unrestricted);
       await controller.setBackgroundColor(Colors.black);
+      // YouTube's anti-abuse check refuses the iframe player inside a
+      // WebView-identified agent ("此视频不能观看 152-4" while the same embed
+      // plays in Safari); present the stock iOS Safari agent instead.
+      await controller.setUserAgent(
+        'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) '
+        'AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 '
+        'Mobile/15E148 Safari/604.1',
+      );
       await controller.setNavigationDelegate(
         NavigationDelegate(
           onProgress: (value) {
@@ -145,7 +153,16 @@ class _Mv2VideoSurfaceState extends State<Mv2VideoSurface>
           },
         ),
       );
-      await controller.loadRequest(url);
+      // YouTube rejects a bare main-frame embed (error 153) because it has no
+      // referrer context; a local host page restores the iframe semantics.
+      if (widget.embed.provider == 'youtube') {
+        await controller.loadHtmlString(
+          youtubeHostPage(url),
+          baseUrl: 'https://www.youtube.com',
+        );
+      } else {
+        await controller.loadRequest(url);
+      }
       if (mounted && generation == _generation) {
         setState(() => _controller = controller);
       }

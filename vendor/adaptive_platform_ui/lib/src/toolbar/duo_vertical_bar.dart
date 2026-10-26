@@ -294,12 +294,20 @@ class DuoTitleBackdrop extends StatelessWidget {
 /// The page title as iPhone Duo shows it: at the leading edge rather than
 /// centred, because the navigation controls live in the trailing bar.
 class DuoToolbarTitle extends StatelessWidget {
-  const DuoToolbarTitle({super.key, this.title, this.titleWidget});
+  const DuoToolbarTitle({
+    super.key,
+    this.title,
+    this.titleWidget,
+    this.hasLeadingControl = false,
+  });
 
   final String? title;
 
   /// Replaces [title] (a custom widget, or a title with a subtitle).
   final Widget? titleWidget;
+
+  /// The hosted Duo toolbar keeps the back button in the title band.
+  final bool hasLeadingControl;
 
   @override
   Widget build(BuildContext context) {
@@ -308,7 +316,7 @@ class DuoToolbarTitle extends StatelessWidget {
     final onLeft = pose?.onLeft ?? false;
     return Padding(
       padding: EdgeInsets.only(
-        left: 20 + (onLeft ? strip : 0),
+        left: 20 + (onLeft ? strip : 0) + (hasLeadingControl ? 56 : 0),
         right: onLeft ? 20 : strip + 8,
         top: 26,
       ),

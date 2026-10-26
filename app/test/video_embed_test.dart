@@ -20,10 +20,7 @@ void main() {
     });
 
     test('rejects paths that are not a 64-hex Post id', () {
-      expect(
-        matchVideoEmbed('https://hub.v2core.com/p/not-a-post'),
-        isNull,
-      );
+      expect(matchVideoEmbed('https://hub.v2core.com/p/not-a-post'), isNull);
       expect(matchVideoEmbed('https://hub.v2core.com/p/abc123'), isNull);
       expect(matchVideoEmbed('https://hub.v2core.com/'), isNull);
     });
@@ -78,10 +75,7 @@ void main() {
 
     test('non-video bilibili pages are ignored', () {
       expect(matchVideoEmbed('https://www.bilibili.com/v/popular/all'), isNull);
-      expect(
-        matchVideoEmbed('https://space.bilibili.com/1'),
-        isNull,
-      );
+      expect(matchVideoEmbed('https://space.bilibili.com/1'), isNull);
       expect(
         // BV ids are exactly 12 chars; a longer token is not an id.
         matchVideoEmbed('https://www.bilibili.com/video/BV1xx411c7mDxyz'),
@@ -112,7 +106,10 @@ void main() {
     test('rejects malformed ids and non-video pages', () {
       expect(matchVideoEmbed('https://www.youtube.com/watch'), isNull);
       expect(matchVideoEmbed('https://www.youtube.com/watch?v=short'), isNull);
-      expect(matchVideoEmbed('https://www.youtube.com/feed/subscriptions'), isNull);
+      expect(
+        matchVideoEmbed('https://www.youtube.com/feed/subscriptions'),
+        isNull,
+      );
       expect(matchVideoEmbed('https://youtu.be/'), isNull);
     });
   });
@@ -132,16 +129,11 @@ void main() {
     test('follows the redirect off the short-link host', () async {
       final landed = await resolveVideoRedirect(
         Uri.parse('https://b23.tv/4gvVBLs'),
-        fetchLocation: (url) async => (
-          302,
-          Uri.parse('https://www.bilibili.com/video/BV1xx411c7mD/'),
-        ),
+        fetchLocation: (url) async =>
+            (302, Uri.parse('https://www.bilibili.com/video/BV1xx411c7mD/')),
       );
 
-      expect(
-        landed.toString(),
-        'https://www.bilibili.com/video/BV1xx411c7mD/',
-      );
+      expect(landed.toString(), 'https://www.bilibili.com/video/BV1xx411c7mD/');
     });
 
     test('returns the current URL when a hop has no Location', () async {
@@ -170,7 +162,8 @@ void main() {
       final landed = await resolveVideoRedirect(
         Uri.parse('https://b23.tv/loop'),
         maxHops: 5,
-        fetchLocation: (url) async => (302, Uri.parse('https://b23.tv/loop-$url')),
+        fetchLocation: (url) async =>
+            (302, Uri.parse('https://b23.tv/loop-$url')),
       );
 
       expect(landed, isNull);
@@ -192,8 +185,9 @@ void main() {
     });
   });
 
-  testWidgets('rich text upgrades video links to cards, ordinary links stay',
-      (tester) async {
+  testWidgets('rich text upgrades video links to cards, ordinary links stay', (
+    tester,
+  ) async {
     Future<void> pump(String html) async {
       await tester.pumpWidget(
         MaterialApp(
@@ -228,5 +222,35 @@ void main() {
       'https://hub.v2core.com/p/$_hex64</a></p>',
     );
     expect(find.text('exe-hub'), findsOneWidget);
+  });
+
+  group('youtubeHostPage — error-153 host page', () {
+    test('wraps the embed in a referrer-policy iframe', () {
+      final html = youtubeHostPage(
+        Uri.https('www.youtube-nocookie.com', '/embed/dQw4w9WgXcQ'),
+      );
+
+      expect(
+        html,
+        contains('referrerpolicy="strict-origin-when-cross-origin"'),
+      );
+      expect(html, contains('src="https://www.youtube.com/embed/'));
+      expect(html, contains('origin=https%3A%2F%2Fwww.youtube.com'));
+      expect(html, contains('playsinline=1'));
+      expect(html, contains('autoplay=0'));
+    });
+
+    test('keeps query separators out of the raw src value', () {
+      final html = youtubeHostPage(
+        Uri.https('www.youtube-nocookie.com', '/embed/dQw4w9WgXcQ', {
+          'list': 'PLa&b"c',
+        }),
+      );
+
+      // Uri percent-encodes reserved characters inside values; the parameter
+      // separators themselves are escaped for the HTML attribute.
+      expect(html, contains('PLa%26b%22c'));
+      expect(html, contains('&amp;autoplay=0'));
+    });
   });
 }

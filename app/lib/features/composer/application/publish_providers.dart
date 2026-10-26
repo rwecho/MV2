@@ -165,9 +165,15 @@ class PublishController extends Notifier<PublishState> {
     state = state.copyWith(loading: true, clearFailure: true);
     try {
       final form = await ref.read(v2exApiProvider).topicForm(node: initialNode);
+      // Fresh composer with no explicit node and no draft: fall back to the
+      // last node the user posted to, so the picker is not a forced step.
+      final recent = decodeRecentPublishNodes(
+        (await _prefsInstance()).getString(_recentPublishNodesKey),
+      ).firstOrNull;
       final slug =
           initialNode ??
           state.nodeSlug ??
+          recent?.slug ??
           form.defaultNode ??
           _firstOption(form);
       // Prefer the form's own label for the slug; only reuse the stored draft
@@ -230,6 +236,11 @@ class PublishController extends Notifier<PublishState> {
       problems: const <String>[],
     );
     Mv2Analytics.logPublishNodeSelect(nodeKey: slug);
+    unawaited(
+      _prefsInstance().then(
+        (prefs) => recordRecentPublishNode(prefs, slug, title),
+      ),
+    );
     _scheduleDraftSave();
   }
 
@@ -426,6 +437,62 @@ final publishNodeOptionsProvider = FutureProvider<List<V2Node>>((ref) async {
   }
   return ref.watch(nodesProvider.future);
 });
+
+/// 最近用于发帖的节点（上次选择的排最前），持久化到
+/// `SharedPreferences`（`mv2.publishRecentNodes`）。发布页用它预选上次节点，
+/// 节点选择器用它展示「最近使用」。
+const String _recentPublishNodesKey = 'mv2.publishRecentNodes';
+const int _recentPublishNodesLimit = 8;
+
+typedef RecentPublishNode = ({String slug, String title});
+
+/// Decodes the stored list; tolerant of any legacy/corrupt payload.
+List<RecentPublishNode> decodeRecentPublishNodes(String? raw) {
+  if (raw == null || raw.isEmpty) return const <RecentPublishNode>[];
+  try {
+    final list = (jsonDecode(raw) as List).cast<Object?>();
+    return <RecentPublishNode>[
+      for (final entry in list)
+        if (entry is Map)
+          (
+            slug: entry['slug'] as String? ?? '',
+            title: entry['title'] as String? ?? '',
+          ),
+    ].where((node) => node.slug.isNotEmpty).toList(growable: false);
+  } catch (_) {
+    return const <RecentPublishNode>[];
+  }
+}
+
+final recentPublishNodesProvider =
+    FutureProvider<List<RecentPublishNode>>((ref) async {
+      final prefs = await SharedPreferences.getInstance();
+      return decodeRecentPublishNodes(
+        prefs.getString(_recentPublishNodesKey),
+      );
+    });
+
+/// Records a node as just-used (front of the list, deduped, bounded).
+Future<void> recordRecentPublishNode(
+  SharedPreferences prefs,
+  String slug,
+  String title,
+) async {
+  final current = decodeRecentPublishNodes(
+    prefs.getString(_recentPublishNodesKey),
+  );
+  final next = <RecentPublishNode>[
+    (slug: slug, title: title),
+    ...current.where((node) => node.slug != slug),
+  ].take(_recentPublishNodesLimit).toList(growable: false);
+  await prefs.setString(
+    _recentPublishNodesKey,
+    jsonEncode(<Map<String, String>>[
+      for (final node in next)
+        <String, String>{'slug': node.slug, 'title': node.title},
+    ]),
+  );
+}
 
 final publishProvider = NotifierProvider<PublishController, PublishState>(
   PublishController.new,

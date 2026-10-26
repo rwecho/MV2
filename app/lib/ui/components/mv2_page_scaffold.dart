@@ -98,10 +98,16 @@ class Mv2PageScaffold extends ConsumerWidget {
                         label: action.tooltip ?? pageHeader.title,
                         onPressed: action.onPressed ?? () {},
                       )
+                    else if (action is Mv2HeaderAction)
+                      AdaptiveAppBarAction(
+                        iconWidget: action.child,
+                        label: action.label ?? '',
+                        onPressed: action.onPressed ?? () {},
+                      )
                     else
-                      // Custom header widgets (the account avatar, a draft
-                      // status label) ride along as an item so nothing the page
-                      // put in its header disappears.
+                      // Custom header widgets without a declared action ride
+                      // along as an item so nothing the page put in its header
+                      // disappears; prefer [Mv2HeaderAction] for new code.
                       AdaptiveAppBarAction(
                         iconWidget: action,
                         label: '',

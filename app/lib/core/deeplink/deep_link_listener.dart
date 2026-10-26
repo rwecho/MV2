@@ -10,7 +10,8 @@ import '../../app/router.dart';
 import '../../features/auth/application/auth_controller.dart';
 import '../../features/auth/domain/auth_session.dart';
 import '../../features/composer/presentation/composer_sheets.dart';
-import '../../ui/utils/mv2_breakpoints.dart';
+import '../../features/topic/application/open_topic.dart'
+    show openTopicFromRoute;
 import '../native/mv2_native_bridge.dart';
 import '../push/push_payload.dart';
 import '../push/push_providers.dart';
@@ -61,8 +62,6 @@ class _Mv2DeepLinkListenerState extends ConsumerState<Mv2DeepLinkListener>
   static const String _pasteboardCountKey = 'mv2.clipboard.handledChangeCount';
   int? _handledPasteboardCount;
   bool _pasteboardCountReady = false;
-
-  String get _layout => mv2IsTwoPane(context) ? 'tablet' : 'phone';
 
   @override
   void initState() {
@@ -206,13 +205,13 @@ class _Mv2DeepLinkListenerState extends ConsumerState<Mv2DeepLinkListener>
   /// a topic; quick actions (which never target `/topic/…`) pass nothing and
   /// stay unlogged here.
   void _navigate(String route, {String source = Mv2Events.unspecified}) {
-    final match = _topicRoute.firstMatch(route);
-    if (match != null) {
-      Mv2Analytics.logTopicOpen(
-        topicId: int.parse(match.group(1)!),
-        source: source,
-        layout: _layout,
-      );
+    // Topic routes go through the shared entry point: on wide viewports the
+    // topic opens into the tablet layout's right-hand pane; pushing
+    // `/topic/:id` fullscreen here used to cover the whole two-pane shell
+    // with no back affordance (push notifications, deep links).
+    if (_topicRoute.hasMatch(route) && mounted) {
+      openTopicFromRoute(context, route, source: source);
+      return;
     }
     final router = ref.read(routerProvider);
     if (mv2IsShellBranchLocation(route)) {

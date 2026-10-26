@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="zh-CN"><head><title>own topic</title></head><body>
+<div id="Wrapper">
+<!-- Signed-in author view: V2EX renders the topic ops box inside #Rightbar,
+     which precedes #Main in the DOM. Its `div.header`s must not be parsed as
+     the topic header (regression: produced 空标题 + 匿名 + 未知节点). -->
+<div id="Rightbar">
+    <div class="box">
+        <div class="cell">
+            <table cellpadding="0" cellspacing="0" border="0" width="100%"><tr>
+                <td width="33%" align="center"><a href="/my/following" class="dark"><span class="bigger">33</span><span class="fade">特别关注</span></a></td>
+            </tr></table>
+        </div>
+    </div>
+    <div class="sep"></div>
+    <div class="box">
+        <div class="header">管理功能</div>
+        <div class="header"><li class="fa fa-arrows"></li>&nbsp; <a href="/move/topic/1251839">移动主题到其他节点</a></div>
+        <div class="header flex-one-row">
+            <div style="flex: 1"><li class="fa fa-angle-up"></li>&nbsp; <a href="/t/1251839/boost?once=abc123">放到首页</a></div>
+        </div>
+    </div>
+</div>
+<div id="Main">
+    <div class="box">
+    <div class="header"><div class="fr"><a href="/member/tester"><img src="https://cdn.v2ex.com/avatar/2d53/5f8a/94728_large.png" class="avatar" border="0" align="default" alt="tester" data-uid="94728" /></a></div>
+        <div class="flex-one-row gap10">
+            <div><a href="/">V2EX</a> <span class="chevron">&nbsp;›&nbsp;</span> <a href="/go/sandbox">沙盒</a></div>
+        </div>
+        <div class="sep10"></div>
+        <h1>Own topic parser regression</h1>
+        <div id="topic_1251839_votes" class="votes"></div> &nbsp; <small class="gray"><a href="/member/tester">tester</a> · <span title="2026-10-26 11:43:18 +08:00">刚刚</span> via iPad · 1 次点击 &nbsp; <a href="/t/1251839/info">info</a> &nbsp;<a href="/move/topic/1251839" class="op">MOVE</a> &nbsp;<a href="/edit/topic/1251839" class="op">EDIT</a></small>
+    </div>
+    <div class="cell">
+        <div class="topic_content">repro test body</div>
+    </div>
+    <div class="box"><div class="cell"><span class="gray">0 条回复 &nbsp;<strong class="snow">•</strong> &nbsp;2026-10-26 11:44:00 +08:00</span></div></div>
+    </div>
+</div>
+</div>
+</body></html>

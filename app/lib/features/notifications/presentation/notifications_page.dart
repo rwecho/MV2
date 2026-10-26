@@ -1,4 +1,3 @@
-import 'package:adaptive_platform_ui/adaptive_platform_ui.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -8,7 +7,7 @@ import '../../../design_system/tokens/mv2_radius.dart';
 import '../../../design_system/tokens/mv2_spacing.dart';
 import '../../../shared/models/models.dart';
 import '../../../ui/components/mv2_error_feedback.dart';
-import '../../../ui/components/adaptive/mv2_adaptive_destinations.dart';
+import '../../../ui/components/mv2_page_header.dart';
 import '../../../ui/components/mv2_page_scaffold.dart';
 import '../../../ui/components/mv2_refreshable.dart';
 import '../../../ui/components/mv2_segmented_tabs.dart';
@@ -50,57 +49,54 @@ class _NotificationsPageState extends ConsumerState<NotificationsPage> {
     // The fixed toolbar hosts the title and the account item, so the page
     // body keeps only the segmented tabs — below the chrome, not under it.
     return Mv2PageScaffold(
-      appBar: AdaptiveAppBar(
+      header: Mv2PageHeader(
         title: '通知',
         subtitle: '与优秀的开发者社区',
-        actions: <AdaptiveAppBarAction>[
-          AdaptiveAppBarAction(
-            iconWidget: const Mv2AccountAvatar(),
+        actions: <Widget>[
+          Mv2HeaderAction(
+            child: const Mv2AccountAvatar(),
             label: '账号',
-            onPressed: () {},
           ),
         ],
       ),
-      child: Column(
-        children: <Widget>[
-          SizedBox(height: mv2ChromeTopInset(context)),
-          Padding(
-            padding: const EdgeInsets.only(bottom: Mv2Spacing.x2),
-            child: Mv2SegmentedTabs(
-              items: const <String>['全部', '回复', '@我'],
-              selectedIndex: _tabIndex,
-              onChanged: (index) => setState(() => _tabIndex = index),
-              padded: true,
+      // The segmented tabs scroll with the content, exactly like the 我的
+      // page's first card: content starts at the SafeArea top and slides
+      // under the translucent title band, so no fixed blank band shows
+      // between the title and the tabs.
+      child: NotificationListener<ScrollNotification>(
+        onNotification: (notification) {
+          // Load the next page once the list is within ~400px of the bottom;
+          // the controller de-duplicates concurrent/duplicate calls.
+          if (notification.metrics.extentAfter < 400) {
+            ref.read(notificationsControllerProvider.notifier).loadMore();
+          }
+          return false;
+        },
+        child: Mv2Refreshable(
+          onRefresh: () =>
+              ref.read(notificationsControllerProvider.notifier).refresh(),
+          child: ListView(
+            physics: const AlwaysScrollableScrollPhysics(),
+            padding: EdgeInsets.fromLTRB(
+              Mv2Spacing.pageNarrow,
+              0,
+              Mv2Spacing.pageNarrow,
+              Mv2PageScaffold.bottomContentInset(context),
             ),
-          ),
-          Expanded(
-            child: NotificationListener<ScrollNotification>(
-              onNotification: (notification) {
-                // Load the next page once the list is within ~400px of the bottom;
-                // the controller de-duplicates concurrent/duplicate calls.
-                if (notification.metrics.extentAfter < 400) {
-                  ref.read(notificationsControllerProvider.notifier).loadMore();
-                }
-                return false;
-              },
-              child: Mv2Refreshable(
-                onRefresh: () => ref
-                    .read(notificationsControllerProvider.notifier)
-                    .refresh(),
-                child: ListView(
-                  physics: const AlwaysScrollableScrollPhysics(),
-                  padding: EdgeInsets.fromLTRB(
-                    Mv2Spacing.pageNarrow,
-                    Mv2Spacing.x4,
-                    Mv2Spacing.pageNarrow,
-                    Mv2PageScaffold.bottomContentInset(context),
-                  ),
-                  children: <Widget>[_body(state)],
+            children: <Widget>[
+              Padding(
+                padding: const EdgeInsets.only(bottom: Mv2Spacing.x2),
+                child: Mv2SegmentedTabs(
+                  items: const <String>['全部', '回复', '@我'],
+                  selectedIndex: _tabIndex,
+                  onChanged: (index) => setState(() => _tabIndex = index),
+                  padded: false,
                 ),
               ),
-            ),
+              _body(state),
+            ],
           ),
-        ],
+        ),
       ),
     );
   }

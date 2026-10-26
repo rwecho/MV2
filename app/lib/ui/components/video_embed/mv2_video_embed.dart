@@ -141,6 +141,44 @@ String? bilibiliBvidFromUrl(Uri uri) {
 Uri youtubeEmbedUrl(String id) =>
     Uri.https('www.youtube-nocookie.com', '/embed/$id');
 
+/// The local host page a WebView loads instead of the bare embed URL.
+///
+/// YouTube's late-2025 anti-abuse check rejects the iframe player when the
+/// request carries no referrer context — which is exactly what loading the
+/// embed as the WebView's main frame looks like ("视频播放器配置错误 错误
+/// 153"). Wrapping it in a real `<iframe>` with the policy the player
+/// expects, served from an https base URL, restores the embedding context a
+/// normal web page provides. The caller loads this via `loadHtmlString` with
+/// `baseUrl: https://www.youtube.com`.
+String youtubeHostPage(Uri embedUrl) {
+  final src = embedUrl
+      .replace(
+        scheme: 'https',
+        host: 'www.youtube.com',
+        queryParameters: <String, String>{
+          ...embedUrl.queryParameters,
+          'autoplay': '0',
+          'playsinline': '1',
+          // Matches the loadHtmlString baseUrl, so the player's origin check
+          // sees one consistent embedding context (errors 153 / 152).
+          'origin': 'https://www.youtube.com',
+        },
+      )
+      .toString()
+      .replaceAll('&', '&amp;')
+      .replaceAll('"', '&quot;');
+  return '''
+<!doctype html><html><head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<style>html,body{margin:0;padding:0;height:100%;background:#000;overflow:hidden}
+iframe{position:absolute;inset:0;width:100%;height:100%;border:0}</style>
+</head><body>
+<iframe src="$src" referrerpolicy="strict-origin-when-cross-origin"
+        allowfullscreen allow="encrypted-media;picture-in-picture"></iframe>
+</body></html>''';
+}
+
 /// YouTube video ids are 11 chars of `[A-Za-z0-9_-]`; exact length keeps
 /// ordinary paths from matching.
 @visibleForTesting

@@ -61,6 +61,27 @@ class Mv2PageHeader extends StatelessWidget {
   }
 }
 
+/// A header action that is a custom widget (the account avatar, a draft
+/// status label) rather than an [Mv2IconButton]. The page scaffold translates
+/// it into a native toolbar item, keeping [label] for accessibility and
+/// [onPressed] for the tap — the plain-widget fallback in the scaffold cannot
+/// carry either.
+class Mv2HeaderAction extends StatelessWidget {
+  const Mv2HeaderAction({
+    super.key,
+    required this.child,
+    this.label,
+    this.onPressed,
+  });
+
+  final Widget child;
+  final String? label;
+  final VoidCallback? onPressed;
+
+  @override
+  Widget build(BuildContext context) => child;
+}
+
 /// Secondary page header with a back affordance and centered title
 /// (`designs/03-reply-composer.png`, `designs/08-settings.png`).
 class Mv2SecondaryHeader extends StatelessWidget {

@@ -1,8 +1,6 @@
 // The chrome's own layout constants: the host draws its bar over the content
 // (iOS 26 Liquid Glass), so pinned page content has to keep clear of it. The
 // package does not export these, and re-implementing the heights would drift.
-import 'package:adaptive_platform_ui/src/toolbar/duo_vertical_bar.dart'
-    show kDuoTitleBandHeight;
 import 'package:adaptive_platform_ui/src/toolbar/hosted_top_toolbar.dart'
     show kHostedToolbarHeight;
 import 'package:adaptive_platform_ui/src/toolbar/toolbar_chrome_scope.dart'
@@ -22,11 +20,20 @@ import 'package:flutter/material.dart';
 /// 发布 stays a *destination* in the bar and an action in behaviour: the shell
 /// intercepts it and opens the composer instead of switching branch, exactly
 /// as `selectShellTab` has always done.
+///
+/// [avatarUrl] upgrades the 我的 destination from the generic person glyph to
+/// the signed-in user's avatar: both bar renderers the app can hit (the iOS 26
+/// native tab bar and the Duo's glass capsule) accept an `ImageProvider` icon
+/// and draw it round-clipped. `null` (signed out) keeps the person glyph.
 List<AdaptiveNavigationDestination> mv2AdaptiveDestinations({
   required int notificationUnread,
+  String? avatarUrl,
 }) {
   final ios26 = PlatformInfo.isIOS26OrHigher();
   final ios = PlatformInfo.isIOS;
+  final avatar = (avatarUrl != null && avatarUrl.isNotEmpty)
+      ? NetworkImage(avatarUrl)
+      : null;
 
   return <AdaptiveNavigationDestination>[
     AdaptiveNavigationDestination(
@@ -56,7 +63,11 @@ List<AdaptiveNavigationDestination> mv2AdaptiveDestinations({
       label: '节点',
     ),
     AdaptiveNavigationDestination(
-      icon: ios26 ? 'plus' : ios ? CupertinoIcons.add : Icons.add_rounded,
+      icon: ios26
+          ? 'plus'
+          : ios
+          ? CupertinoIcons.add
+          : Icons.add_rounded,
       label: '发布',
     ),
     AdaptiveNavigationDestination(
@@ -74,16 +85,20 @@ List<AdaptiveNavigationDestination> mv2AdaptiveDestinations({
       badgeCount: notificationUnread,
     ),
     AdaptiveNavigationDestination(
-      icon: ios26
-          ? 'person'
-          : ios
-          ? CupertinoIcons.person
-          : Icons.person_outline_rounded,
-      selectedIcon: ios26
-          ? 'person.fill'
-          : ios
-          ? CupertinoIcons.person
-          : Icons.person_rounded,
+      icon:
+          avatar ??
+          (ios26
+              ? 'person'
+              : ios
+              ? CupertinoIcons.person
+              : Icons.person_outline_rounded),
+      selectedIcon:
+          avatar ??
+          (ios26
+              ? 'person.fill'
+              : ios
+              ? CupertinoIcons.person
+              : Icons.person_rounded),
       label: '我的',
     ),
   ];
@@ -145,11 +160,19 @@ String? mv2SfSymbolFor(IconData icon) {
 /// beneath the translucent bar), so scrolling content is fine — but a pinned
 /// control (the feed's tab strip, 通知's segmented tabs) would be covered by
 /// it, as the unfolded Duo screenshot showed.
-double mv2ChromeTopInset(BuildContext context) {
+double mv2ChromeTopInset(BuildContext context) =>
+    MediaQuery.paddingOf(context).top + mv2ChromeTopInsetInsideSafeArea(context);
+
+/// Same clearance for a page that is **already inside a `SafeArea`** (the
+/// `Mv2PageScaffold` body consumes the top inset), so the status-bar height is
+/// not applied twice — that double count showed up as a blank band between the
+/// title and 通知's segmented tabs.
+double mv2ChromeTopInsetInsideSafeArea(BuildContext context) {
   final scope = ToolbarChromeScope.maybeOf(context);
   if (scope == null || !scope.hostsToolbar) return 0;
-  // The Duo shows the title alone in a band at the top; other iOS 26+ devices
-  // draw the toolbar beneath the status bar.
-  if (scope.hostsDuoControls) return kDuoTitleBandHeight;
-  return kHostedToolbarHeight + MediaQuery.paddingOf(context).top;
+  // The Duo's title band is drawn from the very top of the window and already
+  // covers the status area, so a page inside a SafeArea keeps no extra inset
+  // at all — any remainder shows up as a blank band above pinned content.
+  if (scope.hostsDuoControls) return 0.0;
+  return kHostedToolbarHeight;
 }

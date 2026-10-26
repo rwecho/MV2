@@ -346,6 +346,35 @@ class _TopicDetailPageState extends ConsumerState<TopicDetailPage> {
     final inDuoBar =
         ToolbarChromeScope.maybeOf(context)?.hostsDuoControls ?? false;
     return AdaptiveAppBar(
+      // Explicit leading keeps the back affordance at the top-left even when
+      // the Duo is upright or this topic is the root route. The hosted Duo
+      // chrome converts it to the title-band back button and keeps actions in
+      // the side rail.
+      leading: widget.inPane
+          ? null
+          : SizedBox.square(
+              dimension: 44,
+              child: PlatformInfo.isIOS26OrHigher()
+                  ? AdaptiveButton.sfSymbol(
+                      onPressed: () => Navigator.of(context).maybePop(),
+                      sfSymbol: SFSymbol(
+                        'chevron.left',
+                        size: 20,
+                        color: colors.textPrimary,
+                      ),
+                      style: AdaptiveButtonStyle.glass,
+                      size: AdaptiveButtonSize.large,
+                      useSmoothRectangleBorder: false,
+                    )
+                  : AdaptiveButton.icon(
+                      onPressed: () => Navigator.of(context).maybePop(),
+                      icon: Icons.arrow_back_ios_new_rounded,
+                      iconColor: colors.textPrimary,
+                      style: AdaptiveButtonStyle.glass,
+                      size: AdaptiveButtonSize.large,
+                      useSmoothRectangleBorder: false,
+                    ),
+            ),
       title: widget.inPane
           ? null
           : (loaded?.topic.title ?? widget.initialTitle),

@@ -20,7 +20,15 @@ abstract final class TopicParser {
       throw const ParseFailure('topic page: div#Wrapper not found');
     }
 
-    final header = wrapper.querySelector('div.header');
+    // The topic header is the `div.header` carrying the `h1`. On the author's
+    // own topic page V2EX renders an ops box (移动主题 / 放到首页 / 管理功能)
+    // whose `div.header`s precede the topic's in the DOM, so a plain
+    // `querySelector('div.header')` used to grab one of those and yield an
+    // empty title plus the 匿名/未知节点 fallbacks.
+    final header = wrapper
+        .querySelectorAll('div.header')
+        .where((element) => element.querySelector('h1') != null)
+        .firstOrNull;
     final title = cleanText(header?.querySelector('h1')?.text) ?? '';
     final authorAnchor = header?.querySelector('small a');
     final authorName = cleanText(authorAnchor?.text);

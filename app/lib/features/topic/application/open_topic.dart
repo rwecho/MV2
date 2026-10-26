@@ -53,3 +53,21 @@ void openTopic(
     extra: initialTitle,
   );
 }
+
+/// `/topic/123`（可带 `?floor=n`）路由版 [openTopic]，deep link / 推送通知的
+/// 公共咽喉：宽屏进右侧分栏，窄屏全屏 push。此前 `_navigate` 直接
+/// `router.push`，双栏下会把整个壳盖成一层没有返回入口的全屏页。
+void openTopicFromRoute(
+  BuildContext context,
+  String route, {
+  String source = Mv2Events.unspecified,
+}) {
+  final match = RegExp(r'^/topic/(\d+)').firstMatch(route);
+  if (match == null) return;
+  openTopic(
+    context,
+    int.parse(match.group(1)!),
+    floor: int.tryParse(Uri.parse(route).queryParameters['floor'] ?? ''),
+    source: source,
+  );
+}

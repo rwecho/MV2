@@ -28,8 +28,8 @@ class TopToolbarContent {
   /// No page owns the chrome, the page has no toolbar, or it draws a
   /// non-native bar of its own: nothing to show.
   ///
-  /// With [titleOnly] the controls are left out, because the iPhone Duo
-  /// vertical bar shows them instead.
+  /// With [titleOnly], page actions move to the iPhone Duo vertical bar while
+  /// an implied back button remains in the title band.
   factory TopToolbarContent.of(ToolbarEntry? entry, {bool titleOnly = false}) {
     final appBar = entry?.appBar;
     if (entry == null || appBar == null || !appBar.useNativeToolbar) {
@@ -39,7 +39,10 @@ class TopToolbarContent {
       title: appBar.title,
       titleOverlay: entry.titleOverlay,
       customLeading: titleOnly ? null : appBar.leading,
-      impliesBack: !titleOnly && entry.impliesBackButton,
+      // On Duo, page actions live in the vertical rail but the back affordance
+      // stays in the familiar leading position of the title band.
+      impliesBack:
+          entry.impliesBackButton || (titleOnly && appBar.leading != null),
       actions: titleOnly
           ? const <AdaptiveAppBarAction>[]
           : appBar.actions ?? const <AdaptiveAppBarAction>[],
@@ -85,7 +88,8 @@ class HostedTopToolbar extends StatelessWidget {
 
   final ToolbarBlend blend;
 
-  /// True on iPhone Duo, where the controls live in the vertical bar.
+  /// True on iPhone Duo, where page actions live in the vertical bar and the
+  /// back button remains in the title band.
   final bool titleOnly;
 
   @override
@@ -167,8 +171,9 @@ class HostedTopToolbar extends StatelessWidget {
                 if (backOpacity != null)
                   Positioned(
                     key: const ValueKey<String>('adaptive_toolbar_back'),
-                    left: 16 + (_isWindowed(context) ? 62 : 0),
-                    bottom: 0,
+                    left: _backLeading(context),
+                    top: titleOnly ? 26 : null,
+                    bottom: titleOnly ? null : 0,
                     child: FadeTransition(
                       key: const ValueKey<String>('adaptive_toolbar_back_fade'),
                       opacity: backOpacity,
@@ -217,6 +222,7 @@ class HostedTopToolbar extends StatelessWidget {
               ? DuoToolbarTitle(
                   title: content.title,
                   titleWidget: content.titleOverlay,
+                  hasLeadingControl: content.impliesBack,
                 )
               : defaultTargetPlatform == TargetPlatform.iOS
               ? IOS26NativeToolbar(
@@ -236,6 +242,12 @@ class HostedTopToolbar extends StatelessWidget {
         ),
       ),
     );
+  }
+
+  double _backLeading(BuildContext context) {
+    final pose = DuoPoseScope.maybeOf(context)?.pose;
+    final leftStrip = pose?.onLeft == true ? pose!.bandWidth : 0.0;
+    return 16 + (_isWindowed(context) ? 62 : 0) + leftStrip;
   }
 
   /// Whether the app runs in a window smaller than the display (iPadOS),

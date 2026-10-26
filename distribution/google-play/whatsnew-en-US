@@ -1,4 +1,4 @@
-• Fix Android preferences compatibility affecting drafts and replies
-• Prevent local draft cleanup failures from blocking successful replies
-• Improve reply credential recovery and error feedback
-• Improve diagnostics and stability
+• Improved topic navigation and deep links on wide screens
+• Remembered recently used posting nodes and refined node selection
+• Fixed topic parsing and improved embedded video handling
+• Improved back navigation on iPhone Duo

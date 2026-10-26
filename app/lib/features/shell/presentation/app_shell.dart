@@ -204,6 +204,11 @@ class _AppShellState extends ConsumerState<AppShell> {
         onTap: (int index) => _onSelect(context, _barOrder[index]),
         items: mv2AdaptiveDestinations(
           notificationUnread: ref.watch(notificationUnreadProvider),
+          avatarUrl: ref.watch(
+            authControllerProvider.select(
+              (session) => session.value?.user?.avatarUrl,
+            ),
+          ),
         ),
       ),
     );
