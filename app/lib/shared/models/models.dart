@@ -238,6 +238,7 @@ class V2Notification {
     required this.sourceTitle,
     this.topicId,
     this.topicUrl,
+    this.replyFloor,
     this.actionLabel,
     this.isUnread = false,
   });
@@ -261,6 +262,13 @@ class V2Notification {
 
   /// Absolute `a.topic-link` href.
   final String? topicUrl;
+
+  /// Reply floor parsed from the href fragment (`/t/123#reply4` → `4`).
+  ///
+  /// `null` for notifications that point at the topic itself (收藏 / 感谢主题).
+  /// Feeds `openTopic(floor: …)` so tapping the notification lands on — and
+  /// highlights — that exact comment instead of just the topic.
+  final int? replyFloor;
 
   final bool isUnread;
 }

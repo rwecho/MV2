@@ -345,6 +345,13 @@ class _TopicDetailPageState extends ConsumerState<TopicDetailPage> {
 
     final inDuoBar =
         ToolbarChromeScope.maybeOf(context)?.hostsDuoControls ?? false;
+    // `glass` only exists on iOS 26+; on Android AdaptiveButton falls back to
+    // a tonal FilledButton, which renders the back affordance as a big
+    // accent-coloured circle (v2.2.24 regression). Non-iOS gets the plain,
+    // background-free icon button instead.
+    final backStyle = PlatformInfo.isIOS26OrHigher()
+        ? AdaptiveButtonStyle.glass
+        : AdaptiveButtonStyle.plain;
     return AdaptiveAppBar(
       // Explicit leading keeps the back affordance at the top-left even when
       // the Duo is upright or this topic is the root route. The hosted Duo
@@ -362,7 +369,7 @@ class _TopicDetailPageState extends ConsumerState<TopicDetailPage> {
                         size: 20,
                         color: colors.textPrimary,
                       ),
-                      style: AdaptiveButtonStyle.glass,
+                      style: backStyle,
                       size: AdaptiveButtonSize.large,
                       useSmoothRectangleBorder: false,
                     )
@@ -370,7 +377,7 @@ class _TopicDetailPageState extends ConsumerState<TopicDetailPage> {
                       onPressed: () => Navigator.of(context).maybePop(),
                       icon: Icons.arrow_back_ios_new_rounded,
                       iconColor: colors.textPrimary,
-                      style: AdaptiveButtonStyle.glass,
+                      style: backStyle,
                       size: AdaptiveButtonSize.large,
                       useSmoothRectangleBorder: false,
                     ),

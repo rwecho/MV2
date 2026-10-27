@@ -73,6 +73,9 @@ void main() {
       expect(first.sourceTitle, '周五了，额度双双用光光');
       expect(first.topicId, 1241200);
       expect(first.topicUrl, 'https://www.v2ex.com/t/1241200#reply20');
+      // `#reply20` is the floor the notification points at; the page hands it
+      // to `openTopic(floor: …)` so the tap lands on that exact comment.
+      expect(first.replyFloor, 20);
     });
 
     test('reads the quoted payload as plain text', () {
@@ -100,6 +103,10 @@ void main() {
       expect(page.items[2].timeLabel, '1 天前');
       expect(page.items[0].isUnread, isTrue);
       expect(page.items[2].isUnread, isFalse);
+    });
+
+    test('parses the reply floor out of the href fragment', () {
+      expect(page.items[1].replyFloor, 155);
     });
   });
 

@@ -173,6 +173,7 @@ abstract final class NotificationParser {
       sourceTitle: cleanText(topicAnchor?.text) ?? '',
       topicId: parseIdFromUrl(href),
       topicUrl: absoluteV2exUrl(href),
+      replyFloor: replyFloorFromUrl(href),
       // The unread marker is unverifiable without a signed-in capture; accept
       // the obvious class hooks and default to read.
       isUnread:

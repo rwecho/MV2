@@ -93,6 +93,15 @@ int? parseIdFromUrl(String? url) {
   return int.tryParse(match.group(1)!);
 }
 
+/// Extracts the reply floor from a V2EX topic URL's fragment
+/// (`/t/123#reply4` → `4`), `null` when the link targets the topic itself.
+int? replyFloorFromUrl(String? url) {
+  if (url == null) return null;
+  final match = RegExp(r'#reply(\d+)').firstMatch(url.trim());
+  if (match == null) return null;
+  return int.tryParse(match.group(1)!);
+}
+
 /// `r_123456` → `123456` (reply cell id).
 String? parseReplyId(String? cellId) {
   if (cellId == null) return null;

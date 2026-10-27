@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
-import 'package:url_launcher/url_launcher.dart';
 
 import '../../design_system/effects/mv2_glass.dart';
 import '../../design_system/theme/mv2_theme.dart';
 import '../../design_system/tokens/mv2_radius.dart';
 import '../../design_system/tokens/mv2_spacing.dart';
+import '../../features/reader/application/open_external_url.dart';
 import '../../shared/models/models.dart';
 import '../primitives/mv2_avatar.dart';
 
@@ -18,25 +18,25 @@ bool _canOpenAuthor(V2User author) {
 /// Card for one VXNA aggregator entry (`/xna`).
 ///
 /// VXNA syndicates **external** articles, so the card deliberately differs from
-/// [TopicItem]: a source-site badge replaces the node badge, there is no reply
-/// count, and tapping opens the article in the browser instead of pushing an
-/// in-app topic route.
+/// [TopicItem]: a source-site badge replaces the node badge and there is no
+/// reply count. Tapping goes through [openExternalUrl] — the same choke point
+/// as every other external link — so the 外链打开方式 setting decides between
+/// the in-app reader and the system browser (V2.2.x: this used to hardcode
+/// `launchUrl`, always yanking the user out of the app).
 class XnaItem extends StatelessWidget {
   const XnaItem({super.key, required this.entry, this.onTap});
 
   final V2XnaEntry entry;
 
-  /// Overrides the default "open in browser" behaviour (used by tests).
+  /// Overrides the default "open externally" behaviour (used by tests).
   final VoidCallback? onTap;
 
-  Future<void> _open(BuildContext context) async {
+  void _open(BuildContext context) {
     if (onTap != null) {
       onTap!();
       return;
     }
-    final uri = Uri.tryParse(entry.url);
-    if (uri == null) return;
-    await launchUrl(uri, mode: LaunchMode.externalApplication);
+    openExternalUrl(context, entry.url);
   }
 
   @override

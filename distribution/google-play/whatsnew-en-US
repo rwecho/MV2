@@ -1,4 +1,4 @@
-• Improved topic navigation and deep links on wide screens
-• Remembered recently used posting nodes and refined node selection
-• Fixed topic parsing and improved embedded video handling
-• Improved back navigation on iPhone Duo
+• Tapping a notification now jumps straight to the quoted comment
+• VXNA articles now open in the in-app reader, honoring the link-opening setting
+• Fixed the back button rendering on Android
+• Unified the in-app browser header; reader/original choice is now remembered

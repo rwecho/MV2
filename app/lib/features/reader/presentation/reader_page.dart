@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:adaptive_platform_ui/adaptive_platform_ui.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show Clipboard, ClipboardData;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -15,7 +16,6 @@ import '../../../design_system/tokens/mv2_radius.dart';
 import '../../../design_system/tokens/mv2_spacing.dart';
 import '../../../ui/components/mv2_page_scaffold.dart';
 import '../../../ui/components/mv2_rich_text.dart';
-import '../../../ui/primitives/mv2_buttons.dart';
 import '../../settings/application/settings_controller.dart';
 import '../application/reader_mode.dart';
 import '../data/reader_article.dart';
@@ -282,6 +282,17 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
         onSelectMode: (ReaderMode mode) {
           Navigator.of(sheetContext).pop();
           _setMode(mode);
+          // An explicit pick is a preference statement: persist it as the
+          // 外链打开方式 so the next link opens the same way (阅读/原文 only —
+          // the sheet never offers 外部浏览器, so a browser setting chosen in
+          // settings is only overwritten by a deliberate in-reader choice).
+          unawaited(
+            ref.read(settingsProvider.notifier).setOpenLinkMode(
+                  mode == ReaderMode.original
+                      ? Mv2LinkOpenMode.original
+                      : Mv2LinkOpenMode.reader,
+                ),
+          );
         },
         onOpenExternal: () {
           Navigator.of(sheetContext).pop();
@@ -384,6 +395,12 @@ class _ReaderPageState extends ConsumerState<ReaderPage> {
 }
 
 /// Floating frosted header: back · page title · overflow.
+///
+/// The floating-glass structure is the reader's own (the WebView must extend
+/// beneath it, so the fixed toolbar chrome cannot host this bar), but the
+/// controls inside mirror the topic page's toolbar exactly: the same
+/// `AdaptiveButton` back affordance (glass on iOS 26+, plain elsewhere) and
+/// the same title style, so the header reads as one system.
 class _ReaderHeader extends StatelessWidget {
   const _ReaderHeader({
     required this.title,
@@ -398,6 +415,9 @@ class _ReaderHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = context.colors;
+    final buttonStyle = PlatformInfo.isIOS26OrHigher()
+        ? AdaptiveButtonStyle.glass
+        : AdaptiveButtonStyle.plain;
     return Mv2GlassSurface(
       borderRadius: const BorderRadius.vertical(
         bottom: Radius.circular(Mv2Radius.lgValue),
@@ -408,11 +428,16 @@ class _ReaderHeader extends StatelessWidget {
         height: ReaderPage.headerHeight,
         child: Row(
           children: <Widget>[
-            Mv2IconButton(
-              icon: Icons.arrow_back_ios_new_rounded,
-              iconSize: 18,
-              tooltip: '返回',
-              onPressed: onBack,
+            SizedBox.square(
+              dimension: 44,
+              child: AdaptiveButton.icon(
+                onPressed: onBack,
+                icon: Icons.arrow_back_ios_new_rounded,
+                iconColor: colors.textPrimary,
+                style: buttonStyle,
+                size: AdaptiveButtonSize.large,
+                useSmoothRectangleBorder: false,
+              ),
             ),
             Expanded(
               child: Text(
@@ -425,10 +450,16 @@ class _ReaderHeader extends StatelessWidget {
                 ),
               ),
             ),
-            Mv2IconButton(
-              icon: Icons.more_horiz_rounded,
-              tooltip: '更多操作',
-              onPressed: onMore,
+            SizedBox.square(
+              dimension: 44,
+              child: AdaptiveButton.icon(
+                onPressed: onMore,
+                icon: Icons.more_horiz_rounded,
+                iconColor: colors.textPrimary,
+                style: buttonStyle,
+                size: AdaptiveButtonSize.large,
+                useSmoothRectangleBorder: false,
+              ),
             ),
           ],
         ),

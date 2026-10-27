@@ -197,12 +197,15 @@ class _NotificationGroups extends StatelessWidget {
         children.add(
           NotificationItem(
             notification: item,
-            // The `a.topic-link` href supplies the destination topic.
+            // The `a.topic-link` href supplies the destination topic; its
+            // `#replyN` fragment is the comment to land on (a reply or
+            // mention), so the detail page scrolls to and flashes that floor.
             onTap: topicId == null
                 ? null
                 : () => openTopic(
                     context,
                     topicId,
+                    floor: item.replyFloor,
                     initialTitle: item.sourceTitle,
                     source: 'notifications',
                   ),
