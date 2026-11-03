@@ -157,8 +157,10 @@ jobs:
       # Play 的 API 行为是状态依赖的：versionCode 高于现网时必须自动送审
       # （不允许带 changesNotSentForReview），需要人工送审的变更则相反。
       # 所以先按默认（自动送审）上传，失败再带 flag 重试落成草稿。
+      # continue-on-error：第一次失败是预期分支，重试成功时 job 必须保持绿色。
       - name: Upload to Google Play (internal track)
         id: play_upload
+        continue-on-error: true
         uses: r0adkll/upload-google-play@v1
         with:
           serviceAccountJsonPlainText: ${{ secrets.GOOGLE_PLAY_SERVICE_ACCOUNT_JSON }}
@@ -169,7 +171,7 @@ jobs:
           whatsNewDirectory: distribution/google-play
 
       - name: Upload to Google Play (needs manual review)
-        if: failure() && steps.play_upload.conclusion == 'failure'
+        if: steps.play_upload.outcome == 'failure'
         uses: r0adkll/upload-google-play@v1
         with:
           serviceAccountJsonPlainText: ${{ secrets.GOOGLE_PLAY_SERVICE_ACCOUNT_JSON }}
