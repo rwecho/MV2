@@ -25,6 +25,16 @@ class Mv2VideoPlayerPage extends StatelessWidget {
       backgroundColor: Colors.black,
       foregroundColor: Colors.white,
       title: const Text('视频'),
+      actions: <Widget>[
+        // Always available: YouTube may legitimately refuse in-app playback
+        // (restricted or embed-disabled video), and the user must be able to
+        // reach the original page without a dead end.
+        IconButton(
+          tooltip: '在浏览器中打开',
+          onPressed: () => openExternalUrl(context, embed.originalUrl),
+          icon: const Icon(Icons.open_in_new),
+        ),
+      ],
     ),
     body: SafeArea(
       child: Center(
@@ -97,14 +107,11 @@ class _Mv2VideoSurfaceState extends State<Mv2VideoSurface>
       final controller = WebViewController.fromPlatformCreationParams(params);
       await controller.setJavaScriptMode(JavaScriptMode.unrestricted);
       await controller.setBackgroundColor(Colors.black);
-      // YouTube's anti-abuse check refuses the iframe player inside a
-      // WebView-identified agent ("此视频不能观看 152-4" while the same embed
-      // plays in Safari); present the stock iOS Safari agent instead.
-      await controller.setUserAgent(
-        'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) '
-        'AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 '
-        'Mobile/15E148 Safari/604.1',
-      );
+      // Real WebView identity on purpose: masking the user agent to get past
+      // YouTube's player checks ("152-4") is what Play's Device and Network
+      // Abuse policy treats as circumventing another service's safeguards.
+      // If YouTube refuses this WebView, the failure state below offers
+      // "打开原网页" instead of pretending to be Safari.
       await controller.setNavigationDelegate(
         NavigationDelegate(
           onProgress: (value) {
@@ -154,11 +161,12 @@ class _Mv2VideoSurfaceState extends State<Mv2VideoSurface>
         ),
       );
       // YouTube rejects a bare main-frame embed (error 153) because it has no
-      // referrer context; a local host page restores the iframe semantics.
+      // referrer context; the host page restores the iframe semantics and is
+      // loaded from our own https origin (never youtube.com).
       if (widget.embed.provider == 'youtube') {
         await controller.loadHtmlString(
           youtubeHostPage(url),
-          baseUrl: 'https://www.youtube.com',
+          baseUrl: youtubeEmbedOrigin,
         );
       } else {
         await controller.loadRequest(url);

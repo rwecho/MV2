@@ -141,15 +141,25 @@ String? bilibiliBvidFromUrl(Uri uri) {
 Uri youtubeEmbedUrl(String id) =>
     Uri.https('www.youtube-nocookie.com', '/embed/$id');
 
+/// Origin the YouTube host page is loaded from — the app's own web presence.
+///
+/// The IFrame player's `origin` parameter must name the embedding page's real
+/// origin. It must never be `https://www.youtube.com`: YouTube rejects that
+/// origin, and presenting our page as youtube.com is exactly the kind of
+/// impersonation Google Play treats as circumventing another service's
+/// safeguards (Device and Network Abuse).
+const String youtubeEmbedOrigin = 'https://rwecho.github.io';
+
 /// The local host page a WebView loads instead of the bare embed URL.
 ///
-/// YouTube's late-2025 anti-abuse check rejects the iframe player when the
-/// request carries no referrer context — which is exactly what loading the
-/// embed as the WebView's main frame looks like ("视频播放器配置错误 错误
-/// 153"). Wrapping it in a real `<iframe>` with the policy the player
-/// expects, served from an https base URL, restores the embedding context a
-/// normal web page provides. The caller loads this via `loadHtmlString` with
-/// `baseUrl: https://www.youtube.com`.
+/// A bare embed loaded as the WebView's main frame has no referrer context and
+/// YouTube answers with "视频播放器配置错误 错误 153". Wrapping it in a real
+/// `<iframe>` restores the embedding context a normal web page provides. The
+/// page is loaded from [youtubeEmbedOrigin] — our own https origin — with the
+/// same value in the player's `origin` parameter, so the player sees one
+/// consistent, honest embedding context. No user-agent masking and no
+/// youtube.com base URL: the player gets the WebView's real identity and
+/// simply falls back to opening the video externally when it refuses.
 String youtubeHostPage(Uri embedUrl) {
   final src = embedUrl
       .replace(
@@ -159,9 +169,8 @@ String youtubeHostPage(Uri embedUrl) {
           ...embedUrl.queryParameters,
           'autoplay': '0',
           'playsinline': '1',
-          // Matches the loadHtmlString baseUrl, so the player's origin check
-          // sees one consistent embedding context (errors 153 / 152).
-          'origin': 'https://www.youtube.com',
+          // Must match the loadHtmlString baseUrl below.
+          'origin': youtubeEmbedOrigin,
         },
       )
       .toString()

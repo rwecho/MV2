@@ -224,7 +224,7 @@ void main() {
     expect(find.text('exe-hub'), findsOneWidget);
   });
 
-  group('youtubeHostPage — error-153 host page', () {
+  group('youtubeHostPage — compliant embed host page', () {
     test('wraps the embed in a referrer-policy iframe', () {
       final html = youtubeHostPage(
         Uri.https('www.youtube-nocookie.com', '/embed/dQw4w9WgXcQ'),
@@ -235,9 +235,20 @@ void main() {
         contains('referrerpolicy="strict-origin-when-cross-origin"'),
       );
       expect(html, contains('src="https://www.youtube.com/embed/'));
-      expect(html, contains('origin=https%3A%2F%2Fwww.youtube.com'));
       expect(html, contains('playsinline=1'));
       expect(html, contains('autoplay=0'));
+    });
+
+    test('declares our own origin and never impersonates youtube.com', () {
+      final html = youtubeHostPage(
+        Uri.https('www.youtube-nocookie.com', '/embed/dQw4w9WgXcQ'),
+      );
+
+      // The player's origin check compares this parameter with the page's real
+      // origin; youtube.com would both fail playback and read as spoofing.
+      expect(html, contains('origin=https%3A%2F%2Frwecho.github.io'));
+      expect(html, isNot(contains('origin=https%3A%2F%2Fwww.youtube.com')));
+      expect(youtubeEmbedOrigin, 'https://rwecho.github.io');
     });
 
     test('keeps query separators out of the raw src value', () {

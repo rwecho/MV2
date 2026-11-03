@@ -1,4 +1,2 @@
-• Tapping a notification now jumps straight to the quoted comment
-• VXNA articles now open in the in-app reader, honoring the link-opening setting
-• Fixed the back button rendering on Android
-• Unified the in-app browser header; reader/original choice is now remembered
+• Improved video playback compatibility
+• Videos that can't play in the app can now be opened in the browser
